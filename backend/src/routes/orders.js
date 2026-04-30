@@ -118,7 +118,7 @@ router.get('/', authenticate, async (req, res) => {
        JOIN order_items oi ON oi.order_id = o.id
        JOIN seats s ON s.id = oi.seat_id
        JOIN zones z ON z.id = s.zone_id
-       WHERE o.user_id = $1
+       WHERE o.user_id = $1 AND o.status = 'paid'
        GROUP BY o.id, e.id
        ORDER BY o.created_at DESC`,
       [req.user.id]
