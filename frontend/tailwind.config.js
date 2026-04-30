@@ -3,8 +3,14 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
       colors: {
         brand: { 50: '#eff6ff', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
+        primary: '#E6007E',
+        secondary: '#00AEEF',
+        navy: '#0A1221',
       },
     },
   },

@@ -31,6 +31,32 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build: ./backend
+    container_name: ticketrush_backend
+    env_file: ./backend/.env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      NODE_ENV: production
+    ports:
+      - '4000:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: ticketrush_frontend
+    ports:
+      - '80:80'
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:

@@ -1,21 +1,56 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import pool from '../config/db.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
-// GET /events - list published events
+const CATEGORIES = ['music', 'sports', 'arts', 'conference', 'comedy', 'festival', 'other'];
+
+// ── Public ────────────────────────────────────────────────
+
+// GET /events?search=&category=&date_from=&date_to=&location=
 router.get('/', async (req, res) => {
+  const { search, category, date_from, date_to, location } = req.query;
+  const conditions = [`e.status = 'on_sale'`];
+  const params = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`(e.title ILIKE $${params.length} OR e.venue ILIKE $${params.length})`);
+  }
+  if (category && CATEGORIES.includes(category)) {
+    params.push(category);
+    conditions.push(`e.category = $${params.length}`);
+  }
+  if (date_from) {
+    params.push(date_from);
+    conditions.push(`e.event_date >= $${params.length}`);
+  }
+  if (date_to) {
+    params.push(date_to);
+    conditions.push(`e.event_date <= $${params.length}`);
+  }
+  if (location) {
+    params.push(`%${location}%`);
+    conditions.push(`e.venue ILIKE $${params.length}`);
+  }
+
+  const where = conditions.join(' AND ');
   try {
     const { rows } = await pool.query(
       `SELECT e.*,
               COUNT(s.id) FILTER (WHERE s.status = 'available') AS available_seats,
-              COUNT(s.id) AS total_seats
+              COUNT(s.id) AS total_seats,
+              MIN(z.price) AS min_price,
+              MAX(z.price) AS max_price
        FROM events e
        LEFT JOIN seats s ON s.event_id = e.id
-       WHERE e.status = 'on_sale'
+       LEFT JOIN zones z ON z.event_id = e.id
+       WHERE ${where}
        GROUP BY e.id
-       ORDER BY e.event_date ASC`
+       ORDER BY e.event_date ASC`,
+      params
     );
     res.json(rows);
   } catch (err) {
@@ -24,7 +59,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /events/:id - event detail with zones + seat counts
+// GET /events/:id
 router.get('/:id', async (req, res) => {
   try {
     const { rows: events } = await pool.query(
@@ -52,7 +87,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET /events/:id/seats - all seats for seat map
+// GET /events/:id/seats
 router.get('/:id/seats', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -71,19 +106,30 @@ router.get('/:id/seats', async (req, res) => {
   }
 });
 
-// ── Admin routes ──────────────────────────────────────────
+// ── Admin ─────────────────────────────────────────────────
 
-// POST /events - create event
+const eventSchema = z.object({
+  title:       z.string().min(3).max(200),
+  description: z.string().max(5000).optional(),
+  venue:       z.string().min(3).max(300),
+  event_date:  z.string().datetime({ offset: true }),
+  poster_url:  z.string().url().optional().or(z.literal('')),
+  category:    z.enum(CATEGORIES).default('other'),
+  status:      z.enum(['draft', 'on_sale', 'ended']).optional(),
+});
+
+// POST /events
 router.post('/', authenticate, requireAdmin, async (req, res) => {
-  const { title, description, venue, event_date, poster_url } = req.body;
-  if (!title || !venue || !event_date) {
-    return res.status(400).json({ error: 'title, venue, event_date required' });
+  const parsed = eventSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
   }
+  const { title, description, venue, event_date, poster_url, category } = parsed.data;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO events (title, description, venue, event_date, poster_url, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [title, description, venue, event_date, poster_url || null, req.user.id]
+      `INSERT INTO events (title, description, venue, event_date, poster_url, category, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [title, description, venue, event_date, poster_url || null, category, req.user.id]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -92,9 +138,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// PATCH /events/:id - update event (status, info)
+// PATCH /events/:id
 router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
-  const allowed = ['title', 'description', 'venue', 'event_date', 'poster_url', 'status'];
+  const allowed = ['title', 'description', 'venue', 'event_date', 'poster_url', 'status', 'category'];
   const fields = Object.keys(req.body).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
 
@@ -113,16 +159,41 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// POST /events/:id/zones - add zone + auto-generate seats
-router.post('/:id/zones', authenticate, requireAdmin, async (req, res) => {
-  const { name, rows, cols, price, color } = req.body;
-  if (!name || !rows || !cols || price === undefined) {
-    return res.status(400).json({ error: 'name, rows, cols, price required' });
+// DELETE /events/:id
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM events WHERE id = $1 AND status = 'draft'`,
+      [req.params.id]
+    );
+    if (!rowCount) {
+      return res.status(400).json({ error: 'Only draft events can be deleted' });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
   }
+});
+
+// POST /events/:id/zones
+const zoneSchema = z.object({
+  name:  z.string().min(1).max(50),
+  rows:  z.number().int().min(1).max(50),
+  cols:  z.number().int().min(1).max(50),
+  price: z.number().min(0),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+});
+
+router.post('/:id/zones', authenticate, requireAdmin, async (req, res) => {
+  const parsed = zoneSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+  }
+  const { name, rows, cols, price, color } = parsed.data;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
     const { rows: zoneRows } = await client.query(
       `INSERT INTO zones (event_id, name, rows, cols, price, color)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
@@ -130,14 +201,13 @@ router.post('/:id/zones', authenticate, requireAdmin, async (req, res) => {
     );
     const zone = zoneRows[0];
 
-    // Generate seats for the matrix
     const seatValues = [];
     const seatParams = [];
-    let paramIdx = 1;
+    let idx = 1;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const label = `${name}-${String.fromCharCode(65 + r)}${String(c + 1).padStart(2, '0')}`;
-        seatValues.push(`($${paramIdx++},$${paramIdx++},$${paramIdx++},$${paramIdx++},$${paramIdx++})`);
+        seatValues.push(`($${idx++},$${idx++},$${idx++},$${idx++},$${idx++})`);
         seatParams.push(zone.id, req.params.id, r, c, label);
       }
     }
@@ -145,7 +215,6 @@ router.post('/:id/zones', authenticate, requireAdmin, async (req, res) => {
       `INSERT INTO seats (zone_id, event_id, row_idx, col_idx, label) VALUES ${seatValues.join(',')}`,
       seatParams
     );
-
     await client.query('COMMIT');
     res.status(201).json({ zone, seats_created: rows * cols });
   } catch (err) {

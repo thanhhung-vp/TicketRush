@@ -26,39 +26,40 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <span className="text-4xl">🎫</span>
-          <h1 className="text-3xl font-bold mt-2">TicketRush</h1>
-          <p className="text-gray-400 mt-1">Đăng nhập để tiếp tục</p>
+          <h1 className="text-3xl font-bold mt-2">
+            <span className="text-primary">Ticket</span><span className="text-gray-800">Rush</span>
+          </h1>
+          <p className="text-gray-500 mt-1">Đăng nhập để tiếp tục</p>
         </div>
-        <form onSubmit={handle} className="bg-gray-900 rounded-2xl p-8 space-y-5 border border-gray-800">
-          {error && <p className="text-red-400 text-sm bg-red-950/50 px-3 py-2 rounded-lg">{error}</p>}
+        <form onSubmit={handle} className="bg-white rounded-2xl p-8 space-y-5 border border-gray-200 shadow-lg">
+          {error && <p className="text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Email</label>
+            <label className="block text-sm text-gray-500 mb-1">Email</label>
             <input
               type="email" required autoFocus
               value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500"
+              className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
               placeholder="you@example.com"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Mật khẩu</label>
+            <label className="block text-sm text-gray-500 mb-1">Mật khẩu</label>
             <input
               type="password" required
               value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500"
+              className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
               placeholder="••••••••"
             />
           </div>
           <button
             type="submit" disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition"
+            className="w-full bg-primary hover:bg-pink-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition"
           >
             {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
           </button>
-          <p className="text-center text-sm text-gray-400">
+          <p className="text-center text-sm text-gray-500">
             Chưa có tài khoản?{' '}
-            <Link to="/register" className="text-blue-400 hover:underline">Đăng ký</Link>
+            <Link to="/register" className="text-primary hover:underline font-medium">Đăng ký</Link>
           </p>
         </form>
       </div>
