@@ -221,7 +221,7 @@ function EventCarousel({ events, loading }) {
 
   if (loading || slides.length === 0) {
     return (
-      <div className="relative h-[400px] md:h-[500px] w-full bg-gradient-to-r from-primary via-purple-600 to-secondary animate-pulse">
+      <div className="relative h-64 md:h-80 w-full bg-gradient-to-r from-primary via-purple-600 to-secondary animate-pulse">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-4">
           <h1 className="text-3xl md:text-5xl font-extrabold mb-3 drop-shadow-lg">Khám phá sự kiện</h1>
@@ -236,57 +236,68 @@ function EventCarousel({ events, loading }) {
 
   return (
     <div className="relative w-full overflow-hidden group">
-      {/* Slide content - Full width */}
-      <Link to={`/events/${slide.id}`} className="block relative h-[400px] md:h-[500px] cursor-pointer">
-        {/* Full-width poster background */}
-        {slide.poster_url ? (
+      {/* Slide content */}
+      <div className={`relative h-[380px] md:h-[450px] bg-gradient-to-r ${gradient} transition-all duration-700`}>
+        {/* Background poster image (blurred overlay) */}
+        {slide.poster_url && (
           <img
             src={slide.poster_url}
-            alt={slide.title}
-            className="absolute inset-0 w-full h-full object-cover"
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-30 blur-sm"
           />
-        ) : (
-          <div className={`absolute inset-0 bg-gradient-to-r ${gradient}`} />
         )}
+        <div className="absolute inset-0 bg-black/20" />
 
-        {/* Bottom gradient scrim for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+        {/* Slide info */}
+        <Link
+          to={`/events/${slide.id}`}
+          className="relative z-10 flex flex-col md:flex-row items-center justify-center md:justify-start h-full max-w-6xl mx-auto px-8 md:px-16 gap-6 md:gap-12"
+        >
+          {/* Left: poster thumbnail (Fixed aspect ratio 3:4 for event posters) */}
+          {slide.poster_url && (
+            <div className="w-40 md:w-60 shrink-0 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 aspect-[3/4] bg-gray-900">
+              <img src={slide.poster_url} alt={slide.title} className="w-full h-full object-cover" />
+            </div>
+          )}
 
-        {/* Text overlay at bottom, aligned within max-w-6xl container */}
-        <div className="absolute bottom-0 left-0 right-0 z-10">
-          <div className="max-w-6xl mx-auto px-4 pb-12 pt-6">
-            <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 mb-3 uppercase tracking-wide text-white">
+          {/* Right: text info */}
+          <div className="text-white flex-1 text-center md:text-left">
+            <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-white/20 border border-white/30 mb-4 uppercase tracking-wide">
               {CATEGORIES.find(c => c.value === slide.category)?.label || 'Sự kiện'}
             </span>
-            <h2 className="text-3xl md:text-5xl font-extrabold mb-3 leading-tight drop-shadow-lg line-clamp-2 text-white">
+            <h2 className="text-2xl md:text-5xl font-extrabold mb-4 leading-tight drop-shadow-lg line-clamp-3">
               {slide.title}
             </h2>
-            <div className="flex flex-wrap items-center gap-4 text-sm text-white/90">
-              <span className="flex items-center gap-1.5">📅 {formatDate(slide.event_date)}</span>
-              <span className="flex items-center gap-1.5">📍 {slide.venue}</span>
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm md:text-base text-white/90">
+              <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1.5 rounded-lg backdrop-blur-sm">
+                📅 {formatDate(slide.event_date)}
+              </span>
+              <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1.5 rounded-lg backdrop-blur-sm">
+                📍 {slide.venue}
+              </span>
             </div>
           </div>
-        </div>
-      </Link>
+        </Link>
+      </div>
 
       {/* Navigation arrows */}
       <button
         onClick={prev}
-        className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white hover:bg-black/50 transition opacity-0 group-hover:opacity-100"
+        className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100"
         aria-label="Previous"
       >
         <span className="text-2xl leading-none">‹</span>
       </button>
       <button
         onClick={next}
-        className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white hover:bg-black/50 transition opacity-0 group-hover:opacity-100"
+        className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100"
         aria-label="Next"
       >
         <span className="text-2xl leading-none">›</span>
       </button>
 
       {/* Dot indicators */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
         {slides.map((_, i) => (
           <button
             key={i}
