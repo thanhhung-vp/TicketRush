@@ -107,13 +107,19 @@ export default function EventDetailPage() {
               </div>
 
               {/* Location */}
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-lg shrink-0">📍</div>
+              <a 
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-3 mb-4 group cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-xl transition"
+                title="Mở Google Maps chỉ đường"
+              >
+                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-lg shrink-0 group-hover:bg-primary/50 transition-colors">📍</div>
                 <div>
-                  <p className="font-semibold text-white">{event.venue}</p>
-                  <p className="text-white/60 text-sm">Xem bản đồ</p>
+                  <p className="font-semibold text-white group-hover:text-blue-200 transition-colors">{event.venue}</p>
+                  <p className="text-white/60 text-sm group-hover:underline">Xem bản đồ chỉ đường ↗</p>
                 </div>
-              </div>
+              </a>
 
               {/* Price range */}
               {minPrice > 0 && (
