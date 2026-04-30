@@ -52,10 +52,11 @@ router.post('/hold', authenticate, async (req, res) => {
     }
 
     const lockedAt = new Date();
+    const updatePlaceholders = seat_ids.map((_, i) => `$${i + 3}`).join(',');
     await client.query(
       `UPDATE seats
        SET status = 'locked', locked_by = $1, locked_at = $2
-       WHERE id IN (${placeholders})`,
+       WHERE id IN (${updatePlaceholders})`,
       [req.user.id, lockedAt, ...seat_ids]
     );
 
