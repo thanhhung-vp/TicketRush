@@ -65,13 +65,14 @@ export default function HomePage() {
   };
 
   return (
-    <div className="w-full">
-      {/* ═══ Hero Banner Carousel (Full width) ═══ */}
-      <EventCarousel events={events} loading={loading} />
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* ═══ Hero Banner Carousel (Contained within frame) ═══ */}
+      <div className="rounded-2xl overflow-hidden mb-8 shadow-xl">
+        <EventCarousel events={events} loading={loading} />
+      </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Section title */}
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Sự kiện nổi bật</h2>
+      {/* Section title */}
+      <h2 className="text-2xl font-bold text-gray-900 mb-4">Sự kiện nổi bật</h2>
 
         {/* Category tabs */}
         <div className="relative mb-8">
@@ -138,7 +139,6 @@ export default function HomePage() {
             {events.map(event => <EventCard key={event.id} event={event} />)}
           </div>
         )}
-      </div>
     </div>
   );
 }
