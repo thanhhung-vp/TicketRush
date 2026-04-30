@@ -164,21 +164,33 @@ function EventCard({ event }) {
       </div>
 
       {/* Category badge */}
-      <span className={`inline-block text-xs font-medium px-3 py-1 rounded-full border mb-2 ${
+      <span className={`inline-block text-xs font-medium px-3 py-1 rounded-full border mb-3 ${
         CATEGORY_COLORS[event.category] || CATEGORY_COLORS.other
       }`}>
         {catLabel}
       </span>
 
-      {/* Location + Date */}
-      <p className="text-sm text-gray-500 mb-1 truncate">
-        {event.venue}, {formatDate(event.event_date)}
-      </p>
-
       {/* Title */}
-      <h3 className="font-bold text-gray-900 leading-tight line-clamp-2 uppercase text-sm group-hover:text-primary transition-colors">
+      <h3 className="font-bold text-gray-900 leading-snug line-clamp-2 uppercase text-sm mb-2 group-hover:text-primary transition-colors">
         {event.title}
       </h3>
+
+      {/* Date & Location (With SVG Icons) */}
+      <div className="space-y-1.5 text-xs text-gray-500 font-medium mt-auto">
+        <div className="flex items-center gap-1.5">
+          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span className="truncate">{formatDate(event.event_date)}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span className="truncate">{event.venue}</span>
+        </div>
+      </div>
     </Link>
   );
 }
@@ -238,42 +250,45 @@ function EventCarousel({ events, loading }) {
     <div className="relative w-full overflow-hidden group">
       {/* Slide content */}
       <div className={`relative h-[380px] md:h-[450px] bg-gradient-to-r ${gradient} transition-all duration-700`}>
-        {/* Background poster image (blurred overlay) */}
-        {slide.poster_url && (
+        {/* Background poster image (sharp, object-top so faces aren't cut off) */}
+        {slide.poster_url ? (
           <img
             src={slide.poster_url}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-30 blur-sm"
+            className="absolute inset-0 w-full h-full object-cover object-top transition-transform duration-1000 group-hover:scale-105"
           />
+        ) : (
+          <div className="absolute inset-0 opacity-50 mix-blend-overlay" />
         )}
-        <div className="absolute inset-0 bg-black/20" />
+        
+        {/* Scrim for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
 
-        {/* Slide info */}
+        {/* Slide info (Bottom aligned) */}
         <Link
           to={`/events/${slide.id}`}
-          className="relative z-10 flex flex-col md:flex-row items-center justify-center md:justify-start h-full max-w-6xl mx-auto px-8 md:px-16 gap-6 md:gap-12"
+          className="absolute inset-0 z-10 flex flex-col justify-end max-w-6xl mx-auto px-8 md:px-16 pb-10"
         >
-          {/* Left: poster thumbnail (Fixed aspect ratio 3:4 for event posters) */}
-          {slide.poster_url && (
-            <div className="w-40 md:w-60 shrink-0 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 aspect-[3/4] bg-gray-900">
-              <img src={slide.poster_url} alt={slide.title} className="w-full h-full object-cover" />
-            </div>
-          )}
-
-          {/* Right: text info */}
-          <div className="text-white flex-1 text-center md:text-left">
-            <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-white/20 border border-white/30 mb-4 uppercase tracking-wide">
+          <div className="text-white max-w-2xl">
+            <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-primary/80 backdrop-blur-sm mb-3 uppercase tracking-wide">
               {CATEGORIES.find(c => c.value === slide.category)?.label || 'Sự kiện'}
             </span>
-            <h2 className="text-2xl md:text-5xl font-extrabold mb-4 leading-tight drop-shadow-lg line-clamp-3">
+            <h2 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight drop-shadow-lg line-clamp-2">
               {slide.title}
             </h2>
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm md:text-base text-white/90">
-              <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1.5 rounded-lg backdrop-blur-sm">
-                📅 {formatDate(slide.event_date)}
+            <div className="flex flex-wrap items-center gap-4 text-sm md:text-base text-white/90 font-medium">
+              <span className="flex items-center gap-1.5 drop-shadow">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {formatDate(slide.event_date)}
               </span>
-              <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1.5 rounded-lg backdrop-blur-sm">
-                📍 {slide.venue}
+              <span className="flex items-center gap-1.5 drop-shadow">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {slide.venue}
               </span>
             </div>
           </div>
