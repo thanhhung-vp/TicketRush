@@ -53,7 +53,7 @@ export default function LoginPage() {
           </div>
           <button
             type="submit" disabled={loading}
-            className="w-full bg-primary hover:bg-pink-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition"
+            className="w-full bg-[#E6007E] hover:bg-[#c4006a] disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition"
           >
             {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
           </button>

@@ -58,8 +58,8 @@ export default function RegisterPage() {
               min={1900} max={new Date().getFullYear() - 5} placeholder="1990" />
           </div>
           <button type="submit" disabled={loading}
-            className="w-full bg-primary hover:bg-pink-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition">
-            {loading ? 'Đang tạo tài khoản...' : 'Đăng ký'}
+            className="w-full bg-[#E6007E] hover:bg-[#c4006a] disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition">
+            {loading ? 'Đang đăng ký...' : 'Đăng ký tài khoản'}
           </button>
           <p className="text-center text-sm text-gray-500">
             Đã có tài khoản?{' '}

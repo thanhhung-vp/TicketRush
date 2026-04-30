@@ -175,7 +175,7 @@ export default function CheckoutPage() {
                 Quay lại
               </button>
               <button onClick={initiatePayment} disabled={loading}
-                className="flex-1 bg-primary hover:bg-pink-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition">
+                className="flex-1 bg-[#E6007E] hover:bg-[#c4006a] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition">
                 {loading ? 'Đang xử lý...' : 'Tiếp tục →'}
               </button>
             </div>

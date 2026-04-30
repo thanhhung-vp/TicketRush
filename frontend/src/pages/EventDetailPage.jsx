@@ -72,14 +72,14 @@ export default function EventDetailPage() {
               {!user ? (
                 <button
                   onClick={() => navigate('/login')}
-                  className="mt-4 w-full bg-primary hover:bg-pink-700 text-white font-bold py-3.5 rounded-full transition shadow-lg text-sm"
+                  className="mt-4 w-full bg-[#E6007E] hover:bg-[#c4006a] text-white font-bold py-3.5 rounded-full transition shadow-lg text-sm"
                 >
                   Đăng nhập để mua vé
                 </button>
               ) : (
                 <button
                   onClick={() => document.getElementById('seat-section')?.scrollIntoView({ behavior: 'smooth' })}
-                  className="mt-4 w-full bg-primary hover:bg-pink-700 text-white font-bold py-3.5 rounded-full transition shadow-lg text-sm"
+                  className="mt-4 w-full bg-[#E6007E] hover:bg-[#c4006a] text-white font-bold py-3.5 rounded-full transition shadow-lg text-sm"
                 >
                   Chọn vé ngay
                 </button>

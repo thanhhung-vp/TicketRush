@@ -87,7 +87,7 @@ export default function ProfilePage() {
 
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving}
-                  className="flex-1 bg-primary hover:bg-pink-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition">
+                  className="flex-1 bg-[#E6007E] hover:bg-[#c4006a] disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition">
                   {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
                 <button type="button" onClick={() => { setEditing(false); setError(''); }}
