@@ -37,7 +37,7 @@ export default function HomePage() {
   const [events, setEvents]     = useState([]);
   const [loading, setLoading]   = useState(true);
   const [category, setCategory] = useState('');
-  const search = searchParams.get('search') || '';
+  const search = searchParams.get('search') || searchParams.get('q') || '';
   const tabsRef = useRef(null);
 
   const fetchEvents = useCallback(async () => {
@@ -65,78 +65,80 @@ export default function HomePage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      {/* ═══ Hero Banner Carousel ═══ */}
+    <div className="w-full">
+      {/* ═══ Hero Banner Carousel (Full width) ═══ */}
       <EventCarousel events={events} loading={loading} />
 
-      {/* Section title */}
-      <h2 className="text-2xl font-bold text-gray-900 mb-4">Events</h2>
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* Section title */}
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Sự kiện nổi bật</h2>
 
-      {/* Category tabs */}
-      <div className="relative mb-8">
-        <div ref={tabsRef}
-          className="flex gap-8 overflow-x-auto scrollbar-hide border-b border-gray-300 pb-3">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat.value}
-              onClick={() => setCategory(cat.value === category ? '' : cat.value)}
-              className={`whitespace-nowrap text-sm font-medium pb-1 transition-colors border-b-2 -mb-[13px] ${
-                category === cat.value
-                  ? 'text-primary border-primary'
-                  : 'text-gray-500 border-transparent hover:text-gray-800'
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
+        {/* Category tabs */}
+        <div className="relative mb-8">
+          <div ref={tabsRef}
+            className="flex gap-8 overflow-x-auto scrollbar-hide border-b border-gray-300 pb-3">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.value}
+                onClick={() => setCategory(cat.value === category ? '' : cat.value)}
+                className={`whitespace-nowrap text-sm font-medium pb-1 transition-colors border-b-2 -mb-[13px] ${
+                  category === cat.value
+                    ? 'text-primary border-primary'
+                    : 'text-gray-500 border-transparent hover:text-gray-800'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => scrollTabs(1)}
+            className="absolute right-0 top-0 h-8 w-8 flex items-center justify-center bg-white/90 border border-gray-200 rounded-full shadow text-gray-400 hover:text-gray-700 transition text-lg"
+            aria-label="Scroll categories"
+          >
+            ›
+          </button>
         </div>
-        <button
-          onClick={() => scrollTabs(1)}
-          className="absolute right-0 top-0 h-8 w-8 flex items-center justify-center bg-white/90 border border-gray-200 rounded-full shadow text-gray-400 hover:text-gray-700 transition text-lg"
-          aria-label="Scroll categories"
-        >
-          ›
-        </button>
+
+        {/* Results info */}
+        {search && (
+          <p className="text-sm text-gray-500 mb-4">
+            Kết quả tìm kiếm cho "<span className="font-medium text-gray-700">{search}</span>"
+            — {events.length} sự kiện
+          </p>
+        )}
+
+        {/* Events grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="aspect-[16/10] bg-gray-200 rounded-lg mb-3" />
+                <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
+                <div className="h-3 bg-gray-200 rounded w-2/3 mb-2" />
+                <div className="h-4 bg-gray-200 rounded w-3/4" />
+              </div>
+            ))}
+          </div>
+        ) : events.length === 0 ? (
+          <div className="text-center py-20 text-gray-500">
+            <div className="text-5xl mb-3">🎭</div>
+            <p>Không tìm thấy sự kiện nào.</p>
+            {(search || category) && (
+              <button
+                onClick={() => { setCategory(''); window.history.replaceState(null, '', '/'); }}
+                className="mt-3 text-primary hover:underline text-sm"
+              >
+                Xóa bộ lọc
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {events.map(event => <EventCard key={event.id} event={event} />)}
+          </div>
+        )}
       </div>
-
-      {/* Results info */}
-      {search && (
-        <p className="text-sm text-gray-500 mb-4">
-          Kết quả tìm kiếm cho "<span className="font-medium text-gray-700">{search}</span>"
-          — {events.length} sự kiện
-        </p>
-      )}
-
-      {/* Events grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="animate-pulse">
-              <div className="aspect-[16/10] bg-gray-200 rounded-lg mb-3" />
-              <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
-              <div className="h-3 bg-gray-200 rounded w-2/3 mb-2" />
-              <div className="h-4 bg-gray-200 rounded w-3/4" />
-            </div>
-          ))}
-        </div>
-      ) : events.length === 0 ? (
-        <div className="text-center py-20 text-gray-500">
-          <div className="text-5xl mb-3">🎭</div>
-          <p>Không tìm thấy sự kiện nào.</p>
-          {(search || category) && (
-            <button
-              onClick={() => { setCategory(''); window.history.replaceState(null, '', '/'); }}
-              className="mt-3 text-primary hover:underline text-sm"
-            >
-              Xóa bộ lọc
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {events.map(event => <EventCard key={event.id} event={event} />)}
-        </div>
-      )}
     </div>
   );
 }
@@ -172,7 +174,6 @@ function EventCard({ event }) {
       <p className="text-sm text-gray-500 mb-1 truncate">
         {event.venue}, {formatDate(event.event_date)}
       </p>
-
 
       {/* Title */}
       <h3 className="font-bold text-gray-900 leading-tight line-clamp-2 uppercase text-sm group-hover:text-primary transition-colors">
@@ -220,7 +221,7 @@ function EventCarousel({ events, loading }) {
 
   if (loading || slides.length === 0) {
     return (
-      <div className="relative h-56 md:h-80 rounded-2xl overflow-hidden mb-10 bg-gradient-to-r from-primary via-purple-600 to-secondary animate-pulse">
+      <div className="relative h-[400px] md:h-[500px] w-full bg-gradient-to-r from-primary via-purple-600 to-secondary animate-pulse">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-4">
           <h1 className="text-3xl md:text-5xl font-extrabold mb-3 drop-shadow-lg">Khám phá sự kiện</h1>
@@ -234,9 +235,9 @@ function EventCarousel({ events, loading }) {
   const gradient = SLIDE_GRADIENTS[current % SLIDE_GRADIENTS.length];
 
   return (
-    <div className="relative rounded-2xl overflow-hidden mb-10 group">
-      {/* Slide content */}
-      <Link to={`/events/${slide.id}`} className="block relative h-64 md:h-80 cursor-pointer">
+    <div className="relative w-full overflow-hidden group">
+      {/* Slide content - Full width */}
+      <Link to={`/events/${slide.id}`} className="block relative h-[400px] md:h-[500px] cursor-pointer">
         {/* Full-width poster background */}
         {slide.poster_url ? (
           <img
@@ -249,19 +250,21 @@ function EventCarousel({ events, loading }) {
         )}
 
         {/* Bottom gradient scrim for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
-        {/* Text overlay at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 z-10 text-white">
-          <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 mb-3 uppercase tracking-wide">
-            {CATEGORIES.find(c => c.value === slide.category)?.label || 'Sự kiện'}
-          </span>
-          <h2 className="text-xl md:text-3xl font-extrabold mb-2 leading-tight drop-shadow-lg line-clamp-2">
-            {slide.title}
-          </h2>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-white/90">
-            <span className="flex items-center gap-1.5">📅 {formatDate(slide.event_date)}</span>
-            <span className="flex items-center gap-1.5">📍 {slide.venue}</span>
+        {/* Text overlay at bottom, aligned within max-w-6xl container */}
+        <div className="absolute bottom-0 left-0 right-0 z-10">
+          <div className="max-w-6xl mx-auto px-4 pb-12 pt-6">
+            <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 mb-3 uppercase tracking-wide text-white">
+              {CATEGORIES.find(c => c.value === slide.category)?.label || 'Sự kiện'}
+            </span>
+            <h2 className="text-3xl md:text-5xl font-extrabold mb-3 leading-tight drop-shadow-lg line-clamp-2 text-white">
+              {slide.title}
+            </h2>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-white/90">
+              <span className="flex items-center gap-1.5">📅 {formatDate(slide.event_date)}</span>
+              <span className="flex items-center gap-1.5">📍 {slide.venue}</span>
+            </div>
           </div>
         </div>
       </Link>
@@ -269,17 +272,17 @@ function EventCarousel({ events, loading }) {
       {/* Navigation arrows */}
       <button
         onClick={prev}
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 shadow-lg flex items-center justify-center text-gray-700 hover:bg-white transition opacity-0 group-hover:opacity-100"
+        className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white hover:bg-black/50 transition opacity-0 group-hover:opacity-100"
         aria-label="Previous"
       >
-        ‹
+        <span className="text-2xl leading-none">‹</span>
       </button>
       <button
         onClick={next}
-        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 shadow-lg flex items-center justify-center text-gray-700 hover:bg-white transition opacity-0 group-hover:opacity-100"
+        className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white hover:bg-black/50 transition opacity-0 group-hover:opacity-100"
         aria-label="Next"
       >
-        ›
+        <span className="text-2xl leading-none">›</span>
       </button>
 
       {/* Dot indicators */}
@@ -290,7 +293,7 @@ function EventCarousel({ events, loading }) {
             onClick={() => goTo(i)}
             className={`rounded-full transition-all ${
               i === current
-                ? 'w-8 h-2.5 bg-white'
+                ? 'w-10 h-2.5 bg-white'
                 : 'w-2.5 h-2.5 bg-white/50 hover:bg-white/80'
             }`}
             aria-label={`Slide ${i + 1}`}
