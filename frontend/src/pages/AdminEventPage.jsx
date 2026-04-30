@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api.js';
+import MerchManager from '../components/MerchManager.jsx';
 
 const CATEGORIES = [
   { value: 'music',      label: '🎵 Âm nhạc' },
@@ -125,23 +126,23 @@ export default function AdminEventPage() {
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/admin')} className="text-gray-400 hover:text-white transition">← Quay lại</button>
-          <h1 className="text-xl font-bold">{isNew ? 'Tạo sự kiện mới' : 'Chỉnh sửa sự kiện'}</h1>
+          <button onClick={() => navigate('/admin')} className="text-gray-500 hover:text-gray-800 transition font-medium">← Quay lại</button>
+          <h1 className="text-xl font-bold text-gray-800">{isNew ? 'Tạo sự kiện mới' : 'Chỉnh sửa sự kiện'}</h1>
         </div>
         {!isNew && form.status === 'draft' && (
           <button onClick={deleteEvent} disabled={deleting}
-            className="text-sm text-red-400 hover:text-red-300 border border-red-900/50 hover:border-red-700 px-3 py-1.5 rounded-lg transition">
+            className="text-sm text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition font-medium">
             {deleting ? 'Đang xóa...' : '🗑 Xóa sự kiện'}
           </button>
         )}
       </div>
 
       {/* Event form */}
-      <form onSubmit={saveEvent} className="bg-gray-900 rounded-2xl p-6 border border-gray-800 space-y-5">
-        <h2 className="font-semibold border-b border-gray-800 pb-3">Thông tin sự kiện</h2>
+      <form onSubmit={saveEvent} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm space-y-5">
+        <h2 className="font-semibold border-b border-gray-200 pb-3 text-gray-700">Thông tin sự kiện</h2>
 
-        {error   && <p className="text-red-400 text-sm bg-red-950/30 px-3 py-2 rounded-lg">{error}</p>}
-        {success && <p className="text-green-400 text-sm bg-green-950/30 px-3 py-2 rounded-lg">{success}</p>}
+        {error   && <p className="text-red-600 text-sm bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{error}</p>}
+        {success && <p className="text-emerald-600 text-sm bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">{success}</p>}
 
         <Field label="Tên sự kiện *" value={form.title} onChange={set('title')} required />
         <Field label="Mô tả" value={form.description} onChange={set('description')} as="textarea" />
@@ -150,16 +151,16 @@ export default function AdminEventPage() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Danh mục</label>
+            <label className="block text-sm text-gray-600 mb-1 font-medium">Danh mục</label>
             <select value={form.category} onChange={set('category')}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500">
+              className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800">
               {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Trạng thái</label>
+            <label className="block text-sm text-gray-600 mb-1 font-medium">Trạng thái</label>
             <select value={form.status} onChange={set('status')}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500">
+              className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800">
               <option value="draft">Nháp</option>
               <option value="on_sale">Mở bán</option>
               <option value="ended">Kết thúc</option>
@@ -169,17 +170,17 @@ export default function AdminEventPage() {
 
         {/* Poster upload */}
         <div>
-          <label className="block text-sm text-gray-400 mb-2">Ảnh poster</label>
+          <label className="block text-sm text-gray-600 mb-2 font-medium">Ảnh poster</label>
           <div className="flex gap-3 items-start">
             <div className="flex-1">
               <input value={form.poster_url} onChange={set('poster_url')}
                 placeholder="https://… hoặc tải ảnh lên →"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500 text-sm" />
+                className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-800" />
             </div>
             <button type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="bg-gray-800 hover:bg-gray-700 border border-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium transition whitespace-nowrap disabled:opacity-50">
+              className="bg-gray-100 hover:bg-gray-200 border border-gray-300 px-4 py-2.5 rounded-xl text-sm font-medium transition whitespace-nowrap disabled:opacity-50 text-gray-700">
               {uploading ? '⏳ Tải lên...' : '📤 Chọn ảnh'}
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
@@ -187,39 +188,39 @@ export default function AdminEventPage() {
           </div>
           {form.poster_url && (
             <img src={form.poster_url} alt="Preview"
-              className="mt-3 h-32 rounded-xl object-cover border border-gray-700" />
+              className="mt-3 h-32 rounded-xl object-cover border border-gray-200" />
           )}
         </div>
 
         <button type="submit" disabled={saving}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-xl transition">
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-xl transition shadow-lg shadow-blue-500/25">
           {saving ? 'Đang lưu...' : isNew ? '+ Tạo sự kiện' : '✓ Lưu thay đổi'}
         </button>
       </form>
 
       {/* Zones (only after event is created) */}
       {!isNew && (
-        <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 space-y-4">
-          <h2 className="font-semibold border-b border-gray-800 pb-3">Khu vực ghế ngồi</h2>
+        <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm space-y-4">
+          <h2 className="font-semibold border-b border-gray-200 pb-3 text-gray-700">Khu vực ghế ngồi</h2>
 
           {zones.length === 0 ? (
-            <p className="text-gray-500 text-sm">Chưa có khu vực nào.</p>
+            <p className="text-gray-400 text-sm">Chưa có khu vực nào.</p>
           ) : (
             <div className="space-y-2">
               {zones.map(z => (
-                <div key={z.id} className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3">
+                <div key={z.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
                   <div className="flex items-center gap-3">
-                    <span className="w-4 h-4 rounded-sm flex-shrink-0" style={{ backgroundColor: z.color }} />
+                    <span className="w-4 h-4 rounded-sm flex-shrink-0 shadow-sm" style={{ backgroundColor: z.color }} />
                     <div>
-                      <p className="font-medium">{z.name}</p>
-                      <p className="text-xs text-gray-400">{z.rows}×{z.cols} = {z.rows * z.cols} ghế</p>
+                      <p className="font-medium text-gray-800">{z.name}</p>
+                      <p className="text-xs text-gray-500">{z.rows}×{z.cols} = {z.rows * z.cols} ghế</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="text-blue-400 text-sm font-medium">
+                    <span className="text-blue-600 text-sm font-semibold">
                       {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(z.price)}
                     </span>
-                    <button onClick={() => deleteZone(z.id)} className="text-red-400 hover:text-red-300 text-sm transition">
+                    <button onClick={() => deleteZone(z.id)} className="text-red-500 hover:text-red-600 text-sm transition font-medium">
                       Xóa
                     </button>
                   </div>
@@ -228,8 +229,8 @@ export default function AdminEventPage() {
             </div>
           )}
 
-          <form onSubmit={addZone} className="border border-gray-700 rounded-xl p-4 space-y-3">
-            <p className="text-sm font-medium text-gray-300">Thêm khu mới</p>
+          <form onSubmit={addZone} className="border border-gray-200 bg-gray-50 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-medium text-gray-700">Thêm khu mới</p>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Tên khu (VD: Khu VIP)" value={newZone.name} onChange={setZ('name')} required maxLength={50} />
               <Field label="Màu sắc" type="color" value={newZone.color} onChange={setZ('color')} />
@@ -238,10 +239,26 @@ export default function AdminEventPage() {
               <Field label="Giá vé (VNĐ)" type="number" min="0" step="1000" value={newZone.price} onChange={setZ('price')} required wrapperClass="col-span-2" placeholder="VD: 500000" />
             </div>
             <button type="submit"
-              className="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition">
+              className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition shadow-md shadow-emerald-500/25">
               + Thêm khu
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Merchandise section */}
+      {!isNew && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-800">🛍️ Vật phẩm (Merchandise)</h2>
+            <Link
+              to={`/admin/events/${id}/checkin`}
+              className="text-sm bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 px-3 py-1.5 rounded-lg transition font-medium"
+            >
+              ✅ Trang Check-in
+            </Link>
+          </div>
+          <MerchManager eventId={id} />
         </div>
       )}
     </div>
@@ -249,10 +266,10 @@ export default function AdminEventPage() {
 }
 
 function Field({ label, as, wrapperClass = '', ...props }) {
-  const cls = 'w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500';
+  const cls = 'w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800';
   return (
     <div className={wrapperClass}>
-      <label className="block text-sm text-gray-400 mb-1">{label}</label>
+      <label className="block text-sm text-gray-600 mb-1 font-medium">{label}</label>
       {as === 'textarea'
         ? <textarea {...props} className={cls + ' resize-none h-20'} />
         : <input {...props} className={cls} />}

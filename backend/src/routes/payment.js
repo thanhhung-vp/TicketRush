@@ -3,6 +3,7 @@ import { Router } from 'express';
 import QRCode from 'qrcode';
 import pool from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
+import { sendOrderConfirmation } from '../services/email.js';
 
 const router = Router();
 
@@ -149,6 +150,37 @@ router.post('/confirm', authenticate, async (req, res) => {
         seatIds.map(id => ({ id, event_id: order.event_id, status: 'sold' }))
       );
     }
+
+    // Send confirmation email (non-blocking)
+    try {
+      const { rows: eventRows } = await pool.query(
+        `SELECT e.title, e.venue, e.event_date,
+                u.email, u.full_name
+         FROM events e, users u
+         WHERE e.id = $1 AND u.id = $2`,
+        [order.event_id, req.user.id]
+      );
+      if (eventRows[0]) {
+        const { rows: ticketDetails } = await pool.query(
+          `SELECT s.label AS seat_label, z.name AS zone_name
+           FROM tickets t
+           JOIN seats s ON s.id = t.seat_id
+           JOIN zones z ON z.id = s.zone_id
+           WHERE t.order_id = $1`,
+          [order_id]
+        );
+        const ev = eventRows[0];
+        sendOrderConfirmation({
+          to: ev.email,
+          full_name: ev.full_name,
+          event_title: ev.title,
+          event_date: ev.event_date,
+          venue: ev.venue,
+          tickets: ticketDetails,
+          total_amount: order.total_amount,
+        });
+      }
+    } catch { /* email errors are non-fatal */ }
 
     res.json({ order: { ...order, status: 'paid' }, tickets });
   } catch (err) {

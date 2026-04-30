@@ -6,14 +6,18 @@ import rateLimit from 'express-rate-limit';
 import { initSocket } from './socket/index.js';
 import { startSeatReleaseWorker, sweepExpiredSeats } from './workers/seatRelease.js';
 
-import authRouter    from './routes/auth.js';
-import eventsRouter  from './routes/events.js';
-import seatsRouter   from './routes/seats.js';
-import ordersRouter  from './routes/orders.js';
-import adminRouter   from './routes/admin.js';
-import queueRouter   from './routes/queue.js';
-import uploadRouter  from './routes/upload.js';
-import paymentRouter from './routes/payment.js';
+import authRouter        from './routes/auth.js';
+import eventsRouter      from './routes/events.js';
+import seatsRouter       from './routes/seats.js';
+import ordersRouter      from './routes/orders.js';
+import adminRouter       from './routes/admin.js';
+import queueRouter       from './routes/queue.js';
+import uploadRouter      from './routes/upload.js';
+import paymentRouter     from './routes/payment.js';
+import wishlistsRouter   from './routes/wishlists.js';
+import reviewsRouter     from './routes/reviews.js';
+import merchandiseRouter from './routes/merchandise.js';
+import checkinRouter     from './routes/checkin.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -54,14 +58,18 @@ app.use('/api/auth/register', authLimiter);
 app.use('/api/orders/checkout', checkoutLimiter);
 
 // ── Routes ─────────────────────────────────────────────────
-app.use('/api/auth',    authRouter);
-app.use('/api/events',  eventsRouter);
-app.use('/api/seats',   seatsRouter);
-app.use('/api/orders',  ordersRouter);
-app.use('/api/admin',   adminRouter);
-app.use('/api/queue',   queueRouter);
-app.use('/api/upload',  uploadRouter);
-app.use('/api/payment', paymentRouter);
+app.use('/api/auth',        authRouter);
+app.use('/api/events',      eventsRouter);
+app.use('/api/seats',       seatsRouter);
+app.use('/api/orders',      ordersRouter);
+app.use('/api/admin',       adminRouter);
+app.use('/api/queue',       queueRouter);
+app.use('/api/upload',      uploadRouter);
+app.use('/api/payment',     paymentRouter);
+app.use('/api/wishlists',   wishlistsRouter);
+app.use('/api/reviews',     reviewsRouter);
+app.use('/api/merchandise', merchandiseRouter);
+app.use('/api/checkin',     checkinRouter);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 

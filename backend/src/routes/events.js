@@ -9,15 +9,15 @@ const CATEGORIES = ['music', 'sports', 'arts', 'conference', 'comedy', 'festival
 
 // ── Public ────────────────────────────────────────────────
 
-// GET /events?search=&category=&date_from=&date_to=&location=
+// GET /events?search=&category=&date_from=&date_to=&location=&min_price=&max_price=&sort=date|price_asc|price_desc
 router.get('/', async (req, res) => {
-  const { search, category, date_from, date_to, location } = req.query;
+  const { search, category, date_from, date_to, location, min_price, max_price, sort } = req.query;
   const conditions = [`e.status = 'on_sale'`];
   const params = [];
 
   if (search) {
     params.push(`%${search}%`);
-    conditions.push(`(e.title ILIKE $${params.length} OR e.venue ILIKE $${params.length})`);
+    conditions.push(`(e.title ILIKE $${params.length} OR e.venue ILIKE $${params.length} OR e.description ILIKE $${params.length})`);
   }
   if (category && CATEGORIES.includes(category)) {
     params.push(category);
@@ -28,13 +28,33 @@ router.get('/', async (req, res) => {
     conditions.push(`e.event_date >= $${params.length}`);
   }
   if (date_to) {
+    // Include the whole end day
     params.push(date_to);
-    conditions.push(`e.event_date <= $${params.length}`);
+    conditions.push(`e.event_date <= ($${params.length}::date + interval '1 day')`);
   }
   if (location) {
     params.push(`%${location}%`);
     conditions.push(`e.venue ILIKE $${params.length}`);
   }
+
+  const orderMap = {
+    date:       'e.event_date ASC',
+    price_asc:  'min_price ASC NULLS LAST',
+    price_desc: 'min_price DESC NULLS LAST',
+    newest:     'e.created_at DESC',
+  };
+  const orderBy = orderMap[sort] || 'e.event_date ASC';
+
+  const havingClauses = [];
+  if (min_price) {
+    params.push(Number(min_price));
+    havingClauses.push(`MIN(z.price) >= $${params.length}`);
+  }
+  if (max_price) {
+    params.push(Number(max_price));
+    havingClauses.push(`MIN(z.price) <= $${params.length}`);
+  }
+  const having = havingClauses.length ? `HAVING ${havingClauses.join(' AND ')}` : '';
 
   const where = conditions.join(' AND ');
   try {
@@ -49,8 +69,55 @@ router.get('/', async (req, res) => {
        LEFT JOIN zones z ON z.event_id = e.id
        WHERE ${where}
        GROUP BY e.id
-       ORDER BY e.event_date ASC`,
+       ${having}
+       ORDER BY ${orderBy}`,
       params
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /events/suggestions?q=
+router.get('/suggestions', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 1) return res.json([]);
+
+  try {
+    const pattern = `%${q}%`;
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (type, label)
+              label, type, extra_info, event_id, event_date, min_price
+       FROM (
+         -- Event title matches
+         SELECT e.title         AS label,
+                'event'         AS type,
+                e.category      AS extra_info,
+                e.id            AS event_id,
+                e.event_date,
+                MIN(z.price)    AS min_price
+         FROM events e
+         LEFT JOIN zones z ON z.event_id = e.id
+         WHERE e.status = 'on_sale'
+           AND (e.title ILIKE $1 OR e.description ILIKE $1)
+         GROUP BY e.id
+         UNION ALL
+         -- Venue matches
+         SELECT e.venue         AS label,
+                'venue'         AS type,
+                NULL            AS extra_info,
+                NULL            AS event_id,
+                MIN(e.event_date) AS event_date,
+                NULL            AS min_price
+         FROM events e
+         WHERE e.status = 'on_sale' AND e.venue ILIKE $1
+         GROUP BY e.venue
+       ) sub
+       ORDER BY type, label, event_date ASC
+       LIMIT 10`,
+      [pattern]
     );
     res.json(rows);
   } catch (err) {

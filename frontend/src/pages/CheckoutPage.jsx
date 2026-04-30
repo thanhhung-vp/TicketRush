@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -43,9 +43,20 @@ export default function CheckoutPage() {
   const [orderId, setOrderId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+  const [merch, setMerch]     = useState([]);           // available merchandise
+  const [cart, setCart]       = useState({});            // { merch_id: quantity }
 
   const seatIds  = state?.seat_ids  || [];
   const seatInfo = state?.seat_info || [];
+  const eventId  = state?.event_id  || seatInfo[0]?.event_id;
+
+  // Fetch merchandise for this event
+  useEffect(() => {
+    if (!eventId) return;
+    api.get(`/merchandise/${eventId}`)
+      .then(r => setMerch(r.data.filter(m => m.stock > 0)))
+      .catch(() => {});
+  }, [eventId]);
 
   if (!seatIds.length) {
     return (
@@ -56,12 +67,33 @@ export default function CheckoutPage() {
     );
   }
 
-  const total = seatInfo.reduce((s, seat) => s + Number(seat.price), 0);
+  const seatTotal = seatInfo.reduce((s, seat) => s + Number(seat.price), 0);
+  const merchTotal = merch.reduce((s, m) => s + (cart[m.id] || 0) * Number(m.price), 0);
+  const total = seatTotal + merchTotal;
+
+  const setQty = (id, delta) => {
+    const item = merch.find(m => m.id === id);
+    if (!item) return;
+    setCart(c => {
+      const cur = c[id] || 0;
+      const next = Math.max(0, Math.min(item.stock, cur + delta));
+      if (next === 0) { const { [id]: _, ...rest } = c; return rest; }
+      return { ...c, [id]: next };
+    });
+  };
+
+  const cartItems = merch
+    .filter(m => cart[m.id])
+    .map(m => ({ merch_id: m.id, quantity: cart[m.id], price: m.price, name: m.name }));
 
   const initiatePayment = async () => {
     setLoading(true); setError('');
     try {
-      const { data } = await api.post('/payment/initiate', { seat_ids: seatIds, method });
+      const { data } = await api.post('/payment/initiate', {
+        seat_ids: seatIds,
+        method,
+        merch_items: cartItems.map(({ merch_id, quantity }) => ({ merch_id, quantity })),
+      });
       setOrderId(data.order.id);
 
       if (method === 'vnpay' && data.payment.payment_url) {
@@ -72,7 +104,6 @@ export default function CheckoutPage() {
         window.location.href = data.payment.payment_url;
         return;
       }
-      // Mock: go to confirm step
       setStep('confirm');
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể khởi tạo thanh toán');
@@ -124,6 +155,47 @@ export default function CheckoutPage() {
             )}
           </div>
         </div>
+
+        {/* Merchandise */}
+        {merch.length > 0 && (
+          <div className="px-6 py-4 border-b border-gray-200">
+            <p className="text-xs text-gray-400 mb-3 uppercase tracking-wide">Mua thêm vật phẩm 🛍️</p>
+            <div className="space-y-3">
+              {merch.map(m => (
+                <div key={m.id} className="flex items-center gap-3">
+                  {m.image_url ? (
+                    <img src={m.image_url} alt={m.name} className="w-12 h-12 object-cover rounded-lg border border-gray-100" />
+                  ) : (
+                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-xl">🎁</div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{m.name}</p>
+                    <p className="text-xs text-primary font-semibold">{formatVND(m.price)}</p>
+                    {m.description && <p className="text-xs text-gray-400 truncate">{m.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => setQty(m.id, -1)}
+                      className="w-7 h-7 rounded-full border border-gray-300 text-gray-600 hover:border-primary hover:text-primary transition text-sm font-bold"
+                    >−</button>
+                    <span className="w-5 text-center text-sm font-medium">{cart[m.id] || 0}</span>
+                    <button
+                      onClick={() => setQty(m.id, 1)}
+                      disabled={(cart[m.id] || 0) >= m.stock}
+                      className="w-7 h-7 rounded-full border border-gray-300 text-gray-600 hover:border-primary hover:text-primary transition text-sm font-bold disabled:opacity-40"
+                    >+</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {cartItems.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between text-sm text-gray-600">
+                <span>Vật phẩm</span>
+                <span className="font-medium">{formatVND(merchTotal)}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Total */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">

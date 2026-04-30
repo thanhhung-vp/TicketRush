@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import SeatMap from '../components/SeatMap.jsx';
+import WishlistButton from '../components/WishlistButton.jsx';
+import ReviewSection from '../components/ReviewSection.jsx';
 
 const CATEGORY_GRADIENTS = {
   music:      'from-purple-700 via-pink-600 to-rose-500',
@@ -88,10 +90,13 @@ export default function EventDetailPage() {
 
             {/* Right: Event Info */}
             <div className="flex-1 text-white">
-              {/* Status badge */}
-              <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-green-500/20 text-green-200 border border-green-400/30 mb-3">
-                Đang mở bán
-              </span>
+              {/* Status badge + Wishlist */}
+              <div className="flex items-center gap-3 mb-3">
+                <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-green-500/20 text-green-200 border border-green-400/30">
+                  Đang mở bán
+                </span>
+                <WishlistButton eventId={event.id} className="w-9 h-9 border border-white/30" />
+              </div>
 
               <h1 className="text-3xl lg:text-4xl font-extrabold mb-6 leading-tight drop-shadow">
                 {event.title}
@@ -249,6 +254,11 @@ export default function EventDetailPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ═══════════ Reviews ═══════════ */}
+      <div className="max-w-6xl mx-auto px-4 pb-12">
+        <ReviewSection eventId={id} />
       </div>
     </div>
   );

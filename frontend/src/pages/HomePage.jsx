@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '../lib/api.js';
+import WishlistButton from '../components/WishlistButton.jsx';
 
 const CATEGORIES = [
   { value: '', label: 'Tất cả' },
-  { value: 'music', label: 'Live Music' },
-  { value: 'sports', label: 'Thể thao' },
-  { value: 'arts', label: 'Sân khấu & Nghệ thuật' },
-  { value: 'conference', label: 'Hội nghị & Cộng đồng' },
-  { value: 'comedy', label: 'Hài kịch' },
+  { value: 'music', label: 'Nhạc sống' },
   { value: 'festival', label: 'Lễ hội' },
+  { value: 'arts', label: 'Sân khấu & Nghệ thuật' },
+  { value: 'sports', label: 'Thể thao' },
+  { value: 'conference', label: 'Hội thảo & Cộng đồng' },
+  { value: 'comedy', label: 'Hài kịch' },
   { value: 'other', label: 'Khác' },
 ];
 
@@ -32,20 +33,43 @@ function formatDate(d) {
   return `${day} ${month}, ${year}`;
 }
 
+const SORT_OPTIONS = [
+  { value: 'date',       label: 'Ngày tổ chức' },
+  { value: 'newest',     label: 'Mới nhất' },
+  { value: 'price_asc',  label: 'Giá thấp → cao' },
+  { value: 'price_desc', label: 'Giá cao → thấp' },
+];
+
 export default function HomePage() {
-  const [searchParams] = useSearchParams();
-  const [events, setEvents]     = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [category, setCategory] = useState('');
-  const search = searchParams.get('search') || searchParams.get('q') || '';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [events, setEvents]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const tabsRef = useRef(null);
+
+  const search    = searchParams.get('search') || searchParams.get('q') || '';
+  const category  = searchParams.get('category') || '';
+  const sort      = searchParams.get('sort') || 'date';
+  const dateFrom  = searchParams.get('date_from') || '';
+  const dateTo    = searchParams.get('date_to') || '';
+
+  const setParam = (key, value) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value); else next.delete(key);
+      return next;
+    });
+  };
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
-      if (search)   params.search   = search;
-      if (category) params.category = category;
+      if (search)   params.search    = search;
+      if (category) params.category  = category;
+      if (sort)     params.sort      = sort;
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo)   params.date_to   = dateTo;
       const { data } = await api.get('/events', { params });
       setEvents(data);
     } catch {
@@ -53,7 +77,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [search, category]);
+  }, [search, category, sort, dateFrom, dateTo]);
 
   useEffect(() => {
     const timer = setTimeout(fetchEvents, 300);
@@ -64,6 +88,10 @@ export default function HomePage() {
     if (tabsRef.current) tabsRef.current.scrollBy({ left: dir * 200, behavior: 'smooth' });
   };
 
+  const activeFilterCount = [category, dateFrom, dateTo, sort !== 'date' ? sort : ''].filter(Boolean).length;
+
+  const clearFilters = () => setSearchParams({});
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
       {/* ═══ Hero Banner Carousel (Contained within frame) ═══ */}
@@ -71,42 +99,114 @@ export default function HomePage() {
         <EventCarousel events={events} loading={loading} />
       </div>
 
-      {/* Section title */}
-      <h2 className="text-2xl font-bold text-gray-900 mb-4">Sự kiện nổi bật</h2>
+      {/* Section title + filter toggle */}
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-xl font-bold text-gray-900">Sự kiện</h2>
+        <button
+          onClick={() => setShowFilters(v => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+            showFilters || activeFilterCount > 0
+              ? 'bg-primary text-white border-primary'
+              : 'bg-white text-gray-500 border-gray-300 hover:border-gray-400'
+          }`}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+          </svg>
+          Lọc{activeFilterCount > 0 && ` (${activeFilterCount})`}
+        </button>
+      </div>
 
         {/* Category tabs */}
-        <div className="relative mb-8">
-          <div ref={tabsRef}
-            className="flex gap-8 overflow-x-auto scrollbar-hide border-b border-gray-300 pb-3">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat.value}
-                onClick={() => setCategory(cat.value === category ? '' : cat.value)}
-                className={`whitespace-nowrap text-sm font-medium pb-1 transition-colors border-b-2 -mb-[13px] ${
-                  category === cat.value
-                    ? 'text-primary border-primary'
-                    : 'text-gray-500 border-transparent hover:text-gray-800'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
+        <div className="relative mb-4">
+          <div className="flex items-center">
+            <div ref={tabsRef}
+              className="flex gap-0 overflow-x-auto scrollbar-hide border-b border-gray-200 flex-1">
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat.value}
+                  onClick={() => setParam('category', cat.value === category ? '' : cat.value)}
+                  className={`whitespace-nowrap text-sm px-4 pb-3 pt-1 transition-all border-b-2 -mb-px ${
+                    category === cat.value
+                      ? 'text-blue-600 border-blue-600 font-semibold'
+                      : 'text-gray-500 border-transparent hover:text-gray-800 font-normal'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <button
-            onClick={() => scrollTabs(1)}
-            className="absolute right-0 top-0 h-8 w-8 flex items-center justify-center bg-white/90 border border-gray-200 rounded-full shadow text-gray-400 hover:text-gray-700 transition text-lg"
-            aria-label="Scroll categories"
-          >
-            ›
-          </button>
         </div>
 
+        {/* Expandable filter panel */}
+        {showFilters && (
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-6 shadow-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Sort */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Sắp xếp</label>
+                <select
+                  value={sort}
+                  onChange={e => setParam('sort', e.target.value === 'date' ? '' : e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 bg-white"
+                >
+                  {SORT_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Date from */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Từ ngày</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => setParam('date_from', e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              {/* Date to */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Đến ngày</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={e => setParam('date_to', e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+            </div>
+
+            {activeFilterCount > 0 && (
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-red-500 hover:text-red-600 font-medium transition hover:underline"
+                >
+                  Xóa tất cả bộ lọc
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Results info */}
-        {search && (
-          <p className="text-sm text-gray-500 mb-4">
-            Kết quả tìm kiếm cho "<span className="font-medium text-gray-700">{search}</span>"
-            — {events.length} sự kiện
-          </p>
+        {(search || category || dateFrom || dateTo) && (
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <p className="text-sm text-gray-500">
+              {search && <>Kết quả cho "<span className="font-medium text-gray-700">{search}</span>" — </>}
+              <span className="font-medium text-gray-700">{events.length}</span> sự kiện
+            </p>
+            <button
+              onClick={clearFilters}
+              className="text-xs text-blue-600 hover:text-blue-700 hover:underline font-medium transition"
+            >
+              Xóa bộ lọc
+            </button>
+          </div>
         )}
 
         {/* Events grid */}
@@ -125,9 +225,9 @@ export default function HomePage() {
           <div className="text-center py-20 text-gray-500">
             <div className="text-5xl mb-3">🎭</div>
             <p>Không tìm thấy sự kiện nào.</p>
-            {(search || category) && (
+            {(search || category || dateFrom || dateTo) && (
               <button
-                onClick={() => { setCategory(''); window.history.replaceState(null, '', '/'); }}
+                onClick={clearFilters}
                 className="mt-3 text-primary hover:underline text-sm"
               >
                 Xóa bộ lọc
@@ -149,7 +249,7 @@ function EventCard({ event }) {
   return (
     <Link to={`/events/${event.id}`} className="group block">
       {/* Image */}
-      <div className="aspect-[16/10] rounded-lg overflow-hidden mb-3 bg-gray-200">
+      <div className="aspect-[16/10] rounded-lg overflow-hidden mb-3 bg-gray-200 relative">
         {event.poster_url ? (
           <img
             src={event.poster_url}
@@ -161,6 +261,7 @@ function EventCard({ event }) {
             🎵
           </div>
         )}
+        <WishlistButton eventId={event.id} className="absolute top-2 right-2 w-8 h-8 shadow-sm" />
       </div>
 
       {/* Category badge */}

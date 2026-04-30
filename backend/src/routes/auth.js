@@ -5,6 +5,8 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import pool from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
+import redis from '../config/redis.js';
+import { sendPasswordResetOTP } from '../services/email.js';
 
 const router = Router();
 
@@ -186,6 +188,93 @@ router.patch('/profile', authenticate, async (req, res) => {
       [req.user.id, ...values]
     );
     res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PATCH /auth/change-password
+const changePasswordSchema = z.object({
+  old_password: z.string().min(1),
+  new_password: z.string().min(6),
+});
+
+router.patch('/change-password', authenticate, async (req, res) => {
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+  }
+  const { old_password, new_password } = parsed.data;
+
+  try {
+    const { rows } = await pool.query('SELECT password FROM users WHERE id = $1', [req.user.id]);
+    const user = rows[0];
+    if (!user || !(await bcrypt.compare(old_password, user.password))) {
+      return res.status(401).json({ error: 'Mật khẩu cũ không chính xác' });
+    }
+
+    const hash = await bcrypt.hash(new_password, 12);
+    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hash, req.user.id]);
+    res.json({ ok: true, message: 'Đổi mật khẩu thành công' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+
+  try {
+    const { rows } = await pool.query('SELECT id, email FROM users WHERE email = $1', [email]);
+    if (!rows[0]) {
+      // Don't leak whether email exists
+      return res.json({ ok: true, message: 'If email exists, OTP sent' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
+    await redis.setex(`otp:${email}`, 900, otp); // 15 mins expiry
+    await sendPasswordResetOTP({ to: email, otp });
+
+    res.json({ ok: true, message: 'OTP sent' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /auth/reset-password
+const resetPasswordSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6),
+  new_password: z.string().min(6),
+});
+
+router.post('/reset-password', async (req, res) => {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+  }
+  const { email, otp, new_password } = parsed.data;
+
+  try {
+    const savedOtp = await redis.get(`otp:${email}`);
+    if (!savedOtp || savedOtp !== otp) {
+      return res.status(401).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn' });
+    }
+
+    const hash = await bcrypt.hash(new_password, 12);
+    const result = await pool.query('UPDATE users SET password = $1 WHERE email = $2', [hash, email]);
+    
+    if (result.rowCount === 0) {
+       return res.status(404).json({ error: 'User not found' });
+    }
+
+    await redis.del(`otp:${email}`);
+    res.json({ ok: true, message: 'Đặt lại mật khẩu thành công' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

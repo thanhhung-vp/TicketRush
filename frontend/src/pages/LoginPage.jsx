@@ -1,11 +1,17 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import {
+  AuthBg, AuthCard, IconInput, PinkButton, AuthDivider, GoogleAuthButton, Checkbox,
+  EnvelopeIcon, LockIcon, EyeIcon, EyeOffIcon,
+} from '../components/AuthLayout.jsx';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
+  const [showPw, setShowPw] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -23,46 +29,66 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mt-2">
-            <span className="text-primary">Ticket</span><span className="text-gray-800">Rush</span>
-          </h1>
-          <p className="text-gray-500 mt-1">Đăng nhập để tiếp tục</p>
-        </div>
-        <form onSubmit={handle} className="bg-white rounded-2xl p-8 space-y-5 border border-gray-200 shadow-lg">
-          {error && <p className="text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-          <div>
-            <label className="block text-sm text-gray-500 mb-1">Email</label>
-            <input
-              type="email" required autoFocus
-              value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
-              placeholder="you@example.com"
-            />
+    <AuthBg>
+      <AuthCard title="Đăng nhập">
+        {error && (
+          <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
+            {error}
           </div>
-          <div>
-            <label className="block text-sm text-gray-500 mb-1">Mật khẩu</label>
-            <input
-              type="password" required
-              value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
-              placeholder="••••••••"
+        )}
+
+        <form onSubmit={handle} className="space-y-3.5">
+          <IconInput
+            icon={<EnvelopeIcon />}
+            type="email"
+            placeholder="Nhập địa chỉ email"
+            value={form.email}
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            required
+            autoFocus
+          />
+          <IconInput
+            icon={<LockIcon />}
+            type={showPw ? 'text' : 'password'}
+            placeholder="Nhập mật khẩu"
+            value={form.password}
+            onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+            required
+            rightEl={
+              <button type="button" onClick={() => setShowPw(v => !v)} className="text-gray-400 hover:text-gray-600 transition">
+                {showPw ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            }
+          />
+
+          <div className="flex items-center justify-between pt-0.5">
+            <Checkbox
+              checked={remember}
+              onChange={setRemember}
+              label={<span className="text-sm text-gray-600">Tự động đăng nhập</span>}
             />
+            <Link to="/forgot-password" className="text-sm text-blue-500 hover:text-blue-600 font-medium transition">
+              Quên mật khẩu?
+            </Link>
           </div>
-          <button
-            type="submit" disabled={loading}
-            className="w-full bg-[#E6007E] hover:bg-[#c4006a] disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition"
-          >
-            {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
-          </button>
-          <p className="text-center text-sm text-gray-500">
-            Chưa có tài khoản?{' '}
-            <Link to="/register" className="text-primary hover:underline font-medium">Đăng ký</Link>
-          </p>
+
+          <div className="pt-1">
+            <PinkButton type="submit" disabled={loading}>
+              {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+            </PinkButton>
+          </div>
         </form>
-      </div>
-    </div>
+
+        <AuthDivider text="Hoặc đăng nhập với" />
+        <GoogleAuthButton />
+
+        <p className="mt-5 text-center text-sm text-gray-500">
+          Bạn chưa có tài khoản?{' '}
+          <Link to="/register" className="text-blue-500 hover:text-blue-600 font-semibold transition">
+            Đăng ký ngay
+          </Link>
+        </p>
+      </AuthCard>
+    </AuthBg>
   );
 }
