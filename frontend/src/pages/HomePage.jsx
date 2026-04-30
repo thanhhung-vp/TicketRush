@@ -314,14 +314,14 @@ function EventCarousel({ events, loading }) {
       {/* Navigation arrows */}
       <button
         onClick={prev}
-        className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100"
+        className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100 z-20"
         aria-label="Previous"
       >
         <span className="text-2xl leading-none">‹</span>
       </button>
       <button
         onClick={next}
-        className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100"
+        className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100 z-20"
         aria-label="Next"
       >
         <span className="text-2xl leading-none">›</span>
