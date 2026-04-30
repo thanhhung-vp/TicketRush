@@ -176,15 +176,15 @@ function EventCard({ event }) {
       </h3>
 
       {/* Date & Location (With SVG Icons) */}
-      <div className="space-y-1.5 text-xs text-gray-500 font-medium mt-auto">
+      <div className="space-y-1.5 text-xs text-gray-600 font-medium mt-auto">
         <div className="flex items-center gap-1.5">
-          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <span className="truncate">{formatDate(event.event_date)}</span>
         </div>
         <div 
-          className="flex items-center gap-1.5 hover:text-blue-500 transition-colors"
+          className="flex items-center gap-1.5 hover:text-blue-600 transition-colors"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
