@@ -12,15 +12,6 @@ const CATEGORY_ICONS = {
   comedy: '😂', festival: '🎪', other: '✨',
 };
 
-const POPULAR_CATEGORIES = [
-  { label: 'Live Music',  category: 'music',    icon: '🎵' },
-  { label: 'Thể thao',   category: 'sports',   icon: '⚽' },
-  { label: 'Sân khấu',   category: 'arts',     icon: '🎭' },
-  { label: 'Lễ hội',     category: 'festival', icon: '🎪' },
-  { label: 'Hài kịch',   category: 'comedy',   icon: '😂' },
-  { label: 'Hội nghị',   category: 'conference', icon: '🎤' },
-];
-
 function formatDateShort(d) {
   if (!d) return '';
   const date = new Date(d);
@@ -91,13 +82,8 @@ export default function SearchSuggestions({
     setShowDropdown(false);
   };
 
-  const handleCategoryClick = (cat) => {
-    navigate(`/?category=${cat}`);
-    setShowDropdown(false);
-  };
-
   // Keyboard navigation
-  const allItems = searchValue.trim() ? suggestions : POPULAR_CATEGORIES;
+  const allItems = suggestions;
   const handleKeyDown = (e) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -108,11 +94,7 @@ export default function SearchSuggestions({
     } else if (e.key === 'Enter') {
       if (activeIndex >= 0 && activeIndex < allItems.length) {
         e.preventDefault();
-        if (searchValue.trim()) {
-          handleSelectSuggestion(allItems[activeIndex]);
-        } else {
-          handleCategoryClick(allItems[activeIndex].category);
-        }
+        handleSelectSuggestion(allItems[activeIndex]);
       } else {
         onSubmit(searchValue);
         setShowDropdown(false);
@@ -122,7 +104,6 @@ export default function SearchSuggestions({
     }
   };
 
-  const showPopular  = !searchValue.trim() && showDropdown;
   const showResults  = searchValue.trim().length >= 1 && showDropdown;
 
   return (
@@ -152,36 +133,8 @@ export default function SearchSuggestions({
       )}
 
       {/* Dropdown */}
-      {(showPopular || showResults) && (
+      {showResults && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden z-[9999]">
-
-          {/* Popular categories (when input empty) */}
-          {showPopular && (
-            <div className="p-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">
-                🔥 Khám phá theo thể loại
-              </p>
-              <div className="grid grid-cols-2 gap-1">
-                {POPULAR_CATEGORIES.map((item, idx) => (
-                  <button
-                    key={item.category}
-                    onClick={() => handleCategoryClick(item.category)}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-left transition-all ${
-                      activeIndex === idx
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span className="text-lg">{item.icon}</span>
-                    <span className="font-medium">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Live search results */}
-          {showResults && (
             <div className="p-2">
               {loading && suggestions.length === 0 ? (
                 <div className="flex items-center justify-center py-6 gap-2 text-sm text-gray-400">
@@ -267,7 +220,6 @@ export default function SearchSuggestions({
                 </>
               )}
             </div>
-          )}
         </div>
       )}
     </div>

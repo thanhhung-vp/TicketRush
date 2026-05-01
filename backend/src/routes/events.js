@@ -5,14 +5,17 @@ import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
-const CATEGORIES = ['music', 'sports', 'arts', 'conference', 'comedy', 'festival', 'other'];
+const CATEGORIES = [
+  'music', 'fan_meeting', 'merchandise', 'arts', 'sports',
+  'conference', 'education', 'nightlife', 'livestream', 'travel', 'other',
+];
 
 // ── Public ────────────────────────────────────────────────
 
 // GET /events?search=&category=&date_from=&date_to=&location=&min_price=&max_price=&sort=date|price_asc|price_desc
 router.get('/', async (req, res) => {
   const { search, category, date_from, date_to, location, min_price, max_price, sort } = req.query;
-  const conditions = [`e.status = 'on_sale'`];
+  const conditions = [`e.status IN ('on_sale', 'ended')`];
   const params = [];
 
   if (search) {
@@ -38,12 +41,12 @@ router.get('/', async (req, res) => {
   }
 
   const orderMap = {
-    date:       'e.event_date ASC',
-    price_asc:  'min_price ASC NULLS LAST',
-    price_desc: 'min_price DESC NULLS LAST',
-    newest:     'e.created_at DESC',
+    date:       '(e.event_date < NOW()) ASC, e.event_date ASC',
+    price_asc:  '(e.event_date < NOW()) ASC, min_price ASC NULLS LAST',
+    price_desc: '(e.event_date < NOW()) ASC, min_price DESC NULLS LAST',
+    newest:     '(e.event_date < NOW()) ASC, e.created_at DESC',
   };
-  const orderBy = orderMap[sort] || 'e.event_date ASC';
+  const orderBy = orderMap[sort] || '(e.event_date < NOW()) ASC, e.event_date ASC';
 
   const havingClauses = [];
   if (min_price) {
@@ -301,6 +304,72 @@ router.delete('/:id/zones/:zoneId', authenticate, requireAdmin, async (req, res)
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PUT /events/:id/layout  — replace all zones+seats from designer layout
+router.put('/:id/layout', authenticate, requireAdmin, async (req, res) => {
+  const { zones: layoutZones, canvas } = req.body;
+  if (!Array.isArray(layoutZones) || layoutZones.length === 0) {
+    return res.status(400).json({ error: 'zones array required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Wipe existing zones (seats cascade)
+    await client.query('DELETE FROM zones WHERE event_id = $1', [req.params.id]);
+
+    const savedZones = [];
+
+    for (const z of layoutZones) {
+      const rows  = Math.max(1, Math.min(50, Number(z.rows)  || 5));
+      const cols  = Math.max(1, Math.min(50, Number(z.cols)  || 8));
+      const price = Math.max(0, Number(z.price) || 0);
+      const color = /^#[0-9A-Fa-f]{6}$/.test(z.color) ? z.color : '#3B82F6';
+
+      const { rows: zr } = await client.query(
+        `INSERT INTO zones (event_id, name, rows, cols, price, color)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [req.params.id, (z.name || 'Khu').slice(0, 50), rows, cols, price, color]
+      );
+      const zone = zr[0];
+
+      // Build seat insert
+      const vals = [];
+      const params = [];
+      let pi = 1;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const label = `${zone.name}-${String.fromCharCode(65 + r)}${String(c + 1).padStart(2, '0')}`;
+          vals.push(`($${pi++},$${pi++},$${pi++},$${pi++},$${pi++})`);
+          params.push(zone.id, req.params.id, r, c, label);
+        }
+      }
+      await client.query(
+        `INSERT INTO seats (zone_id, event_id, row_idx, col_idx, label) VALUES ${vals.join(',')}`,
+        params
+      );
+
+      savedZones.push({ ...z, dbId: zone.id, id: zone.id.toString() });
+    }
+
+    // Persist layout_json with real DB ids
+    const layoutJson = { canvas: canvas || { width: 860, height: 540 }, zones: savedZones, stages: req.body.stages || [] };
+    await client.query(
+      'UPDATE events SET layout_json = $1 WHERE id = $2',
+      [JSON.stringify(layoutJson), req.params.id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ ok: true, zones_created: savedZones.length, layout: layoutJson });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
   }
 });
 

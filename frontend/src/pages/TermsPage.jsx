@@ -68,7 +68,7 @@ export default function TermsPage() {
       <div className="mb-8 pb-6 border-b border-gray-200">
         <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">TicketRush</p>
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Điều khoản sử dụng dịch vụ</h1>
-        <p className="text-sm text-gray-500">Cập nhật lần cuối: 01/05/2026 · Có hiệu lực từ 01/01/2025</p>
+        <p className="text-sm text-gray-500">Cập nhật lần cuối: 01/05/2026 · Có hiệu lực từ 01/01/2026</p>
       </div>
 
       <div className="flex gap-8 items-start">
@@ -102,7 +102,8 @@ export default function TermsPage() {
                 Chúng tôi cung cấp dịch vụ trung gian kết nối người mua vé với ban tổ chức sự kiện trên toàn quốc.
               </p>
               <p className="mt-2">
-                Địa chỉ: 268 Lý Thường Kiệt, Phường 14, Quận 10, TP. Hồ Chí Minh<br/>
+                Đại diện pháp luật: <strong>Đỗ Thành Hưng</strong><br/>
+                Địa chỉ: 144 Xuân Thủy, Cầu Giấy, Hà Nội, Việt Nam<br/>
                 Hotline: 1800 6789 (miễn phí) · Email: support@ticketrush.vn
               </p>
             </Sub>
@@ -347,7 +348,7 @@ export default function TermsPage() {
               <p>
                 Các điều khoản này được điều chỉnh bởi pháp luật Việt Nam. Mọi tranh chấp phát sinh
                 từ việc sử dụng dịch vụ TicketRush sẽ được giải quyết tại Tòa án nhân dân có thẩm quyền
-                tại TP. Hồ Chí Minh.
+                tại Hà Nội.
               </p>
             </Sub>
             <Sub title="3. Giới hạn trách nhiệm">
@@ -370,7 +371,7 @@ export default function TermsPage() {
                 { label: 'Email hỗ trợ', value: 'support@ticketrush.vn' },
                 { label: 'Hotline', value: '1800 6789 (miễn phí)' },
                 { label: 'Giờ làm việc', value: 'T2–T7, 8:00 – 21:00' },
-                { label: 'Địa chỉ', value: '268 Lý Thường Kiệt, Q.10, TP.HCM' },
+                { label: 'Địa chỉ', value: '144 Xuân Thủy, Cầu Giấy, Hà Nội' },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-gray-50 rounded-xl px-4 py-3">
                   <p className="text-xs text-gray-400 mb-0.5">{label}</p>

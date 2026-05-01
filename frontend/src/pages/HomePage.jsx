@@ -1,27 +1,33 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '../lib/api.js';
-import WishlistButton from '../components/WishlistButton.jsx';
 
 const CATEGORIES = [
-  { value: '', label: 'Tất cả' },
-  { value: 'music', label: 'Nhạc sống' },
-  { value: 'festival', label: 'Lễ hội' },
-  { value: 'arts', label: 'Sân khấu & Nghệ thuật' },
-  { value: 'sports', label: 'Thể thao' },
-  { value: 'conference', label: 'Hội thảo & Cộng đồng' },
-  { value: 'comedy', label: 'Hài kịch' },
-  { value: 'other', label: 'Khác' },
+  { value: '',            label: 'Tất cả' },
+  { value: 'music',       label: 'Nhạc sống' },
+  { value: 'fan_meeting', label: 'Fan Meeting' },
+  { value: 'merchandise', label: 'Merchandise' },
+  { value: 'arts',        label: 'Sân khấu & Nghệ thuật' },
+  { value: 'sports',      label: 'Thể thao' },
+  { value: 'conference',  label: 'Hội thảo & Cộng đồng' },
+  { value: 'education',   label: 'Khoá học' },
+  { value: 'nightlife',   label: 'Nightlife' },
+  { value: 'livestream',  label: 'Livestream' },
+  { value: 'travel',      label: 'Tham quan du lịch' },
 ];
 
 const CATEGORY_COLORS = {
-  music:      'bg-pink-50 text-pink-600 border-pink-200',
-  sports:     'bg-cyan-50 text-cyan-700 border-cyan-200',
-  arts:       'bg-purple-50 text-purple-600 border-purple-200',
-  conference: 'bg-blue-50 text-blue-600 border-blue-200',
-  comedy:     'bg-yellow-50 text-yellow-700 border-yellow-200',
-  festival:   'bg-orange-50 text-orange-600 border-orange-200',
-  other:      'bg-gray-100 text-gray-600 border-gray-200',
+  music:       'bg-pink-50 text-pink-600 border-pink-200',
+  fan_meeting: 'bg-rose-50 text-rose-600 border-rose-200',
+  merchandise: 'bg-amber-50 text-amber-600 border-amber-200',
+  arts:        'bg-purple-50 text-purple-600 border-purple-200',
+  sports:      'bg-cyan-50 text-cyan-700 border-cyan-200',
+  conference:  'bg-blue-50 text-blue-600 border-blue-200',
+  education:   'bg-green-50 text-green-700 border-green-200',
+  nightlife:   'bg-indigo-50 text-indigo-600 border-indigo-200',
+  livestream:  'bg-sky-50 text-sky-600 border-sky-200',
+  travel:      'bg-teal-50 text-teal-700 border-teal-200',
+  other:       'bg-gray-100 text-gray-600 border-gray-200',
 };
 
 function formatDate(d) {
@@ -120,6 +126,17 @@ export default function HomePage() {
         {/* Category tabs */}
         <div className="relative mb-4">
           <div className="flex items-center">
+            {/* Left scroll button */}
+            <button
+              onClick={() => scrollTabs(-1)}
+              className="shrink-0 w-7 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition shadow-sm mr-1"
+              aria-label="Scroll left"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+
             <div ref={tabsRef}
               className="flex gap-0 overflow-x-auto scrollbar-hide border-b border-gray-200 flex-1">
               {CATEGORIES.map(cat => (
@@ -136,6 +153,17 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
+
+            {/* Right scroll button */}
+            <button
+              onClick={() => scrollTabs(1)}
+              className="shrink-0 w-7 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition shadow-sm ml-1"
+              aria-label="Scroll right"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -243,8 +271,17 @@ export default function HomePage() {
   );
 }
 
+function eventStatusInfo(event) {
+  const isPast = new Date(event.event_date) < new Date();
+  if (event.status === 'ended' || isPast) return { label: 'Đã đóng', cls: 'bg-gray-800/80 text-gray-200', dot: 'bg-gray-400' };
+  if (Number(event.available_seats) === 0)  return { label: 'Hết vé', cls: 'bg-red-600/85 text-white',    dot: 'bg-red-300' };
+  return { label: 'Đang mở bán', cls: 'bg-green-600/85 text-white', dot: 'bg-green-300 animate-pulse' };
+}
+
 function EventCard({ event }) {
   const catLabel = CATEGORIES.find(c => c.value === event.category)?.label || 'Khác';
+  const statusInfo = eventStatusInfo(event);
+  const isDimmed = event.status === 'ended' || Number(event.available_seats) === 0;
 
   return (
     <Link to={`/events/${event.id}`} className="group block">
@@ -254,14 +291,18 @@ function EventCard({ event }) {
           <img
             src={event.poster_url}
             alt={event.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isDimmed ? 'brightness-50' : ''}`}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-5xl bg-gradient-to-br from-primary/10 to-secondary/10">
+          <div className={`w-full h-full flex items-center justify-center text-5xl bg-gradient-to-br from-primary/10 to-secondary/10 ${isDimmed ? 'brightness-50' : ''}`}>
             🎵
           </div>
         )}
-        <WishlistButton eventId={event.id} className="absolute top-2 right-2 w-8 h-8 shadow-sm" />
+        {/* Status badge */}
+        <span className={`absolute bottom-2 left-2 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm ${statusInfo.cls}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
+          {statusInfo.label}
+        </span>
       </div>
 
       {/* Category badge */}

@@ -18,6 +18,8 @@ import FAQPage            from './pages/FAQPage.jsx';
 import AdminCheckinPage   from './pages/AdminCheckinPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import TermsPage          from './pages/TermsPage.jsx';
+import AboutPage          from './pages/AboutPage.jsx';
+import FeedbackPage       from './pages/FeedbackPage.jsx';
 
 function PrivateRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth();
@@ -45,6 +47,8 @@ function AppRoutes() {
           <Route path="/profile"           element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
           <Route path="/faq"               element={<FAQPage />} />
           <Route path="/terms"             element={<TermsPage />} />
+          <Route path="/about"             element={<AboutPage />} />
+          <Route path="/feedback"          element={<FeedbackPage />} />
           <Route path="/admin"             element={<PrivateRoute adminOnly><AdminPage /></PrivateRoute>} />
           <Route path="/admin/events/:id"  element={<PrivateRoute adminOnly><AdminEventPage /></PrivateRoute>} />
           <Route path="/admin/events/:eventId/checkin" element={<PrivateRoute adminOnly><AdminCheckinPage /></PrivateRoute>} />

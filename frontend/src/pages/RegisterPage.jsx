@@ -5,7 +5,6 @@ import {
   AuthBg, AuthCard, IconInput, PinkButton, AuthDivider, GoogleAuthButton, Checkbox,
   EnvelopeIcon, LockIcon, EyeIcon, EyeOffIcon, UserIcon,
 } from '../components/AuthLayout.jsx';
-import { Link } from 'react-router-dom';
 
 export default function RegisterPage() {
   const { register } = useAuth();
