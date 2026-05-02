@@ -281,6 +281,7 @@ export default function AdminEventPage() {
             initialLayout={layoutJson}
             onSave={saveLayout}
             saving={savingLayout}
+            posterUrl={form.poster_url}
           />
         </div>
       )}

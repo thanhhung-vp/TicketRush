@@ -42,51 +42,90 @@ function rrect(ctx, x, y, w, h, r) {
   else { ctx.rect(x, y, w, h); }
 }
 
+function drawStagePath(ctx, s, x, y, w, h) {
+  ctx.beginPath();
+  if (s.shape === 'trapezoid') {
+    const off = w * 0.16;
+    ctx.moveTo(x+off,y); ctx.lineTo(x+w-off,y); ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h); ctx.closePath();
+  } else if (s.shape === 'ellipse') {
+    ctx.ellipse(x+w/2, y+h/2, w/2, h/2, 0, 0, Math.PI*2);
+  } else if (s.shape === 'semicircle') {
+    ctx.arc(x+w/2, y+h, w/2, Math.PI, 0, false); ctx.closePath();
+  } else { rrect(ctx, x, y, w, h, 4); }
+}
+
+function drawZonePathCanvas(ctx, shape, x, y, w, h) {
+  ctx.beginPath();
+  if (shape === 'trapezoid') {
+    const off = w * 0.15;
+    ctx.moveTo(x+off,y); ctx.lineTo(x+w-off,y); ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h); ctx.closePath();
+  } else if (shape === 'fan') {
+    const cx = x+w/2, cy = y-h*0.3;
+    const outerR = Math.hypot(w/2, h-(-h*0.3));
+    const innerR = outerR * 0.38;
+    const aR = Math.atan2(y+h-cy, x+w-cx);
+    const aL = Math.atan2(y+h-cy, x-cx);
+    ctx.arc(cx, cy, outerR, aL, aR, false);
+    ctx.arc(cx, cy, innerR, aR, aL, true);
+    ctx.closePath();
+  } else if (shape === 'circle') {
+    ctx.ellipse(x+w/2, y+h/2, w/2, h/2, 0, 0, Math.PI*2);
+  } else if (shape === 'diamond') {
+    ctx.moveTo(x+w/2,y); ctx.lineTo(x+w,y+h/2); ctx.lineTo(x+w/2,y+h); ctx.lineTo(x,y+h/2); ctx.closePath();
+  } else if (shape === 'triangle') {
+    ctx.moveTo(x+w/2,y); ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h); ctx.closePath();
+  } else if (shape === 'pentagon') {
+    const cx=x+w/2,cy=y+h/2,a=2*Math.PI/5; ctx.beginPath();
+    for(let i=0;i<5;i++){const px=cx+(w/2)*Math.cos(-Math.PI/2+i*a),py=cy+(h/2)*Math.sin(-Math.PI/2+i*a);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.closePath();
+  } else if (shape === 'hexagon') {
+    const cx=x+w/2,cy=y+h/2; ctx.beginPath();
+    for(let i=0;i<6;i++){const px=cx+(w/2)*Math.cos(i*Math.PI/3),py=cy+(h/2)*Math.sin(i*Math.PI/3);i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+    ctx.closePath();
+  } else { rrect(ctx, x, y, w, h, 6); }
+}
+
 function SeatmapPreview({ event, zoom }) {
   const canvasRef = useRef();
+  const hasLayout = Boolean(event.layout_json?.zones?.length);
 
   useEffect(() => {
+    if (!hasLayout) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#0d0d14';
-    ctx.fillRect(0, 0, W, H);
 
-    const layout = event.layout_json;
-
-    if (layout?.zones?.length) {
+    const draw = (posterImg) => {
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      const layout = event.layout_json;
       const srcW = layout.canvas?.width || 860;
       const srcH = layout.canvas?.height || 540;
       const sx = W / srcW, sy = H / srcH;
 
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#f5f4f0';
+      ctx.fillRect(0, 0, W, H);
+
+      // Poster background
+      if (posterImg) {
+        ctx.globalAlpha = 0.15;
+        ctx.drawImage(posterImg, 0, 0, W, H);
+        ctx.globalAlpha = 1;
+      }
+
       // Grid
-      ctx.strokeStyle = 'rgba(255,255,255,0.035)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(0,0,0,0.07)'; ctx.lineWidth = 1;
       for (let x = 0; x <= srcW; x += 40) { ctx.beginPath(); ctx.moveTo(x*sx,0); ctx.lineTo(x*sx,H); ctx.stroke(); }
       for (let y = 0; y <= srcH; y += 40) { ctx.beginPath(); ctx.moveTo(0,y*sy); ctx.lineTo(W,y*sy); ctx.stroke(); }
 
       // Stages
       for (const s of layout.stages || []) {
-        const x = s.x*sx, y = s.y*sy, w = s.width*sx, h = s.height*sy;
-        const grad = ctx.createLinearGradient(x, y, x, y+h);
-        grad.addColorStop(0, '#3d2d6a'); grad.addColorStop(1, '#1a1a35');
-        ctx.fillStyle = grad;
-        ctx.strokeStyle = 'rgba(200,180,255,0.5)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        if (s.shape === 'trapezoid') {
-          const off = w * 0.16;
-          ctx.moveTo(x+off,y); ctx.lineTo(x+w-off,y); ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h);
-          ctx.closePath();
-        } else if (s.shape === 'ellipse') {
-          ctx.ellipse(x+w/2, y+h/2, w/2, h/2, 0, 0, Math.PI*2);
-        } else if (s.shape === 'semicircle') {
-          ctx.arc(x+w/2, y+h, w/2, Math.PI, 0, false); ctx.closePath();
-        } else { rrect(ctx, x, y, w, h, 4); }
-        ctx.fill(); ctx.stroke();
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        const x=s.x*sx, y=s.y*sy, w=s.width*sx, h=s.height*sy;
+        const grad = ctx.createLinearGradient(x,y,x,y+h);
+        grad.addColorStop(0,'#4c3b8a'); grad.addColorStop(1,'#1a1535');
+        ctx.fillStyle = grad; ctx.strokeStyle = 'rgba(167,139,250,0.7)'; ctx.lineWidth = 1.5;
+        drawStagePath(ctx, s, x, y, w, h); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
         ctx.font = `bold ${Math.round(11*Math.min(sx,sy))}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.fillText(s.label || 'SÂN KHẤU', x+w/2, y+h/2+4);
@@ -94,37 +133,54 @@ function SeatmapPreview({ event, zoom }) {
 
       // Zones
       for (const z of layout.zones) {
-        const x = z.x*sx, y = z.y*sy, w = z.width*sx, h = z.height*sy;
+        const x=z.x*sx, y=z.y*sy, w=z.width*sx, h=z.height*sy;
         const c = z.color || '#3B82F6';
-        ctx.fillStyle = c + '22'; ctx.strokeStyle = c; ctx.lineWidth = 1.5;
-        rrect(ctx, x, y, w, h, 6); ctx.fill(); ctx.stroke();
+        const isGa = Boolean(z.ga);
+        ctx.fillStyle = c + (isGa ? '45' : '28'); ctx.strokeStyle = c; ctx.lineWidth = 1.5;
+        drawZonePathCanvas(ctx, z.shape||'rect', x, y, w, h);
+        ctx.fill(); ctx.stroke();
+        const scale = Math.min(sx,sy);
         ctx.fillStyle = c;
-        ctx.font = `bold ${Math.round(11*Math.min(sx,sy))}px sans-serif`;
-        ctx.textAlign = 'left';
-        ctx.fillText(z.name, x+8*sx, y+18*sy);
-        ctx.fillStyle = c + '99';
-        ctx.font = `${Math.round(9*Math.min(sx,sy))}px sans-serif`;
-        ctx.fillText(`${(z.rows||5)*(z.cols||8)} ghế`, x+8*sx, y+30*sy);
+        ctx.font = `bold ${Math.round(12*scale)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(z.name, x+w/2, y+h/2 - 6*scale);
+        ctx.fillStyle = c+'aa';
+        ctx.font = `${Math.round(9*scale)}px sans-serif`;
+        ctx.fillText(isGa ? `${(z.rows||1)*(z.cols||8)} vé tự do` : `${(z.rows||5)*(z.cols||8)} ghế`, x+w/2, y+h/2 + 7*scale);
       }
-    } else if (event.zones?.length) {
-      const cols = 2, pad = 20, blockW = (W - pad*(cols+1))/cols, blockH = 72;
-      event.zones.forEach((z, i) => {
-        const col = i%cols, row = Math.floor(i/cols);
-        const x = pad + col*(blockW+pad), y = pad + row*(blockH+12);
-        const c = z.color || '#3B82F6';
-        ctx.fillStyle = c+'22'; ctx.strokeStyle = c; ctx.lineWidth = 1.5;
-        rrect(ctx, x, y, blockW, blockH, 8); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = c; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(z.name, x+blockW/2, y+28);
-        ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '11px sans-serif';
-        ctx.fillText(`${z.available_seats}/${z.total_seats} ghế trống`, x+blockW/2, y+46);
-        ctx.fillText(new Intl.NumberFormat('vi-VN').format(z.price)+' VND', x+blockW/2, y+62);
-      });
+    };
+
+    if (event.poster_url) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload  = () => draw(img);
+      img.onerror = () => draw(null);
+      img.src = event.poster_url;
     } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('Chưa có sơ đồ chỗ ngồi', W/2, H/2);
+      draw(null);
     }
-  }, [event]);
+  }, [event, hasLayout]);
+
+  // No layout → show poster or empty
+  if (!hasLayout) {
+    if (event.poster_url) {
+      return (
+        <img src={event.poster_url} alt="Sơ đồ chỗ ngồi"
+          draggable={false}
+          className="select-none max-w-full max-h-full object-contain"
+          style={{ transform:`scale(${zoom})`, transformOrigin:'center center', transition:'transform 0.2s ease' }}
+        />
+      );
+    }
+    return (
+      <div className="text-gray-400 text-sm flex flex-col items-center gap-3">
+        <svg className="w-12 h-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+        </svg>
+        Chưa có sơ đồ chỗ ngồi
+      </div>
+    );
+  }
 
   return (
     <canvas ref={canvasRef} width={760} height={480}
@@ -402,7 +458,7 @@ export default function EventDetailPage() {
 
             {/* Seat map */}
             <div className="bg-gray-950 rounded-2xl p-5 text-white">
-              <SeatMap eventId={id} />
+              <SeatMap eventId={id} layoutJson={event.layout_json} />
             </div>
           </div>
         ) : (
@@ -465,7 +521,7 @@ export default function EventDetailPage() {
             </div>
 
             {/* Seatmap canvas with zoom */}
-            <div className="relative overflow-hidden rounded-b-2xl" style={{ height: '420px', background: '#0d0d14' }}>
+            <div className="relative overflow-hidden rounded-b-2xl" style={{ height: '420px', background: '#f5f4f0' }}>
               <div className="w-full h-full overflow-auto flex items-center justify-center">
                 <SeatmapPreview event={event} zoom={seatmapZoom} />
               </div>

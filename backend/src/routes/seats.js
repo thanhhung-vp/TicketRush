@@ -79,15 +79,20 @@ router.post('/hold', authenticate, async (req, res) => {
     await broadcastSeatUpdate(req.app, seat_ids);
 
     // Schedule auto-release — jobId is deterministic per user so we can cancel it on renew
-    const jobId = `hold:${req.user.id}`;
-    const existingJob = await seatReleaseQueue.getJob(jobId);
-    if (existingJob) await existingJob.remove().catch(() => {});
+    // Wrap in try/catch: if Redis is down, the sweepExpiredSeats fallback handles expiry
+    try {
+      const jobId = `hold-${req.user.id}`;
+      const existingJob = await seatReleaseQueue.getJob(jobId);
+      if (existingJob) await existingJob.remove().catch(() => {});
 
-    await seatReleaseQueue.add(
-      'release',
-      { seat_ids, user_id: req.user.id },
-      { delay: HOLD_MS, jobId }
-    );
+      await seatReleaseQueue.add(
+        'release',
+        { seat_ids, user_id: req.user.id },
+        { delay: HOLD_MS, jobId }
+      );
+    } catch (queueErr) {
+      console.warn('Queue unavailable, relying on sweep fallback:', queueErr.message);
+    }
 
     res.json({ ok: true, locked_until: lockedUntil, seat_ids });
   } catch (err) {
@@ -137,15 +142,19 @@ router.post('/renew', authenticate, async (req, res) => {
     await client.query('COMMIT');
 
     // Replace the scheduled release job with a fresh one
-    const jobId = `hold:${req.user.id}`;
-    const existingJob = await seatReleaseQueue.getJob(jobId);
-    if (existingJob) await existingJob.remove().catch(() => {});
+    try {
+      const jobId = `hold-${req.user.id}`;
+      const existingJob = await seatReleaseQueue.getJob(jobId);
+      if (existingJob) await existingJob.remove().catch(() => {});
 
-    await seatReleaseQueue.add(
-      'release',
-      { seat_ids, user_id: req.user.id },
-      { delay: HOLD_MS, jobId }
-    );
+      await seatReleaseQueue.add(
+        'release',
+        { seat_ids, user_id: req.user.id },
+        { delay: HOLD_MS, jobId }
+      );
+    } catch (queueErr) {
+      console.warn('Queue unavailable, relying on sweep fallback:', queueErr.message);
+    }
 
     res.json({ ok: true, locked_until: newLockedUntil });
   } catch (err) {
@@ -174,9 +183,13 @@ router.post('/release', authenticate, async (req, res) => {
       [req.user.id, ...seat_ids]
     );
     // Cancel the scheduled release job too
-    const jobId = `hold:${req.user.id}`;
-    const job = await seatReleaseQueue.getJob(jobId);
-    if (job) await job.remove().catch(() => {});
+    try {
+      const jobId = `hold-${req.user.id}`;
+      const job = await seatReleaseQueue.getJob(jobId);
+      if (job) await job.remove().catch(() => {});
+    } catch (queueErr) {
+      console.warn('Queue unavailable on release:', queueErr.message);
+    }
 
     await broadcastSeatUpdate(req.app, seat_ids);
     res.json({ ok: true });
