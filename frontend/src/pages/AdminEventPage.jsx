@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import api from '../lib/api.js';
 import MerchManager from '../components/MerchManager.jsx';
 import SeatDesigner from '../components/SeatDesigner.jsx';
@@ -18,6 +29,16 @@ const CATEGORIES = [
   { value: 'other',       label: 'Khác' },
 ];
 
+const GENDER_COLORS = { male: '#3b82f6', female: '#ec4899', other: '#a78bfa', unknown: '#94a3b8' };
+const AGE_COLOR = '#6366f1';
+
+function getGenderLabel(gender) {
+  if (gender === 'male') return 'Nam';
+  if (gender === 'female') return 'Nữ';
+  if (gender === 'other') return 'Khác';
+  return 'Chưa rõ';
+}
+
 export default function AdminEventPage() {
   const { id }      = useParams();
   const navigate    = useNavigate();
@@ -29,6 +50,7 @@ export default function AdminEventPage() {
     poster_url: '', status: 'draft', category: 'other',
   });
   const [zones,       setZones]       = useState([]);
+  const [audience,    setAudience]    = useState(null);
   const [layoutJson,  setLayoutJson]  = useState(null);
   const [newZone,     setNewZone]     = useState({ name: '', rows: '', cols: '', price: '', color: '#3B82F6' });
   const [loading,     setLoading]     = useState(!isNew);
@@ -52,6 +74,9 @@ export default function AdminEventPage() {
         setZones(z || []);
         setLayoutJson(ev.layout_json || null);
       }).finally(() => setLoading(false));
+      api.get(`/admin/events/${id}/audience`)
+        .then(r => setAudience(r.data))
+        .catch(() => setAudience(null));
     }
   }, [id, isNew]);
 
@@ -151,6 +176,7 @@ export default function AdminEventPage() {
     { key: 'info',   label: 'Thông tin' },
     ...(isNew ? [] : [
       { key: 'design', label: '🎨 Thiết kế sơ đồ' },
+      { key: 'audience', label: 'Khán giả' },
       { key: 'merch',  label: '🛍 Merchandise' },
     ]),
   ];
@@ -285,6 +311,10 @@ export default function AdminEventPage() {
         </div>
       )}
 
+      {activeTab === 'audience' && !isNew && (
+        <AudiencePanel audience={audience} />
+      )}
+
       {/* ── Tab: Merchandise ── */}
       {activeTab === 'merch' && !isNew && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
@@ -300,6 +330,80 @@ export default function AdminEventPage() {
           <MerchManager eventId={id} />
         </div>
       )}
+    </div>
+  );
+}
+
+function AudiencePanel({ audience }) {
+  const summary = audience?.summary || {};
+  const genderData = (audience?.by_gender || []).map(g => ({
+    name: getGenderLabel(g.gender),
+    value: Number(g.count || 0),
+    color: GENDER_COLORS[g.gender] || GENDER_COLORS.unknown,
+  }));
+  const ageData = (audience?.by_age || []).map(a => ({
+    age: a.age_group,
+    count: Number(a.count || 0),
+  }));
+
+  return (
+    <div className="space-y-6">
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500 font-medium">Tổng vé đã bán</p>
+          <p className="mt-1 text-3xl font-extrabold text-gray-900">
+            {Number(summary.total_tickets || 0).toLocaleString('vi-VN')}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500 font-medium">Khách hàng</p>
+          <p className="mt-1 text-3xl font-extrabold text-gray-900">
+            {Number(summary.total_customers || 0).toLocaleString('vi-VN')}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+          <h2 className="font-semibold mb-4 text-gray-700">Phân bố giới tính</h2>
+          {genderData.length === 0 ? (
+            <p className="text-gray-400 text-sm">Chưa có dữ liệu</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={genderData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={82}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {genderData.map((entry, i) => <Cell key={entry.name + i} fill={entry.color} />)}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm">
+          <h2 className="font-semibold mb-4 text-gray-700">Phân bố độ tuổi</h2>
+          {ageData.length === 0 ? (
+            <p className="text-gray-400 text-sm">Chưa có dữ liệu</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={ageData}>
+                <XAxis dataKey="age" tick={{ fontSize: 11, fill: '#6b7280' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="count" fill={AGE_COLOR} radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

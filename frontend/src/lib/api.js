@@ -5,6 +5,20 @@ const api = axios.create({ baseURL: '/api' });
 function getAccessToken()  { return localStorage.getItem('accessToken') || localStorage.getItem('token'); }
 function getRefreshToken() { return localStorage.getItem('refreshToken'); }
 
+const PUBLIC_AUTH_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/refresh',
+];
+
+function isPublicAuthRequest(config) {
+  const url = config?.url || '';
+  const normalized = url.startsWith('/api') ? url.slice(4) : url;
+  return PUBLIC_AUTH_PATHS.some(path => normalized.startsWith(path));
+}
+
 api.interceptors.request.use((config) => {
   const token = getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -23,7 +37,7 @@ api.interceptors.response.use(
   (r) => r,
   async (err) => {
     const original = err.config;
-    if (err.response?.status === 401 && !original._retry) {
+    if (err.response?.status === 401 && original && !original._retry && !isPublicAuthRequest(original)) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });

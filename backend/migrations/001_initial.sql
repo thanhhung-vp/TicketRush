@@ -5,7 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Users
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email      VARCHAR(255) UNIQUE NOT NULL,
   password   VARCHAR(255) NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE users (
 );
 
 -- Events
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title       VARCHAR(255) NOT NULL,
   description TEXT,
@@ -30,7 +30,7 @@ CREATE TABLE events (
 );
 
 -- Zones (Khu vực trong sự kiện, ví dụ: Khu A, Khu VIP)
-CREATE TABLE zones (
+CREATE TABLE IF NOT EXISTS zones (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   event_id    UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   name        VARCHAR(100) NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE zones (
 );
 
 -- Seats (sinh ra từ zones, mỗi ô trong ma trận là 1 seat)
-CREATE TABLE seats (
+CREATE TABLE IF NOT EXISTS seats (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   zone_id    UUID NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
   event_id   UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -55,11 +55,11 @@ CREATE TABLE seats (
   UNIQUE (zone_id, row_idx, col_idx)
 );
 
-CREATE INDEX idx_seats_event_status ON seats(event_id, status);
-CREATE INDEX idx_seats_locked_at    ON seats(locked_at) WHERE status = 'locked';
+CREATE INDEX IF NOT EXISTS idx_seats_event_status ON seats(event_id, status);
+CREATE INDEX IF NOT EXISTS idx_seats_locked_at    ON seats(locked_at) WHERE status = 'locked';
 
 -- Orders
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id      UUID NOT NULL REFERENCES users(id),
   event_id     UUID NOT NULL REFERENCES events(id),
@@ -71,7 +71,7 @@ CREATE TABLE orders (
 );
 
 -- Order items (một order có thể gồm nhiều ghế)
-CREATE TABLE order_items (
+CREATE TABLE IF NOT EXISTS order_items (
   id       UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   seat_id  UUID NOT NULL REFERENCES seats(id),
@@ -79,7 +79,7 @@ CREATE TABLE order_items (
 );
 
 -- Tickets (sau khi thanh toán, mỗi ghế → 1 vé có QR)
-CREATE TABLE tickets (
+CREATE TABLE IF NOT EXISTS tickets (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id   UUID NOT NULL REFERENCES orders(id),
   seat_id    UUID NOT NULL REFERENCES seats(id),

@@ -52,11 +52,14 @@ export default function ForgotPasswordPage() {
   const [success, setSuccess] = useState('');
 
   const sendOtp = async () => {
-    if (!email) { setError('Vui lòng nhập email trước'); return; }
-    setSending(true); setError('');
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) { setError('Vui lòng nhập email trước'); return; }
+    setSending(true); setError(''); setSuccess('');
     try {
-      await api.post('/auth/forgot-password', { email });
+      await api.post('/auth/forgot-password', { email: normalizedEmail });
+      setEmail(normalizedEmail);
       setOtpSent(true);
+      setSuccess('Nếu email tồn tại trong hệ thống, mã xác minh đã được gửi.');
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể gửi mã, vui lòng thử lại');
     } finally {
@@ -69,13 +72,14 @@ export default function ForgotPasswordPage() {
     if (!otpSent) { setError('Vui lòng nhấn "Gửi mã" trước'); return; }
     if (otp.length < 6) { setError('Vui lòng nhập đủ 6 số mã xác minh'); return; }
     setError('');
+    setSuccess('');
     setStep(2);
   };
 
   const resetPassword = async (e) => {
     e.preventDefault();
     if (newPw !== confirmPw) { setError('Mật khẩu xác nhận không khớp'); return; }
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setSuccess('');
     try {
       await api.post('/auth/reset-password', { email, otp, new_password: newPw });
       setSuccess('Đặt lại mật khẩu thành công! Đang chuyển hướng...');

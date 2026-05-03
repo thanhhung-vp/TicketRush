@@ -7,6 +7,7 @@ import pool from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import redis from '../config/redis.js';
 import { sendPasswordResetOTP } from '../services/email.js';
+import { generateOtp, hashOtp, verifyOtpHash } from '../services/otp.js';
 
 const router = Router();
 
@@ -22,19 +23,21 @@ function generateTokens(user) {
   return { accessToken, refreshToken };
 }
 
-async function storeRefreshToken(userId, rawToken) {
+async function storeRefreshToken(userId, rawToken, db = pool) {
   const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
   const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000);
-  await pool.query(
+  await db.query(
     'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
     [userId, hash, expiresAt]
   );
   return hash;
 }
 
+const emailSchema = z.string().trim().toLowerCase().email();
+
 // POST /auth/register
 const registerSchema = z.object({
-  email:      z.string().email(),
+  email:      emailSchema,
   password:   z.string().min(6),
   full_name:  z.string().min(2).max(100),
   gender:     z.enum(['male', 'female', 'other']).optional(),
@@ -47,27 +50,33 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
   }
   const { email, password, full_name, gender, birth_year } = parsed.data;
+  const client = await pool.connect();
   try {
     const hash = await bcrypt.hash(password, 12);
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+    const { rows } = await client.query(
       `INSERT INTO users (email, password, full_name, gender, birth_year)
        VALUES ($1,$2,$3,$4,$5) RETURNING id, email, full_name, role`,
       [email, hash, full_name, gender || null, birth_year || null]
     );
     const user = rows[0];
     const { accessToken, refreshToken } = generateTokens(user);
-    await storeRefreshToken(user.id, refreshToken);
+    await storeRefreshToken(user.id, refreshToken, client);
+    await client.query('COMMIT');
     res.status(201).json({ accessToken, refreshToken, user });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     if (err.code === '23505') return res.status(409).json({ error: 'Email already exists' });
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
   }
 });
 
 // POST /auth/login
 const loginSchema = z.object({
-  email:    z.string().email(),
+  email:    emailSchema,
   password: z.string().min(1),
 });
 
@@ -223,10 +232,17 @@ router.patch('/change-password', authenticate, async (req, res) => {
   }
 });
 
+const forgotPasswordSchema = z.object({
+  email: emailSchema,
+});
+
 // POST /auth/forgot-password
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email required' });
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+  }
+  const { email } = parsed.data;
 
   try {
     const { rows } = await pool.query('SELECT id, email FROM users WHERE email = $1', [email]);
@@ -235,8 +251,8 @@ router.post('/forgot-password', async (req, res) => {
       return res.json({ ok: true, message: 'If email exists, OTP sent' });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
-    await redis.setex(`otp:${email}`, 900, otp); // 15 mins expiry
+    const otp = generateOtp();
+    await redis.setex(`otp:${email}`, 900, hashOtp(otp)); // 15 mins expiry
     await sendPasswordResetOTP({ to: email, otp });
 
     res.json({ ok: true, message: 'OTP sent' });
@@ -248,7 +264,7 @@ router.post('/forgot-password', async (req, res) => {
 
 // POST /auth/reset-password
 const resetPasswordSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   otp: z.string().length(6),
   new_password: z.string().min(6),
 });
@@ -261,8 +277,8 @@ router.post('/reset-password', async (req, res) => {
   const { email, otp, new_password } = parsed.data;
 
   try {
-    const savedOtp = await redis.get(`otp:${email}`);
-    if (!savedOtp || savedOtp !== otp) {
+    const savedOtpHash = await redis.get(`otp:${email}`);
+    if (!verifyOtpHash(otp, savedOtpHash)) {
       return res.status(401).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn' });
     }
 
@@ -274,6 +290,7 @@ router.post('/reset-password', async (req, res) => {
     }
 
     await redis.del(`otp:${email}`);
+    await pool.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email = $1)', [email]);
     res.json({ ok: true, message: 'Đặt lại mật khẩu thành công' });
   } catch (err) {
     console.error(err);

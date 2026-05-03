@@ -107,20 +107,45 @@ router.get('/', authenticate, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT o.*, e.title AS event_title, e.event_date, e.venue,
               e.poster_url,
-              json_agg(json_build_object(
-                'seat_id', oi.seat_id,
-                'label', s.label,
-                'price', oi.price,
-                'zone', z.name
-              )) AS items
+              COALESCE(
+                json_agg(json_build_object(
+                  'seat_id', oi.seat_id,
+                  'label', s.label,
+                  'price', oi.price,
+                  'zone', z.name
+                ) ORDER BY z.name, s.row_idx, s.col_idx)
+                FILTER (WHERE oi.id IS NOT NULL),
+                '[]'::json
+              ) AS items,
+              COALESCE(
+                (
+                  SELECT json_agg(json_build_object(
+                    'action_id', a.id,
+                    'ticket_id', a.ticket_id,
+                    'seat_id', a.seat_id,
+                    'label', cs.label,
+                    'price', a.price,
+                    'zone', cz.name,
+                    'cancelled_at', a.created_at,
+                    'reason', a.reason
+                  ) ORDER BY a.created_at DESC)
+                  FROM admin_ticket_actions a
+                  LEFT JOIN seats cs ON cs.id = a.seat_id
+                  LEFT JOIN zones cz ON cz.id = cs.zone_id
+                  WHERE a.order_id = o.id
+                    AND a.user_id = o.user_id
+                    AND a.action_type = 'deleted'
+                ),
+                '[]'::json
+              ) AS cancelled_items
        FROM orders o
        JOIN events e ON e.id = o.event_id
-       JOIN order_items oi ON oi.order_id = o.id
-       JOIN seats s ON s.id = oi.seat_id
-       JOIN zones z ON z.id = s.zone_id
-       WHERE o.user_id = $1 AND o.status = 'paid'
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       LEFT JOIN seats s ON s.id = oi.seat_id
+       LEFT JOIN zones z ON z.id = s.zone_id
+       WHERE o.user_id = $1 AND o.status IN ('pending', 'paid', 'cancelled')
        GROUP BY o.id, e.id
-       ORDER BY o.created_at DESC`,
+       ORDER BY COALESCE(o.paid_at, o.created_at) DESC`,
       [req.user.id]
     );
     res.json(rows);

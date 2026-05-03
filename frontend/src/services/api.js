@@ -4,6 +4,20 @@ const api = axios.create({ baseURL: '/api' });
 
 const getToken = (key) => localStorage.getItem(key);
 
+const PUBLIC_AUTH_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/refresh',
+];
+
+function isPublicAuthRequest(config) {
+  const url = config?.url || '';
+  const normalized = url.startsWith('/api') ? url.slice(4) : url;
+  return PUBLIC_AUTH_PATHS.some(path => normalized.startsWith(path));
+}
+
 api.interceptors.request.use((config) => {
   const token = getToken('accessToken') || getToken('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -22,7 +36,7 @@ api.interceptors.response.use(
   (r) => r,
   async (err) => {
     const original = err.config;
-    if (err.response?.status === 401 && !original._retry) {
+    if (err.response?.status === 401 && original && !original._retry && !isPublicAuthRequest(original)) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => failedQueue.push({ resolve, reject }))
           .then(token => { original.headers.Authorization = `Bearer ${token}`; return api(original); });
@@ -38,11 +52,12 @@ api.interceptors.response.use(
       }
       try {
         const { data } = await axios.post('/api/auth/refresh', { refreshToken });
-        localStorage.setItem('accessToken', data.data.accessToken);
-        localStorage.setItem('refreshToken', data.data.refreshToken);
-        localStorage.setItem('token', data.data.accessToken);
-        processQueue(null, data.data.accessToken);
-        original.headers.Authorization = `Bearer ${data.data.accessToken}`;
+        const payload = data.data || data;
+        localStorage.setItem('accessToken', payload.accessToken);
+        localStorage.setItem('refreshToken', payload.refreshToken);
+        localStorage.setItem('token', payload.accessToken);
+        processQueue(null, payload.accessToken);
+        original.headers.Authorization = `Bearer ${payload.accessToken}`;
         return api(original);
       } catch (e) {
         processQueue(e, null);

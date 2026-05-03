@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import SearchSuggestions from './SearchSuggestions.jsx';
+import ticketLogo from '../ticketlogo.png';
 
 export default function Navbar() {
   const { user, logout }   = useAuth();
@@ -74,7 +75,16 @@ export default function Navbar() {
           </button>
 
           {user ? (
-            <div className="relative" ref={menuRef}>
+            <>
+              <Link
+                to="/my-tickets"
+                className="hidden sm:inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition"
+              >
+                <img src={ticketLogo} alt="" className="h-5 w-5 object-contain" />
+                <span>Vé của tôi</span>
+              </Link>
+
+              <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setOpen(v => !v)}
                 className="flex items-center gap-2 hover:bg-gray-100 rounded-full pl-1 pr-2 py-1 transition"
@@ -98,8 +108,9 @@ export default function Navbar() {
               {open && (
                 <div className="absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden z-50 py-1.5">
                   <Link to="/my-tickets" onClick={() => setOpen(false)}
-                    className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition">
-                    Lịch sử đặt vé
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition">
+                    <img src={ticketLogo} alt="" className="h-5 w-5 object-contain" />
+                    <span>Vé của tôi</span>
                   </Link>
                   <Link to="/profile" onClick={() => setOpen(false)}
                     className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition">
@@ -122,7 +133,8 @@ export default function Navbar() {
                   </button>
                 </div>
               )}
-            </div>
+              </div>
+            </>
           ) : (
             <>
               <Link to="/login" className="text-sm text-gray-600 hover:text-gray-900 transition font-medium px-3 py-1.5">
