@@ -1,12 +1,49 @@
 import { Router } from 'express';
 import pool from '../config/db.js';
+import redis from '../config/redis.js';
 import { authenticate } from '../middleware/auth.js';
 import { seatReleaseQueue } from '../workers/seatRelease.js';
+import { admittedKey, highLoadKey } from '../utils/queueKeys.js';
+import { ensureSingleEvent, validateSeatIds } from '../utils/seatHoldRules.js';
 
 const router = Router();
 
 const HOLD_MINUTES = Number(process.env.SEAT_HOLD_MINUTES) || 10;
 const HOLD_MS = HOLD_MINUTES * 60 * 1000;
+
+async function safeRedisCall(fn, fallback) {
+  if (!redis || !['ready', 'connect'].includes(redis.status)) return fallback;
+
+  try {
+    return await Promise.race([
+      fn(),
+      new Promise(resolve => setTimeout(() => resolve(fallback), 250)),
+    ]);
+  } catch (err) {
+    console.warn('Redis command skipped:', err.message);
+    return fallback;
+  }
+}
+
+async function userNeedsQueueAdmission(eventId, userId) {
+  const highLoad = await safeRedisCall(() => redis.get(highLoadKey(eventId)), null);
+  if (!highLoad) return false;
+
+  const admitted = await safeRedisCall(() => redis.sismember(admittedKey(eventId), userId), 0);
+  return !admitted;
+}
+
+async function scheduleSeatRelease(userId, seatIds) {
+  const jobId = `hold:${userId}`;
+  const existingJob = await seatReleaseQueue.getJob(jobId);
+  if (existingJob) await existingJob.remove().catch(() => {});
+
+  await seatReleaseQueue.add(
+    'release',
+    { seat_ids: seatIds, user_id: userId },
+    { delay: HOLD_MS, jobId }
+  );
+}
 
 // ── Helper: broadcast seat status changes to all clients in the event room ──
 async function broadcastSeatUpdate(app, seatIds) {
@@ -35,18 +72,29 @@ async function broadcastSeatUpdate(app, seatIds) {
  */
 router.post('/hold', authenticate, async (req, res) => {
   const { seat_ids } = req.body;
-  if (!Array.isArray(seat_ids) || seat_ids.length === 0)
-    return res.status(400).json({ error: 'seat_ids must be a non-empty array' });
-  if (seat_ids.length > 10)
-    return res.status(400).json({ error: 'Cannot hold more than 10 seats at once' });
+  const validation = validateSeatIds(seat_ids);
+  if (!validation.ok) {
+    return res.status(validation.status).json({ error: validation.error });
+  }
 
   const client = await pool.connect();
+  let lockedUntil = null;
+  let eventId = null;
   try {
     await client.query('BEGIN');
 
     const ph = seat_ids.map((_, i) => `$${i + 1}`).join(',');
+    await client.query(
+      `UPDATE seats
+       SET status = 'available', locked_by = NULL, locked_at = NULL, locked_until = NULL
+       WHERE id IN (${ph})
+         AND status = 'locked'
+         AND locked_until <= NOW()`,
+      seat_ids
+    );
+
     const { rows: seats } = await client.query(
-      `SELECT id, status FROM seats WHERE id IN (${ph}) FOR UPDATE NOWAIT`,
+      `SELECT id, event_id, status FROM seats WHERE id IN (${ph}) FOR UPDATE NOWAIT`,
       seat_ids
     );
 
@@ -54,6 +102,23 @@ router.post('/hold', authenticate, async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'One or more seats not found' });
     }
+
+    const eventCheck = ensureSingleEvent(seats);
+    if (!eventCheck.ok) {
+      await client.query('ROLLBACK');
+      return res.status(eventCheck.status).json({ error: eventCheck.error });
+    }
+    eventId = eventCheck.eventId;
+
+    if (await userNeedsQueueAdmission(eventId, req.user.id)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        error: 'Bạn cần vào hàng chờ trước khi giữ ghế.',
+        code: 'QUEUE_REQUIRED',
+        event_id: eventId,
+      });
+    }
+
     const unavailable = seats.filter(s => s.status !== 'available');
     if (unavailable.length > 0) {
       await client.query('ROLLBACK');
@@ -64,7 +129,7 @@ router.post('/hold', authenticate, async (req, res) => {
     }
 
     const now = new Date();
-    const lockedUntil = new Date(now.getTime() + HOLD_MS);
+    lockedUntil = new Date(now.getTime() + HOLD_MS);
     const uph = seat_ids.map((_, i) => `$${i + 4}`).join(',');
     await client.query(
       `UPDATE seats
@@ -74,31 +139,26 @@ router.post('/hold', authenticate, async (req, res) => {
     );
 
     await client.query('COMMIT');
-
-    // Realtime broadcast (works across instances via Redis adapter)
-    await broadcastSeatUpdate(req.app, seat_ids);
-
-    // Schedule auto-release — jobId is deterministic per user so we can cancel it on renew
-    const jobId = `hold:${req.user.id}`;
-    const existingJob = await seatReleaseQueue.getJob(jobId);
-    if (existingJob) await existingJob.remove().catch(() => {});
-
-    await seatReleaseQueue.add(
-      'release',
-      { seat_ids, user_id: req.user.id },
-      { delay: HOLD_MS, jobId }
-    );
-
-    res.json({ ok: true, locked_until: lockedUntil, seat_ids });
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     if (err.code === '55P03')
       return res.status(409).json({ error: 'Ghế đang được người khác chọn, vui lòng thử lại.' });
     console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Server error' });
   } finally {
     client.release();
   }
+
+  // Realtime and release queue are best-effort after the DB transaction.
+  // The fallback sweeper still releases expired seats if Redis/BullMQ is down.
+  await broadcastSeatUpdate(req.app, seat_ids).catch(err => {
+    console.warn('Seat broadcast skipped:', err.message);
+  });
+  await scheduleSeatRelease(req.user.id, seat_ids).catch(err => {
+    console.warn('Seat release job scheduling skipped:', err.message);
+  });
+
+  res.json({ ok: true, locked_until: lockedUntil, seat_ids, event_id: eventId });
 });
 
 /**

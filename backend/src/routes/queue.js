@@ -1,15 +1,12 @@
 import { Router } from 'express';
 import redis from '../config/redis.js';
 import { authenticate } from '../middleware/auth.js';
+import { admittedKey, highLoadKey, queueKey } from '../utils/queueKeys.js';
 
 const router = Router();
 
 const BATCH_SIZE     = 50;   // users per batch admitted
 const ADMIT_INTERVAL = 30;   // seconds between admitting batches
-
-function queueKey(eventId)   { return `queue:${eventId}`; }
-function admittedKey(eventId){ return `admitted:${eventId}`; }
-function highLoadKey(eventId){ return `highload:${eventId}`; }
 
 /**
  * POST /queue/:eventId/enter
