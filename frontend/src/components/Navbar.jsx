@@ -81,7 +81,7 @@ export default function Navbar() {
                 className="inline-flex rounded-full bg-gradient-to-r from-primary via-secondary to-emerald-400 p-[1.5px] text-sm font-semibold shadow-sm shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:shadow-md hover:shadow-primary/20"
               >
                 <span className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-white px-3 text-gray-800 transition hover:bg-gray-50 sm:px-3.5">
-                  <img src={ticketLogo} alt="" className="h-5 w-5 shrink-0 object-contain" />
+                  <img src={ticketLogo} alt="" className="h-5 w-5 shrink-0 -translate-y-0.5 object-contain" />
                   <span className="leading-none">Vé của tôi</span>
                 </span>
               </Link>

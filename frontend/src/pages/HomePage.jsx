@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '../lib/api.js';
 
@@ -49,7 +49,9 @@ const SORT_OPTIONS = [
 export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents]   = useState([]);
+  const [bannerEvents, setBannerEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [bannerLoading, setBannerLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const tabsRef = useRef(null);
 
@@ -67,34 +69,59 @@ export default function HomePage() {
     });
   };
 
-  const fetchEvents = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (search)   params.search    = search;
-      if (category) params.category  = category;
-      if (sort)     params.sort      = sort;
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo)   params.date_to   = dateTo;
-      const { data } = await api.get('/events', { params });
-      setEvents(data);
-    } catch {
-      setEvents([]);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function fetchFeaturedEvents() {
+      setBannerLoading(true);
+      try {
+        const { data } = await api.get('/events/featured', { signal: controller.signal });
+        setBannerEvents(Array.isArray(data) ? data : []);
+      } catch {
+        if (!controller.signal.aborted) setBannerEvents([]);
+      } finally {
+        if (!controller.signal.aborted) setBannerLoading(false);
+      }
     }
-  }, [search, category, sort, dateFrom, dateTo]);
+
+    fetchFeaturedEvents();
+
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
-    const timer = setTimeout(fetchEvents, 300);
-    return () => clearTimeout(timer);
-  }, [fetchEvents]);
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const params = {};
+        if (search)   params.search    = search;
+        if (category) params.category  = category;
+        if (sort)     params.sort      = sort;
+        if (dateFrom) params.date_from = dateFrom;
+        if (dateTo)   params.date_to   = dateTo;
+        const { data } = await api.get('/events', { params, signal: controller.signal });
+        setEvents(Array.isArray(data) ? data : []);
+      } catch {
+        if (!controller.signal.aborted) setEvents([]);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [search, category, sort, dateFrom, dateTo]);
 
   const scrollTabs = (dir) => {
     if (tabsRef.current) tabsRef.current.scrollBy({ left: dir * 200, behavior: 'smooth' });
   };
 
   const activeFilterCount = [category, dateFrom, dateTo, sort !== 'date' ? sort : ''].filter(Boolean).length;
+  const isInitialLoading = loading && events.length === 0;
+  const isRefreshing = loading && events.length > 0;
 
   const clearFilters = () => setSearchParams({});
 
@@ -102,7 +129,7 @@ export default function HomePage() {
     <div className="max-w-6xl mx-auto px-4 py-6">
       {/* ═══ Hero Banner Carousel (Contained within frame) ═══ */}
       <div className="rounded-2xl overflow-hidden mb-8 shadow-xl">
-        <EventCarousel events={events} loading={loading} />
+        <EventCarousel events={bannerEvents} loading={bannerLoading} />
       </div>
 
       {/* Section title + filter toggle */}
@@ -226,7 +253,11 @@ export default function HomePage() {
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <p className="text-sm text-gray-500">
               {search && <>Kết quả cho "<span className="font-medium text-gray-700">{search}</span>" — </>}
-              <span className="font-medium text-gray-700">{events.length}</span> sự kiện
+              {isRefreshing ? (
+                <span className="font-medium text-gray-700">Đang cập nhật...</span>
+              ) : (
+                <><span className="font-medium text-gray-700">{events.length}</span> sự kiện</>
+              )}
             </p>
             <button
               onClick={clearFilters}
@@ -238,7 +269,7 @@ export default function HomePage() {
         )}
 
         {/* Events grid */}
-        {loading ? (
+        {isInitialLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="animate-pulse">
@@ -263,8 +294,17 @@ export default function HomePage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {events.map(event => <EventCard key={event.id} event={event} />)}
+          <div className="relative" aria-busy={isRefreshing}>
+            <div className={`grid grid-cols-1 gap-6 transition-opacity duration-200 sm:grid-cols-2 lg:grid-cols-4 ${isRefreshing ? 'opacity-60' : 'opacity-100'}`}>
+              {events.map(event => <EventCard key={event.id} event={event} />)}
+            </div>
+            {isRefreshing && (
+              <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-2">
+                <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-xs font-semibold text-gray-600 shadow-sm backdrop-blur">
+                  Đang cập nhật...
+                </span>
+              </div>
+            )}
           </div>
         )}
     </div>
@@ -381,13 +421,25 @@ function EventCarousel({ events, loading }) {
   const prev = () => goTo((current - 1 + slides.length) % slides.length);
   const next = () => goTo((current + 1) % slides.length);
 
-  if (loading || slides.length === 0) {
+  if (loading) {
     return (
       <div className="relative h-64 md:h-80 w-full bg-gradient-to-r from-primary via-purple-600 to-secondary animate-pulse">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-4">
           <h1 className="text-3xl md:text-5xl font-extrabold mb-3 drop-shadow-lg">Khám phá sự kiện</h1>
           <p className="text-base md:text-lg opacity-90 max-w-lg">Tìm vé cho hàng nghìn sự kiện trên khắp Việt Nam</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (slides.length === 0) {
+    return (
+      <div className="relative h-64 w-full bg-gradient-to-r from-primary via-purple-600 to-secondary md:h-80">
+        <div className="absolute inset-0 bg-black/20" />
+        <div className="relative z-10 flex h-full flex-col items-center justify-center px-4 text-center text-white">
+          <h1 className="mb-3 text-3xl font-extrabold drop-shadow-lg md:text-5xl">Khám phá sự kiện</h1>
+          <p className="max-w-lg text-base opacity-90 md:text-lg">Tìm vé cho hàng nghìn sự kiện trên khắp Việt Nam</p>
         </div>
       </div>
     );

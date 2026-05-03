@@ -47,7 +47,7 @@ export default function AdminEventPage() {
 
   const [form, setForm] = useState({
     title: '', description: '', venue: '', event_date: '',
-    poster_url: '', status: 'draft', category: 'other',
+    poster_url: '', status: 'draft', category: 'other', is_featured: false,
   });
   const [zones,       setZones]       = useState([]);
   const [audience,    setAudience]    = useState(null);
@@ -68,8 +68,10 @@ export default function AdminEventPage() {
         const { zones: z, ...ev } = r.data;
         setForm({
           ...ev,
+          description: ev.description || '',
           event_date: ev.event_date ? new Date(ev.event_date).toISOString().slice(0, 16) : '',
           poster_url: ev.poster_url || '',
+          is_featured: Boolean(ev.is_featured),
         });
         setZones(z || []);
         setLayoutJson(ev.layout_json || null);
@@ -81,6 +83,7 @@ export default function AdminEventPage() {
   }, [id, isNew]);
 
   const set  = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+  const setChecked = k => e => setForm(f => ({ ...f, [k]: e.target.checked }));
   const setZ = k => e => setNewZone(z => ({ ...z, [k]: e.target.value }));
 
   const uploadImage = async (file) => {
@@ -256,6 +259,19 @@ export default function AdminEventPage() {
               </select>
             </div>
           </div>
+
+          <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={Boolean(form.is_featured)}
+              onChange={setChecked('is_featured')}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>
+              <span className="block font-semibold text-gray-800">Hiển thị trên banner chính</span>
+              <span className="block text-xs text-gray-500">Sự kiện được chọn sẽ xuất hiện ở carousel trang chủ, độc lập với bộ lọc của user.</span>
+            </span>
+          </label>
 
           {/* Poster upload */}
           <div>

@@ -2,13 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import pool from '../config/db.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { CATEGORIES, eventSchema, eventUpdateSchema } from '../utils/eventValidation.js';
 
 const router = Router();
-
-const CATEGORIES = [
-  'music', 'fan_meeting', 'merchandise', 'arts', 'sports',
-  'conference', 'education', 'nightlife', 'livestream', 'travel', 'other',
-];
 
 // ── Public ────────────────────────────────────────────────
 
@@ -129,6 +125,31 @@ router.get('/suggestions', async (req, res) => {
   }
 });
 
+// GET /events/featured
+router.get('/featured', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT e.*,
+              COUNT(DISTINCT s.id) FILTER (WHERE s.status = 'available') AS available_seats,
+              COUNT(DISTINCT s.id) AS total_seats,
+              MIN(z.price) AS min_price,
+              MAX(z.price) AS max_price
+       FROM events e
+       LEFT JOIN seats s ON s.event_id = e.id
+       LEFT JOIN zones z ON z.event_id = e.id
+       WHERE e.is_featured = TRUE
+         AND e.status IN ('on_sale', 'ended')
+       GROUP BY e.id
+       ORDER BY (e.event_date < NOW()) ASC, e.event_date ASC, e.created_at DESC
+       LIMIT 6`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // GET /events/:id
 router.get('/:id', async (req, res) => {
   try {
@@ -178,28 +199,18 @@ router.get('/:id/seats', async (req, res) => {
 
 // ── Admin ─────────────────────────────────────────────────
 
-const eventSchema = z.object({
-  title:       z.string().min(3).max(200),
-  description: z.string().max(5000).optional(),
-  venue:       z.string().min(3).max(300),
-  event_date:  z.string().datetime({ offset: true }),
-  poster_url:  z.string().url().optional().or(z.literal('')),
-  category:    z.enum(CATEGORIES).default('other'),
-  status:      z.enum(['draft', 'on_sale', 'ended']).optional(),
-});
-
 // POST /events
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   const parsed = eventSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
   }
-  const { title, description, venue, event_date, poster_url, category } = parsed.data;
+  const { title, description, venue, event_date, poster_url, category, is_featured = false } = parsed.data;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO events (title, description, venue, event_date, poster_url, category, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [title, description, venue, event_date, poster_url || null, category, req.user.id]
+      `INSERT INTO events (title, description, venue, event_date, poster_url, category, is_featured, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [title, description || null, venue, event_date, poster_url || null, category, is_featured, req.user.id]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -210,12 +221,17 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
 // PATCH /events/:id
 router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
-  const allowed = ['title', 'description', 'venue', 'event_date', 'poster_url', 'status', 'category'];
-  const fields = Object.keys(req.body).filter(k => allowed.includes(k));
+  const parsed = eventUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+  }
+
+  const allowed = ['title', 'description', 'venue', 'event_date', 'poster_url', 'status', 'category', 'is_featured'];
+  const fields = Object.keys(parsed.data).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
 
   const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
-  const values = fields.map(f => req.body[f]);
+  const values = fields.map(f => parsed.data[f]);
   try {
     const { rows } = await pool.query(
       `UPDATE events SET ${sets} WHERE id = $1 RETURNING *`,

@@ -128,11 +128,11 @@ export class EventRepository {
    * Create a new event.
    */
   async create(data, createdBy) {
-    const { title, description, venue, event_date, poster_url, category } = data;
+    const { title, description, venue, event_date, poster_url, category, is_featured = false } = data;
     const { rows } = await pool.query(
-      `INSERT INTO events (title, description, venue, event_date, poster_url, category, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [title, description || null, venue, event_date, poster_url || null, category || 'other', createdBy]
+      `INSERT INTO events (title, description, venue, event_date, poster_url, category, is_featured, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [title, description || null, venue, event_date, poster_url || null, category || 'other', is_featured, createdBy]
     );
     return rows[0];
   }
@@ -141,7 +141,7 @@ export class EventRepository {
    * Partially update an event.
    */
   async update(id, fields) {
-    const allowed = ['title', 'description', 'venue', 'event_date', 'poster_url', 'status', 'category'];
+    const allowed = ['title', 'description', 'venue', 'event_date', 'poster_url', 'status', 'category', 'is_featured'];
     const keys = Object.keys(fields).filter(k => allowed.includes(k));
     if (!keys.length) return this.findById(id);
 
