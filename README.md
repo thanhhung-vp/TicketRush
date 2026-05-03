@@ -127,8 +127,7 @@ POST /initiate        Bearer — body: { seat_ids, method }
 POST /confirm         Bearer — body: { order_id, method, transaction_id? }
                       → { order, tickets }
 POST /cancel          Bearer — body: { order_id }
-POST /vnpay/ipn       VNPay IPN webhook (no auth)
-POST /momo/ipn        MoMo IPN webhook (no auth)
+
 ```
 
 ### Seats `/api/seats`
