@@ -11,7 +11,6 @@ const DEFAULT_LABELS = {
   seat: 'Zone / Seat',
   location: 'Location',
   time: 'Time',
-  valid: 'Valid',
   gate: 'Show QR at the gate',
   price: 'Price',
 };
@@ -162,8 +161,6 @@ function renderTicketCard(row, index, locale, labels) {
       </g>
 
       ${renderQr(row, qrX, qrY)}
-      <rect x="${qrX}" y="${cardY + 56}" width="154" height="34" rx="17" fill="#ecfdf5" stroke="#86efac" />
-      <text x="${qrX + 77}" y="${cardY + 78}" text-anchor="middle" class="valid">${escapeXml(labels.valid)}</text>
       <text x="${qrX + 77}" y="${cardY + 294}" text-anchor="middle" class="code">${escapeXml(labels.ticketCode)} #${escapeXml(ticketCode)}</text>
     </g>
   `;
@@ -245,7 +242,6 @@ export function buildTicketsSvg({ order = {}, tickets = [], locale = 'vi-VN', la
           .value { font-size: 18px; font-weight: 500; fill: #475569; }
           .seat { font-size: 25px; font-weight: 900; fill: #155e75; }
           .price { font-size: 28px; font-weight: 900; fill: #059669; }
-          .valid { font-size: 16px; font-weight: 900; fill: #047857; }
           .code { font-size: 13px; font-weight: 800; fill: #475569; }
           .muted { font-size: 18px; font-weight: 800; fill: #94a3b8; }
         </style>

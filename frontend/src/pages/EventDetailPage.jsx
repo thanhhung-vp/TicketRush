@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
@@ -134,6 +134,47 @@ function SeatmapPreview({ event, zoom, t }) {
   );
 }
 
+function SaleCountdown({ saleStartAt, t }) {
+  const calc = () => Math.max(0, Math.floor((new Date(saleStartAt) - Date.now()) / 1000));
+  const [secs, setSecs] = useState(calc);
+
+  useEffect(() => {
+    if (!saleStartAt) return;
+    const id = setInterval(() => {
+      const s = calc();
+      setSecs(s);
+      if (s === 0) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [saleStartAt]);
+
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+
+  const pad = n => String(n).padStart(2, '0');
+  const units = d > 0
+    ? [{ v: d, l: t('event.countdown.days') }, { v: h, l: t('event.countdown.hours') }, { v: m, l: t('event.countdown.mins') }]
+    : [{ v: h, l: t('event.countdown.hours') }, { v: m, l: t('event.countdown.mins') }, { v: s, l: t('event.countdown.secs') }];
+
+  return (
+    <div className="rounded-2xl bg-white/10 border border-white/20 backdrop-blur-sm px-4 py-3 text-center">
+      <p className="text-xs text-white/60 mb-2 font-medium uppercase tracking-widest">{t('event.countdown.label')}</p>
+      <div className="flex items-center justify-center gap-2">
+        {units.map(({ v, l }) => (
+          <div key={l} className="flex flex-col items-center">
+            <span className="text-3xl font-extrabold text-white tabular-nums leading-none">{pad(v)}</span>
+            <span className="text-[10px] text-white/50 mt-0.5 uppercase tracking-wider">{l}</span>
+          </div>
+        )).reduce((acc, el, i) => i === 0 ? [el] : [...acc,
+          <span key={`sep-${i}`} className="text-2xl font-bold text-white/40 mb-3">:</span>, el
+        ], [])}
+      </div>
+    </div>
+  );
+}
+
 export default function EventDetailPage() {
   const { t, i18n } = useTranslation();
   const { id } = useParams();
@@ -158,10 +199,11 @@ export default function EventDetailPage() {
   const minPrice = event.zones?.length > 0 ? Math.min(...event.zones.map(z => Number(z.price))) : 0;
   const maxPrice = event.zones?.length > 0 ? Math.max(...event.zones.map(z => Number(z.price))) : 0;
 
-  const isPast     = new Date(event.event_date) < new Date();
-  const isClosed   = event.status === 'ended' || isPast;
-  const isSoldOut  = !isClosed && event.zones?.length > 0 && event.zones.every(z => Number(z.available_seats) === 0);
-  const eventStatus = isClosed ? 'ended' : isSoldOut ? 'soldout' : 'onsale';
+  const isPast      = new Date(event.event_date) < new Date();
+  const isClosed    = event.status === 'ended' || isPast;
+  const isScheduled = event.status === 'scheduled';
+  const isSoldOut   = !isClosed && !isScheduled && event.zones?.length > 0 && event.zones.every(z => Number(z.available_seats) === 0);
+  const eventStatus = isClosed ? 'ended' : isScheduled ? 'scheduled' : isSoldOut ? 'soldout' : 'onsale';
 
   const TABS = [
     { key: 'seats', label: t('event.tabs.seats') },
@@ -190,6 +232,13 @@ export default function EventDetailPage() {
                 <button disabled className="mt-4 w-full bg-gray-500/60 text-white/60 font-bold py-3.5 rounded-full text-sm cursor-not-allowed">
                   {t('event.eventEnded')}
                 </button>
+              ) : eventStatus === 'scheduled' ? (
+                <div className="mt-4 space-y-3">
+                  <SaleCountdown saleStartAt={event.sale_start_at} t={t} />
+                  <button disabled className="w-full bg-blue-500/40 text-white/70 font-bold py-3.5 rounded-full text-sm cursor-not-allowed">
+                    {t('event.saleNotStarted')}
+                  </button>
+                </div>
               ) : eventStatus === 'soldout' ? (
                 <button disabled className="mt-4 w-full bg-red-500/70 text-white/80 font-bold py-3.5 rounded-full text-sm cursor-not-allowed">
                   {t('event.soldOut')}
@@ -231,6 +280,12 @@ export default function EventDetailPage() {
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-gray-500/20 text-gray-300 border border-gray-500/30">
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
                     {t('event.badge.ended')}
+                  </span>
+                )}
+                {eventStatus === 'scheduled' && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    {t('event.badge.scheduled')}
                   </span>
                 )}
               </div>

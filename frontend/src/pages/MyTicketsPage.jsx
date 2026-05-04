@@ -88,7 +88,12 @@ export default function MyTicketsPage() {
   }, []);
 
   const filteredOrders = useMemo(
-    () => orders.filter(order => matchesStatus(order, statusFilter) && matchesTime(order, timeFilter)),
+    () => orders.filter(order => {
+      if (!matchesStatus(order, statusFilter)) return false;
+      // Pending orders are ungrouped by time — show all regardless of event date
+      if (statusFilter === 'pending') return true;
+      return matchesTime(order, timeFilter);
+    }),
     [orders, statusFilter, timeFilter]
   );
 
@@ -163,26 +168,28 @@ export default function MyTicketsPage() {
             })}
           </div>
 
-          <div className="mt-4 flex justify-center">
-            <div className="inline-flex rounded-full border border-slate-200 bg-white/80 p-1">
-              {TIME_FILTERS.map(filter => {
-                const active = timeFilter === filter.key;
-                return (
-                  <button
-                    key={filter.key}
-                    onClick={() => setTimeFilter(filter.key)}
-                    className={`h-9 rounded-full px-4 text-sm font-bold transition ${
-                      active
-                        ? 'bg-slate-950 text-white shadow-sm'
-                        : 'text-slate-500 hover:text-slate-950'
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                );
-              })}
+          {statusFilter !== 'pending' && (
+            <div className="mt-4 flex justify-center">
+              <div className="inline-flex rounded-full border border-slate-200 bg-white/80 p-1">
+                {TIME_FILTERS.map(filter => {
+                  const active = timeFilter === filter.key;
+                  return (
+                    <button
+                      key={filter.key}
+                      onClick={() => setTimeFilter(filter.key)}
+                      className={`h-9 rounded-full px-4 text-sm font-bold transition ${
+                        active
+                          ? 'bg-slate-950 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-950'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {error && (
@@ -242,7 +249,6 @@ function TicketOrderCard({ order, locale }) {
     seat: t('tickets.seatZone'),
     location: t('myTickets.location'),
     time: t('myTickets.time'),
-    valid: t('tickets.valid'),
     gate: t('tickets.showAtGate'),
     price: t('event.price'),
   };

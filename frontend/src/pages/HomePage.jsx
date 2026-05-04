@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 
+const PAGE_SIZE = 12;
+
 // Only values — labels resolved via t() inside component
 const CATEGORY_KEYS = [
   { value: '',            key: null },
@@ -56,6 +58,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [bannerLoading, setBannerLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const tabsRef = useRef(null);
 
   // Translated labels — re-computed on language change
@@ -121,15 +125,18 @@ export default function HomePage() {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
+      setHasMore(false);
       try {
-        const params = {};
+        const params = { limit: PAGE_SIZE, offset: 0 };
         if (search)   params.search    = search;
         if (category) params.category  = category;
         if (sort)     params.sort      = sort;
         if (dateFrom) params.date_from = dateFrom;
         if (dateTo)   params.date_to   = dateTo;
         const { data } = await api.get('/events', { params, signal: controller.signal });
-        setEvents(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        setEvents(list);
+        setHasMore(list.length === PAGE_SIZE);
       } catch {
         if (!controller.signal.aborted) setEvents([]);
       } finally {
@@ -142,6 +149,24 @@ export default function HomePage() {
       controller.abort();
     };
   }, [search, category, sort, dateFrom, dateTo]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const params = { limit: PAGE_SIZE, offset: events.length };
+      if (search)   params.search    = search;
+      if (category) params.category  = category;
+      if (sort)     params.sort      = sort;
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo)   params.date_to   = dateTo;
+      const { data } = await api.get('/events', { params });
+      const newList = Array.isArray(data) ? data : [];
+      setEvents(prev => [...prev, ...newList]);
+      setHasMore(newList.length === PAGE_SIZE);
+    } catch {}
+    finally { setLoadingMore(false); }
+  };
 
   const scrollTabs = (dir) => {
     if (tabsRef.current) tabsRef.current.scrollBy({ left: dir * 200, behavior: 'smooth' });
@@ -336,6 +361,27 @@ export default function HomePage() {
                 </span>
               </div>
             )}
+            <div className="flex justify-center mt-10">
+              {hasMore ? (
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="px-8 py-2.5 rounded-full border border-gray-300 dark:border-dark-border text-sm font-medium text-gray-600 dark:text-gray-300 hover:border-primary hover:text-primary dark:hover:text-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loadingMore ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                      </svg>
+                      {t('common.loading')}
+                    </span>
+                  ) : t('home.loadMore')}
+                </button>
+              ) : (
+                <p className="text-xs text-gray-400 dark:text-gray-600">{t('home.noMore')}</p>
+              )}
+            </div>
           </div>
         )}
     </div>
@@ -345,8 +391,26 @@ export default function HomePage() {
 function eventStatusInfo(event) {
   const isPast = new Date(event.event_date) < new Date();
   if (event.status === 'ended' || isPast) return { label: 'Đã đóng', cls: 'bg-gray-800/80 text-gray-200', dot: 'bg-gray-400' };
+  if (event.status === 'scheduled') return { label: 'Sắp mở bán', cls: 'bg-blue-700/85 text-white', dot: 'bg-blue-300 animate-pulse' };
   if (Number(event.available_seats) === 0)  return { label: 'Hết vé', cls: 'bg-red-600/85 text-white',    dot: 'bg-red-300' };
   return { label: 'Đang mở bán', cls: 'bg-green-600/85 text-white', dot: 'bg-green-300 animate-pulse' };
+}
+
+function useSaleCountdown(saleStartAt) {
+  const [remaining, setRemaining] = useState(() => {
+    if (!saleStartAt) return null;
+    return Math.max(0, Math.floor((new Date(saleStartAt) - Date.now()) / 1000));
+  });
+  useEffect(() => {
+    if (!saleStartAt) return;
+    const id = setInterval(() => {
+      const secs = Math.max(0, Math.floor((new Date(saleStartAt) - Date.now()) / 1000));
+      setRemaining(secs);
+      if (secs === 0) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [saleStartAt]);
+  return remaining;
 }
 
 function EventCard({ event }) {
@@ -354,9 +418,22 @@ function EventCard({ event }) {
   const catKey = CATEGORY_KEYS.find(c => c.value === event.category);
   const catLabel = catKey?.key ? t(`event.categories.${catKey.key}`) : t('event.categories.other');
   const statusInfo = eventStatusInfo(event);
-  const isPast    = new Date(event.event_date) < new Date();
-  const isClosed  = event.status === 'ended' || isPast;
-  const isDimmed  = isClosed || Number(event.available_seats) === 0;
+  const isPast       = new Date(event.event_date) < new Date();
+  const isClosed     = event.status === 'ended' || isPast;
+  const isScheduled  = event.status === 'scheduled';
+  const isDimmed     = isClosed || Number(event.available_seats) === 0;
+  const countdown    = useSaleCountdown(isScheduled ? event.sale_start_at : null);
+
+  const fmtCountdown = (secs) => {
+    if (secs === null) return null;
+    const d = Math.floor(secs / 86400);
+    const h = Math.floor((secs % 86400) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (d > 0) return `${d}${t('event.countdown.days')} ${h}${t('event.countdown.hours')}`;
+    if (h > 0) return `${h}${t('event.countdown.hours')} ${m}${t('event.countdown.mins')}`;
+    return `${m}${t('event.countdown.mins')} ${s}${t('event.countdown.secs')}`;
+  };
 
   return (
     <Link to={`/events/${event.id}`} className={`group block ${isClosed ? 'opacity-60' : ''}`}>
@@ -381,11 +458,21 @@ function EventCard({ event }) {
       </div>
 
       {/* Category badge */}
-      <span className={`inline-block text-xs font-medium px-3 py-1 rounded-full border mb-3 ${
+      <span className={`inline-block text-xs font-medium px-3 py-1 rounded-full border mb-2 ${
         CATEGORY_COLORS[event.category] || CATEGORY_COLORS.other
       }`}>
         {catLabel}
       </span>
+
+      {/* Countdown badge for scheduled events */}
+      {isScheduled && countdown !== null && countdown > 0 && (
+        <div className="flex items-center gap-1 mb-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {t('event.countdown.label')}: {fmtCountdown(countdown)}
+        </div>
+      )}
 
       {/* Title */}
       <h3 className="font-bold text-[var(--color-text)] leading-snug line-clamp-2 uppercase text-sm mb-2 group-hover:text-primary transition-colors">
@@ -434,27 +521,22 @@ function EventCarousel({ events, loading }) {
   const { t } = useTranslation();
   const [current, setCurrent] = useState(0);
   const timerRef = useRef(null);
-  const slides = events.slice(0, 6); // max 6 slides
+  const slides = events.slice(0, 6);
 
-  // Auto-play
   useEffect(() => {
     if (slides.length <= 1) return;
-    timerRef.current = setInterval(() => {
-      setCurrent(c => (c + 1) % slides.length);
-    }, 4000);
+    timerRef.current = setInterval(() => setCurrent(c => (c + 1) % slides.length), 4500);
     return () => clearInterval(timerRef.current);
   }, [slides.length]);
 
   const goTo = (idx) => {
     setCurrent(idx);
     clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setCurrent(c => (c + 1) % slides.length);
-    }, 4000);
+    timerRef.current = setInterval(() => setCurrent(c => (c + 1) % slides.length), 4500);
   };
 
-  const prev = () => goTo((current - 1 + slides.length) % slides.length);
-  const next = () => goTo((current + 1) % slides.length);
+  const goPrev = () => goTo((current - 1 + slides.length) % slides.length);
+  const goNext = () => goTo((current + 1) % slides.length);
 
   if (loading) {
     return (
@@ -480,77 +562,89 @@ function EventCarousel({ events, loading }) {
     );
   }
 
-  const slide = slides[current];
-  const gradient = SLIDE_GRADIENTS[current % SLIDE_GRADIENTS.length];
-
   return (
     <div className="relative w-full overflow-hidden group">
-      {/* Slide content */}
-      <div className={`relative h-[380px] md:h-[450px] bg-gradient-to-r ${gradient} transition-all duration-700`}>
-        {/* Background poster image (sharp, object-top so faces aren't cut off) */}
-        {slide.poster_url ? (
-          <img
-            src={slide.poster_url}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover object-top transition-transform duration-1000 group-hover:scale-105"
-          />
-        ) : (
-          <div className="absolute inset-0 opacity-50 mix-blend-overlay" />
-        )}
-        
-        {/* Scrim for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+      <div className="relative h-[380px] md:h-[450px]">
+        {slides.map((slide, i) => {
+          const isActive = i === current;
+          const gradient = SLIDE_GRADIENTS[i % SLIDE_GRADIENTS.length];
+          return (
+            <div
+              key={slide.id}
+              className={`absolute inset-0 bg-gradient-to-r ${gradient} transition-opacity duration-1000 ease-in-out ${
+                isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+              }`}
+            >
+              {/* Ken Burns zoom on image */}
+              {slide.poster_url ? (
+                <img
+                  src={slide.poster_url}
+                  alt=""
+                  className={`absolute inset-0 w-full h-full object-cover object-top transition-transform ease-linear ${
+                    isActive ? 'duration-[8000ms] scale-110' : 'duration-700 scale-100'
+                  }`}
+                />
+              ) : (
+                <div className="absolute inset-0 opacity-50 mix-blend-overlay" />
+              )}
 
-        {/* Slide info (Bottom aligned) */}
-        <Link
-          to={`/events/${slide.id}`}
-          className="absolute inset-0 z-10 flex flex-col justify-end max-w-6xl mx-auto px-8 md:px-16 pb-10"
-        >
-          <div className="text-white max-w-2xl">
-            <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-primary/80 backdrop-blur-sm mb-3 uppercase tracking-wide">
-              {slide.category ? t(`event.categories.${slide.category}`) : t('home.upcomingEvents')}
-            </span>
-            <h2 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight drop-shadow-lg line-clamp-2">
-              {slide.title}
-            </h2>
-            <div className="flex flex-wrap items-center gap-4 text-sm md:text-base text-white/90 font-medium">
-              <span className="flex items-center gap-1.5 drop-shadow">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                {formatDate(slide.event_date)}
-              </span>
-              <span 
-                className="flex items-center gap-1.5 drop-shadow hover:text-blue-300 hover:underline cursor-pointer transition-colors"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(slide.venue)}`, '_blank');
-                }}
-                title="Xem bản đồ chỉ đường"
+              {/* Scrim */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+
+              {/* Text — slides up when active */}
+              <Link
+                to={`/events/${slide.id}`}
+                className="absolute inset-0 z-10 flex flex-col justify-end max-w-6xl mx-auto px-8 md:px-16 pb-10"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                {slide.venue}
-              </span>
+                <div className={`text-white max-w-2xl transition-transform duration-700 ease-out delay-200 ${
+                  isActive ? 'translate-y-0' : 'translate-y-8'
+                }`}>
+                  <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-primary/80 backdrop-blur-sm mb-3 uppercase tracking-wide">
+                    {slide.category ? t(`event.categories.${slide.category}`) : t('home.upcomingEvents')}
+                  </span>
+                  <h2 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight drop-shadow-lg line-clamp-2">
+                    {slide.title}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-4 text-sm md:text-base text-white/90 font-medium">
+                    <span className="flex items-center gap-1.5 drop-shadow">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {formatDate(slide.event_date)}
+                    </span>
+                    <span
+                      className="flex items-center gap-1.5 drop-shadow hover:text-blue-300 hover:underline cursor-pointer transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(slide.venue)}`, '_blank');
+                      }}
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {slide.venue}
+                    </span>
+                  </div>
+                </div>
+              </Link>
             </div>
-          </div>
-        </Link>
+          );
+        })}
       </div>
 
       {/* Navigation arrows */}
       <button
-        onClick={prev}
-        className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100 z-20"
+        onClick={goPrev}
+        className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/25 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition-all duration-200 opacity-0 group-hover:opacity-100 z-20 hover:scale-110"
         aria-label="Previous"
       >
         <span className="text-2xl leading-none">‹</span>
       </button>
       <button
-        onClick={next}
-        className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition opacity-0 group-hover:opacity-100 z-20"
+        onClick={goNext}
+        className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/25 border border-white/30 backdrop-blur-sm shadow-lg flex items-center justify-center text-white transition-all duration-200 opacity-0 group-hover:opacity-100 z-20 hover:scale-110"
         aria-label="Next"
       >
         <span className="text-2xl leading-none">›</span>
@@ -562,10 +656,8 @@ function EventCarousel({ events, loading }) {
           <button
             key={i}
             onClick={() => goTo(i)}
-            className={`rounded-full transition-all ${
-              i === current
-                ? 'w-10 h-2.5 bg-white'
-                : 'w-2.5 h-2.5 bg-white/50 hover:bg-white/80'
+            className={`rounded-full transition-all duration-300 ${
+              i === current ? 'w-10 h-2.5 bg-white' : 'w-2.5 h-2.5 bg-white/50 hover:bg-white/80'
             }`}
             aria-label={`Slide ${i + 1}`}
           />

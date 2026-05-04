@@ -40,9 +40,8 @@ export default function Footer() {
   const COL3 = [
     { key: 'links.contactUs',    to: '/faq' },
     { key: 'links.faqLinks',     to: '/faq' },
-    { key: 'links.relatedPosts', to: '/faq' },
     { key: 'links.guide',        to: '/faq' },
-    { key: 'links.feedback',     to: '/feedback' },
+    { key: 'links.feedback',     to: '/support' },
   ];
 
   return (

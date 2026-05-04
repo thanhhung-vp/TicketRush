@@ -29,24 +29,24 @@ export default function TicketsPage() {
   if (loading) return <div className="text-center py-20 text-gray-400">{t('tickets.loading')}</div>;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-10">
-      <div className="text-center mb-8">
-        <div className="text-5xl mb-3">🎉</div>
-        <h1 className="text-2xl font-bold">{t('tickets.success')}</h1>
-        <p className="text-gray-400 mt-1">
-          {t('tickets.qrReady', { count: tickets.length })}
-        </p>
-      </div>
+    <div className="max-w-md mx-auto px-4 py-20 text-center">
+      <div className="text-6xl mb-4">🎉</div>
+      <h1 className="text-2xl font-bold mb-2">{t('tickets.success')}</h1>
+      <p className="text-gray-400 mb-10">
+        {t('tickets.qrReady', { count: tickets.length })}
+      </p>
 
-      <div className="space-y-4">
-        {tickets.map(ticket => <TicketCard key={ticket.id} ticket={ticket} locale={locale} />)}
-      </div>
-
-      <div className="mt-8 text-center space-y-2">
-        <Link to="/my-tickets" className="block text-blue-400 hover:text-blue-300 underline text-sm">
+      <div className="flex flex-col gap-3">
+        <Link
+          to="/my-tickets"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 transition"
+        >
           {t('tickets.viewAllLink')}
         </Link>
-        <Link to="/" className="block text-gray-500 hover:text-gray-300 text-sm">
+        <Link
+          to="/"
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500 font-medium px-6 py-3 transition"
+        >
           {t('tickets.exploreMore')}
         </Link>
       </div>

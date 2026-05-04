@@ -70,12 +70,18 @@ router.get('/:eventId/status', authenticate, async (req, res) => {
     const admitted = await redis.sismember(admittedKey(eventId), req.user.id);
     if (admitted) return res.json({ admitted: true, position: 0, total: await redis.zcard(queueKey(eventId)) });
 
-    const rank = await redis.zrank(queueKey(eventId), req.user.id);
-    const total = await redis.zcard(queueKey(eventId));
+    let rank = await redis.zrank(queueKey(eventId), req.user.id);
 
+    // User lost their spot (Redis restart or race condition) — re-add to end of queue
+    if (rank === null) {
+      await redis.zadd(queueKey(eventId), 'NX', Date.now(), req.user.id);
+      rank = await redis.zrank(queueKey(eventId), req.user.id);
+    }
+
+    const total = await redis.zcard(queueKey(eventId));
     res.json({
       admitted: false,
-      position: rank === null ? null : rank + 1,
+      position: rank === null ? 1 : rank + 1,
       total,
       batch_size: event.queue_batch_size,
     });

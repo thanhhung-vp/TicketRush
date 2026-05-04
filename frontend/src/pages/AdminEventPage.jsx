@@ -34,6 +34,7 @@ export default function AdminEventPage() {
   const [form, setForm] = useState({
     title: '', description: '', venue: '', event_date: '',
     poster_url: '', status: 'draft', category: 'other', is_featured: false,
+    sale_start_at: '',
   });
   const [zones,       setZones]       = useState([]);
   const [audience,    setAudience]    = useState(null);
@@ -63,6 +64,7 @@ export default function AdminEventPage() {
           ...ev,
           description: ev.description || '',
           event_date: ev.event_date ? new Date(ev.event_date).toISOString().slice(0, 16) : '',
+          sale_start_at: ev.sale_start_at ? new Date(ev.sale_start_at).toISOString().slice(0, 16) : '',
           poster_url: ev.poster_url || '',
           is_featured: Boolean(ev.is_featured),
         });
@@ -102,6 +104,7 @@ export default function AdminEventPage() {
       const payload = {
         ...form,
         event_date: new Date(form.event_date).toISOString(),
+        sale_start_at: form.sale_start_at ? new Date(form.sale_start_at).toISOString() : null,
       };
       if (isNew) {
         const { data } = await api.post('/events', payload);
@@ -192,11 +195,15 @@ export default function AdminEventPage() {
           </h1>
           {!isNew && (
             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-              form.status === 'on_sale' ? 'bg-green-50 text-green-700 border border-green-200'
-              : form.status === 'ended' ? 'bg-gray-100 text-gray-500'
+              form.status === 'on_sale'   ? 'bg-green-50 text-green-700 border border-green-200'
+              : form.status === 'ended'    ? 'bg-gray-100 text-gray-500 border border-gray-200'
+              : form.status === 'scheduled'? 'bg-blue-50 text-blue-700 border border-blue-200'
               : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
             }`}>
-              {form.status === 'on_sale' ? t('admin.statusOnSale') : form.status === 'ended' ? t('admin.statusEnded') : t('admin.statusDraft')}
+              {form.status === 'on_sale' ? t('admin.statusOnSale')
+                : form.status === 'ended' ? t('admin.statusEnded')
+                : form.status === 'scheduled' ? t('admin.statusScheduled')
+                : t('admin.statusDraft')}
             </span>
           )}
         </div>
@@ -255,11 +262,28 @@ export default function AdminEventPage() {
               <select value={form.status} onChange={set('status')}
                 className="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800">
                 <option value="draft">{t('admin.statusDraft')}</option>
+                <option value="scheduled">{t('admin.statusScheduled')}</option>
                 <option value="on_sale">{t('admin.statusOnSale')}</option>
                 <option value="ended">{t('admin.statusEnded')}</option>
               </select>
             </div>
           </div>
+
+          {form.status === 'scheduled' && (
+            <div>
+              <label className="block text-sm text-gray-600 mb-1 font-medium">
+                🕐 {t('event.saleStartsAt')} *
+              </label>
+              <input
+                type="datetime-local"
+                value={form.sale_start_at}
+                onChange={set('sale_start_at')}
+                required
+                className="w-full bg-gray-50 border border-blue-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
+              />
+              <p className="text-xs text-gray-400 mt-1">Sự kiện sẽ tự động chuyển sang "Đang bán" vào thời điểm này.</p>
+            </div>
+          )}
 
           <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
             <input

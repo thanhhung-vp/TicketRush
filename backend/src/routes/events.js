@@ -56,10 +56,12 @@ async function userCanReadEventSeats(eventId, req) {
 
 // ── Public ────────────────────────────────────────────────
 
-// GET /events?search=&category=&date_from=&date_to=&location=&min_price=&max_price=&sort=date|price_asc|price_desc
+// GET /events?search=&category=&date_from=&date_to=&location=&min_price=&max_price=&sort=date|price_asc|price_desc&limit=&offset=
 router.get('/', async (req, res) => {
-  const { search, category, date_from, date_to, location, min_price, max_price, sort } = req.query;
-  const conditions = [`e.status IN ('on_sale', 'ended')`];
+  const { search, category, date_from, date_to, location, min_price, max_price, sort, limit, offset } = req.query;
+  const pageLimit  = Math.min(Math.max(Number(limit)  || 0, 0), 100);
+  const pageOffset = Math.max(Number(offset) || 0, 0);
+  const conditions = [`e.status IN ('on_sale', 'ended', 'scheduled')`];
   const params = [];
 
   if (search) {
@@ -117,7 +119,8 @@ router.get('/', async (req, res) => {
        WHERE ${where}
        GROUP BY e.id
        ${having}
-       ORDER BY ${orderBy}`,
+       ORDER BY ${orderBy}
+       ${pageLimit > 0 ? `LIMIT ${pageLimit} OFFSET ${pageOffset}` : ''}`,
       params
     );
     res.json(rows);
@@ -269,6 +272,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     event_date,
     poster_url,
     category,
+    status: initStatus = 'draft',
+    sale_start_at,
     is_featured = false,
     queue_enabled = false,
     queue_batch_size,
@@ -276,8 +281,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO events
-         (title, description, venue, event_date, poster_url, category, is_featured, queue_enabled, queue_batch_size, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+         (title, description, venue, event_date, poster_url, category, status, sale_start_at,
+          is_featured, queue_enabled, queue_batch_size, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [
         title,
         description || null,
@@ -285,6 +291,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         event_date,
         poster_url || null,
         category,
+        initStatus,
+        sale_start_at || null,
         is_featured,
         queue_enabled,
         normalizeQueueBatchSize(queue_batch_size),
@@ -312,6 +320,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
     'event_date',
     'poster_url',
     'status',
+    'sale_start_at',
     'category',
     'is_featured',
     'queue_enabled',

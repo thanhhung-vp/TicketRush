@@ -49,6 +49,7 @@ function AppRoutes() {
           <Route path="/faq"               element={<FAQPage />} />
           <Route path="/terms"             element={<TermsPage />} />
           <Route path="/about"             element={<AboutPage />} />
+          <Route path="/support"           element={<FeedbackPage />} />
           <Route path="/feedback"          element={<FeedbackPage />} />
           <Route path="/admin"             element={<PrivateRoute adminOnly><AdminPage /></PrivateRoute>} />
           <Route path="/admin/events/:id"  element={<PrivateRoute adminOnly><AdminEventPage /></PrivateRoute>} />

@@ -112,7 +112,9 @@
     "sortDate": "Ngày diễn ra",
     "sortPriceAsc": "Giá tăng dần",
     "sortPriceDesc": "Giá giảm dần",
-    "sortNewest": "Mới nhất"
+    "sortNewest": "Mới nhất",
+    "loadMore": "Xem thêm",
+    "noMore": "Đã hiển thị tất cả sự kiện"
   },
 
   "search": {
@@ -156,12 +158,22 @@
     "badge": {
       "onsale": "Đang mở bán",
       "soldout": "Đã bán hết vé",
-      "ended": "Đã đóng"
+      "ended": "Đã đóng",
+      "scheduled": "Sắp mở bán"
     },
     "eventEnded": "Sự kiện đã kết thúc",
     "soldOut": "Đã hết vé",
     "loginToBuy": "Đăng nhập để mua vé",
     "selectTicket": "Chọn vé ngay",
+    "saleNotStarted": "Chưa mở bán",
+    "saleStartsAt": "Mở bán lúc",
+    "countdown": {
+      "label": "Mở bán sau",
+      "days": "ngày",
+      "hours": "giờ",
+      "mins": "phút",
+      "secs": "giây"
+    },
     "tabs": {
       "seats": "Lịch sự kiện & Sơ đồ ghế",
       "about": "Thông tin sự kiện"
@@ -385,6 +397,7 @@
     "detailsLink": "Chi tiết →",
     "statusDraft": "Nháp",
     "statusOnSale": "Đang bán",
+    "statusScheduled": "Hẹn giờ mở bán",
     "statusEnded": "Kết thúc",
     "searchCustomer": "Tìm khách hàng",
     "searchCustomerPlaceholder": "Email hoặc tên khách",
@@ -581,26 +594,26 @@
   },
 
   "feedback": {
-    "label": "Phản hồi",
-    "title": "Danh sách phản ánh / góp ý",
-    "desc": "Ý kiến của bạn giúp TicketRush ngày càng tốt hơn. Chúng tôi đọc mọi phản hồi.",
+    "label": "Hỗ trợ khách hàng",
+    "title": "Tạo ticket yêu cầu hỗ trợ",
+    "desc": "Gửi yêu cầu hỗ trợ để TicketRush kiểm tra và phản hồi cho bạn qua email.",
     "nameLabel": "Họ và tên *",
     "namePlaceholder": "Nguyễn Văn A",
     "emailLabel": "Email *",
-    "typeLabel": "Loại phản hồi *",
-    "typePlaceholder": "-- Chọn loại phản hồi --",
-    "messageLabel": "Nội dung *",
-    "messagePlaceholder": "Mô tả chi tiết phản hồi của bạn...",
-    "submitBtn": "Gửi phản hồi",
-    "successTitle": "Cảm ơn bạn!",
-    "successDesc": "Phản hồi của bạn đã được ghi nhận. Chúng tôi sẽ xem xét và phản hồi qua email trong vòng 2 ngày làm việc.",
-    "sendAnother": "Gửi phản hồi khác",
+    "typeLabel": "Loại yêu cầu *",
+    "typePlaceholder": "-- Chọn loại yêu cầu --",
+    "messageLabel": "Nội dung yêu cầu *",
+    "messagePlaceholder": "Mô tả vấn đề cần hỗ trợ, mã đơn hàng hoặc sự kiện liên quan...",
+    "submitBtn": "Tạo ticket hỗ trợ",
+    "successTitle": "Ticket hỗ trợ đã được tạo",
+    "successDesc": "Yêu cầu hỗ trợ của bạn đã được ghi nhận. TicketRush sẽ phản hồi qua email trong vòng 2 ngày làm việc.",
+    "sendAnother": "Tạo ticket khác",
     "types": {
-      "product": "Góp ý sản phẩm",
-      "bug": "Báo lỗi",
-      "order": "Khiếu nại đơn hàng",
-      "business": "Hợp tác kinh doanh",
-      "other": "Khác"
+      "account": "Hỗ trợ tài khoản",
+      "technical": "Lỗi kỹ thuật",
+      "order": "Hỗ trợ đơn hàng / vé",
+      "payment": "Thanh toán / hoàn tiền",
+      "other": "Yêu cầu khác"
     },
     "emailSupport": "Email hỗ trợ",
     "hotline": "Hotline",
@@ -644,9 +657,8 @@
       "promotions": "Khuyến mại",
       "contactUs": "Liên hệ chúng tôi",
       "faqLinks": "Câu hỏi thường gặp",
-      "relatedPosts": "Bài viết liên quan",
       "guide": "Hướng dẫn sử dụng",
-      "feedback": "Danh sách phản ánh/ góp ý"
+      "feedback": "Tạo ticket hỗ trợ"
     }
   }
 }

@@ -27,7 +27,12 @@ export async function admitQueueBatch({
   if (userIds.length === 0) return { admitted: 0, user_ids: [] };
 
   await redisClient.sadd(admittedKey(eventId), ...userIds);
-  await redisClient.expire(admittedKey(eventId), accessSeconds);
+  // Use EXPIREGT so we only extend (never shorten) the TTL of the admitted set.
+  // This prevents resetting the 15-min window for users already inside.
+  const setTtl = await redisClient.ttl(admittedKey(eventId));
+  if (setTtl < accessSeconds) {
+    await redisClient.expire(admittedKey(eventId), accessSeconds);
+  }
 
   if (io) {
     userIds.forEach(userId => {

@@ -112,7 +112,9 @@
     "sortDate": "Date",
     "sortPriceAsc": "Price: low to high",
     "sortPriceDesc": "Price: high to low",
-    "sortNewest": "Newest"
+    "sortNewest": "Newest",
+    "loadMore": "Load more",
+    "noMore": "All events shown"
   },
 
   "search": {
@@ -156,12 +158,22 @@
     "badge": {
       "onsale": "On Sale",
       "soldout": "Sold Out",
-      "ended": "Closed"
+      "ended": "Closed",
+      "scheduled": "Coming Soon"
     },
     "eventEnded": "Event has ended",
     "soldOut": "Sold Out",
     "loginToBuy": "Log in to buy tickets",
     "selectTicket": "Select Tickets",
+    "saleNotStarted": "Sale not started",
+    "saleStartsAt": "Sale starts at",
+    "countdown": {
+      "label": "Sale opens in",
+      "days": "d",
+      "hours": "h",
+      "mins": "m",
+      "secs": "s"
+    },
     "tabs": {
       "seats": "Schedule & Seat Map",
       "about": "Event Info"
@@ -385,6 +397,7 @@
     "detailsLink": "Details →",
     "statusDraft": "Draft",
     "statusOnSale": "On Sale",
+    "statusScheduled": "Scheduled",
     "statusEnded": "Ended",
     "searchCustomer": "Find customer",
     "searchCustomerPlaceholder": "Email or name",
@@ -581,26 +594,26 @@
   },
 
   "feedback": {
-    "label": "Feedback",
-    "title": "Feedback & Complaints",
-    "desc": "Your feedback helps TicketRush get better every day. We read every message.",
+    "label": "Customer Support",
+    "title": "Create a support ticket",
+    "desc": "Send a support request so TicketRush can review it and respond by email.",
     "nameLabel": "Full name *",
     "namePlaceholder": "John Doe",
     "emailLabel": "Email *",
-    "typeLabel": "Feedback type *",
-    "typePlaceholder": "-- Select type --",
-    "messageLabel": "Message *",
-    "messagePlaceholder": "Describe your feedback in detail...",
-    "submitBtn": "Submit feedback",
-    "successTitle": "Thank you!",
-    "successDesc": "Your feedback has been recorded. We'll review it and respond via email within 2 business days.",
-    "sendAnother": "Send another message",
+    "typeLabel": "Request type *",
+    "typePlaceholder": "-- Select request type --",
+    "messageLabel": "Request details *",
+    "messagePlaceholder": "Describe the issue, order code, or related event...",
+    "submitBtn": "Create support ticket",
+    "successTitle": "Support ticket created",
+    "successDesc": "Your support request has been recorded. TicketRush will respond by email within 2 business days.",
+    "sendAnother": "Create another ticket",
     "types": {
-      "product": "Product feedback",
-      "bug": "Bug report",
-      "order": "Order complaint",
-      "business": "Business partnership",
-      "other": "Other"
+      "account": "Account support",
+      "technical": "Technical issue",
+      "order": "Order / ticket support",
+      "payment": "Payment / refund",
+      "other": "Other request"
     },
     "emailSupport": "Support email",
     "hotline": "Hotline",
@@ -644,9 +657,8 @@
       "promotions": "Promotions",
       "contactUs": "Contact Us",
       "faqLinks": "FAQ",
-      "relatedPosts": "Related Articles",
       "guide": "User Guide",
-      "feedback": "Feedback & Complaints"
+      "feedback": "Create support ticket"
     }
   }
 }

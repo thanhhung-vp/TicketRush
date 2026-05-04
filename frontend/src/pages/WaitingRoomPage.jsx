@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import api from '../lib/api.js';
 
@@ -8,6 +9,7 @@ const POLL_INTERVAL = 5000; // ms
 export default function WaitingRoomPage() {
   const { eventId } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [status, setStatus] = useState(null); // { admitted, position, total }
   const [entered, setEntered] = useState(false);
   const [error, setError] = useState('');
@@ -61,7 +63,7 @@ export default function WaitingRoomPage() {
 
   if (!entered) return (
     <div className="min-h-screen flex items-center justify-center">
-      <p className="text-gray-400">Đang tham gia hàng chờ...</p>
+      <p className="text-gray-400">{t('waitingRoom.joining')}</p>
     </div>
   );
 
@@ -83,14 +85,14 @@ export default function WaitingRoomPage() {
         </div>
 
         <div>
-          <h1 className="text-2xl font-bold mb-2">Phòng chờ ảo</h1>
-          <p className="text-gray-400">Lưu lượng truy cập đang cao. Hệ thống đang sắp xếp lượt cho bạn.</p>
+          <h1 className="text-2xl font-bold mb-2">{t('waitingRoom.title')}</h1>
+          <p className="text-gray-400">{t('waitingRoom.desc')}</p>
         </div>
 
         {status && (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-3">
             <div className="text-5xl font-bold text-blue-400">#{status.position || '-'}</div>
-            <p className="text-gray-300">Bạn đang ở vị trí thứ <strong>{status.position || '-'}</strong> trong hàng đợi</p>
+            <p className="text-gray-300" dangerouslySetInnerHTML={{ __html: t('waitingRoom.positionText', { pos: status.position || '-' }) }} />
             {status.total && status.position && (
               <div className="w-full bg-gray-800 rounded-full h-2">
                 <div
@@ -99,8 +101,8 @@ export default function WaitingRoomPage() {
                 />
               </div>
             )}
-            <p className="text-xs text-gray-500">Vui lòng không tải lại trang.</p>
-            <p className="text-xs text-gray-600 animate-pulse">Tự động cập nhật mỗi 5 giây...</p>
+            <p className="text-xs text-gray-500">{t('waitingRoom.doNotRefresh')}</p>
+            <p className="text-xs text-gray-600 animate-pulse">{t('waitingRoom.autoUpdate')}</p>
           </div>
         )}
       </div>

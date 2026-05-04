@@ -44,14 +44,18 @@ router.post('/checkout', authenticate, async (req, res) => {
 
     const eventId = seats[0].event_id;
 
-    // Reject checkout on closed or past events
+    // Reject checkout on closed, past, or not-yet-open events
     const { rows: [evt] } = await client.query(
-      `SELECT status, event_date FROM events WHERE id = $1`,
+      `SELECT status, event_date, sale_start_at FROM events WHERE id = $1`,
       [eventId]
     );
     if (!evt || evt.status === 'ended' || new Date(evt.event_date) < new Date()) {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'Sự kiện đã kết thúc, không thể đặt vé.' });
+    }
+    if (evt.status === 'scheduled' || (evt.sale_start_at && new Date(evt.sale_start_at) > new Date())) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Sự kiện chưa mở bán.' });
     }
 
     const total = seats.reduce((sum, s) => sum + Number(s.price), 0);
