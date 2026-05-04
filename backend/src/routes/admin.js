@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { z } from 'zod';
 import pool from '../config/db.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { getAdminDashboard } from '../services/adminDashboard.js';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
@@ -56,7 +57,11 @@ router.get('/events', async (req, res) => {
               COUNT(s.id) FILTER (WHERE s.status = 'available') AS available_seats,
               COUNT(s.id) FILTER (WHERE s.status = 'locked')    AS locked_seats,
               COUNT(s.id) FILTER (WHERE s.status = 'sold')      AS sold_seats,
-              COUNT(s.id) AS total_seats
+              COUNT(s.id) AS total_seats,
+              (SELECT COALESCE(SUM(o.total_amount), 0) FROM orders o WHERE o.event_id = e.id AND o.status = 'paid') AS total_revenue,
+              (SELECT COUNT(*) FROM orders o WHERE o.event_id = e.id AND o.status = 'paid') AS orders_paid,
+              (SELECT COUNT(*) FROM orders o WHERE o.event_id = e.id) AS order_count,
+              (SELECT COUNT(*) FROM admin_ticket_actions a WHERE a.event_id = e.id) AS admin_action_count
        FROM events e
        LEFT JOIN seats s ON s.event_id = e.id
        GROUP BY e.id
@@ -72,29 +77,7 @@ router.get('/events', async (req, res) => {
 // GET /admin/dashboard - revenue & occupancy per event
 router.get('/dashboard', async (req, res) => {
   try {
-    const { rows: revenue } = await pool.query(
-      `SELECT e.id, e.title, e.event_date, e.status,
-              COALESCE(SUM(o.total_amount) FILTER (WHERE o.status='paid'), 0) AS total_revenue,
-              COUNT(o.id) FILTER (WHERE o.status='paid') AS orders_paid,
-              COUNT(s.id) FILTER (WHERE s.status = 'sold')      AS sold_seats,
-              COUNT(s.id) FILTER (WHERE s.status = 'locked')    AS locked_seats,
-              COUNT(s.id) FILTER (WHERE s.status = 'available') AS available_seats,
-              COUNT(s.id) AS total_seats
-       FROM events e
-       LEFT JOIN orders o ON o.event_id = e.id
-       LEFT JOIN seats  s ON s.event_id = e.id
-       GROUP BY e.id
-       ORDER BY e.event_date DESC`
-    );
-
-    const { rows: revenueByDay } = await pool.query(
-      `SELECT DATE(paid_at) AS day, SUM(total_amount) AS revenue
-       FROM orders
-       WHERE status = 'paid' AND paid_at >= NOW() - INTERVAL '30 days'
-       GROUP BY day ORDER BY day`
-    );
-
-    res.json({ events: revenue, revenue_by_day: revenueByDay });
+    res.json(await getAdminDashboard(pool));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

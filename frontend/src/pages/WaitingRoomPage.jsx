@@ -10,12 +10,13 @@ export default function WaitingRoomPage() {
   const navigate = useNavigate();
   const [status, setStatus] = useState(null); // { admitted, position, total }
   const [entered, setEntered] = useState(false);
+  const [error, setError] = useState('');
   const pollRef = useRef(null);
   const socketRef = useRef(null);
 
   useEffect(() => {
     // Connect socket to listen for instant admission notification
-    const socket = io('/', { auth: { token: localStorage.getItem('token') } });
+    const socket = io('/', { auth: { token: localStorage.getItem('accessToken') || localStorage.getItem('token') } });
     socketRef.current = socket;
     socket.on('queue:admitted', ({ eventId: eid }) => {
       if (eid === eventId) {
@@ -26,17 +27,19 @@ export default function WaitingRoomPage() {
 
     // Enter queue
     api.post(`/queue/${eventId}/enter`).then(({ data }) => {
+      const payload = data.data ?? data;
       setEntered(true);
-      if (data.admitted) {
+      if (payload.admitted) {
         navigate(`/events/${eventId}`, { replace: true });
         return;
       }
-      setStatus(data);
+      setStatus(payload);
 
       // Start polling
       pollRef.current = setInterval(async () => {
         try {
-          const { data: s } = await api.get(`/queue/${eventId}/status`);
+          const { data: response } = await api.get(`/queue/${eventId}/status`);
+          const s = response.data ?? response;
           if (s.admitted) {
             clearInterval(pollRef.current);
             navigate(`/events/${eventId}`, { replace: true });
@@ -45,17 +48,29 @@ export default function WaitingRoomPage() {
           }
         } catch {}
       }, POLL_INTERVAL);
+    }).catch((err) => {
+      setError(err.response?.data?.error || 'Không thể tham gia hàng chờ.');
+      setEntered(true);
     });
 
     return () => {
       clearInterval(pollRef.current);
       socket.disconnect();
     };
-  }, [eventId]);
+  }, [eventId, navigate]);
 
   if (!entered) return (
     <div className="min-h-screen flex items-center justify-center">
       <p className="text-gray-400">Đang tham gia hàng chờ...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center">
+      <p className="max-w-md rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">{error}</p>
+      <button onClick={() => navigate(`/events/${eventId}`)} className="mt-4 text-sm font-semibold text-blue-600 hover:underline">
+        Quay lại sự kiện
+      </button>
     </div>
   );
 
@@ -74,9 +89,9 @@ export default function WaitingRoomPage() {
 
         {status && (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-3">
-            <div className="text-5xl font-bold text-blue-400">#{status.position}</div>
-            <p className="text-gray-300">Bạn đang ở vị trí thứ <strong>{status.position}</strong> trong hàng đợi</p>
-            {status.total && (
+            <div className="text-5xl font-bold text-blue-400">#{status.position || '-'}</div>
+            <p className="text-gray-300">Bạn đang ở vị trí thứ <strong>{status.position || '-'}</strong> trong hàng đợi</p>
+            {status.total && status.position && (
               <div className="w-full bg-gray-800 rounded-full h-2">
                 <div
                   className="h-2 bg-blue-600 rounded-full transition-all duration-1000"

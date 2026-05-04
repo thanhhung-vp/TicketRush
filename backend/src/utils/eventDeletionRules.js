@@ -1,18 +1,20 @@
-const UNSOLD_DELETE_ERROR = 'Chỉ có thể xóa sự kiện khi số vé đã bán là 0';
+export const EVENT_DELETE_BLOCKED_ERROR =
+  'Chỉ có thể xóa sự kiện khi tất cả ghế đều trống và chưa có vé đã bán';
 
 function toCount(value) {
   return Number(value || 0);
 }
 
-export function canDeleteEvent({ soldSeats, paidOrders, tickets }) {
-  const hasSoldSeats = toCount(soldSeats) > 0;
-  const hasPaidOrders = toCount(paidOrders) > 0;
-  const hasTickets = toCount(tickets) > 0;
+export function canDeleteEvent({ soldSeats, lockedSeats, paidOrders, tickets, orders, adminActions }) {
+  const hasUnavailableSeats = toCount(soldSeats) > 0 || toCount(lockedSeats) > 0;
+  const hasSoldTickets = toCount(paidOrders) > 0 || toCount(tickets) > 0;
+  const hasOrderHistory = toCount(orders) > 0;
+  const hasAdminHistory = toCount(adminActions) > 0;
 
-  if (hasSoldSeats || hasPaidOrders || hasTickets) {
+  if (hasUnavailableSeats || hasSoldTickets || hasOrderHistory || hasAdminHistory) {
     return {
       ok: false,
-      error: UNSOLD_DELETE_ERROR,
+      error: EVENT_DELETE_BLOCKED_ERROR,
     };
   }
 

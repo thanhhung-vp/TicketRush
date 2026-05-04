@@ -8,6 +8,7 @@ import { authenticate } from '../middleware/auth.js';
 import redis from '../config/redis.js';
 import { sendPasswordResetOTP } from '../services/email.js';
 import { generateOtp, hashOtp, verifyOtpHash } from '../services/otp.js';
+import { emailSchema } from '../utils/emailValidation.js';
 
 const router = Router();
 
@@ -32,8 +33,6 @@ async function storeRefreshToken(userId, rawToken, db = pool) {
   );
   return hash;
 }
-
-const emailSchema = z.string().trim().toLowerCase().email();
 
 // POST /auth/register
 const registerSchema = z.object({

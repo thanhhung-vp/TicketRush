@@ -1,111 +1,169 @@
 import { Router } from 'express';
+import pool from '../config/db.js';
 import redis from '../config/redis.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireAdmin } from '../middleware/auth.js';
 import { admittedKey, highLoadKey, queueKey } from '../utils/queueKeys.js';
+import { normalizeQueueBatchSize, userHasQueueAccess } from '../utils/virtualQueueRules.js';
+import { admitQueueBatch } from '../workers/virtualQueue.js';
 
 const router = Router();
 
-const BATCH_SIZE     = 50;   // users per batch admitted
-const ADMIT_INTERVAL = 30;   // seconds between admitting batches
+async function getQueueEvent(eventId) {
+  const { rows } = await pool.query(
+    `SELECT id, queue_enabled, queue_batch_size
+     FROM events
+     WHERE id = $1`,
+    [eventId]
+  );
+  return rows[0] || null;
+}
 
-/**
- * POST /queue/:eventId/enter
- * Khán giả gọi khi muốn vào trang chọn ghế.
- * - Nếu hệ thống không quá tải → trả về admitted = true ngay.
- * - Nếu quá tải (admin đã bật queue) → đẩy vào danh sách chờ, trả về vị trí.
- */
+async function getQueueSnapshot(eventId) {
+  const [waitingCount, admittedCount] = await Promise.all([
+    redis.zcard(queueKey(eventId)),
+    redis.scard(admittedKey(eventId)),
+  ]);
+  return { waiting_count: waitingCount, admitted_count: admittedCount };
+}
+
 router.post('/:eventId/enter', authenticate, async (req, res) => {
-  const { eventId } = req.params;
-  const userId = req.user.id;
-  const highLoad = await redis.get(highLoadKey(eventId));
+  try {
+    const { eventId } = req.params;
+    const event = await getQueueEvent(eventId);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
 
-  if (!highLoad) {
-    return res.json({ admitted: true, position: 0 });
-  }
-
-  // Check if already admitted
-  const admitted = await redis.sismember(admittedKey(eventId), userId);
-  if (admitted) return res.json({ admitted: true, position: 0 });
-
-  // Add to queue (ZADD NX: only if not already in queue)
-  const score = Date.now();
-  await redis.zadd(queueKey(eventId), 'NX', score, userId);
-
-  const position = await redis.zrank(queueKey(eventId), userId);
-  res.json({ admitted: false, position: position + 1 });
-});
-
-/**
- * GET /queue/:eventId/status
- * Polling: khán giả hỏi trạng thái của mình trong hàng chờ.
- */
-router.get('/:eventId/status', authenticate, async (req, res) => {
-  const { eventId } = req.params;
-  const userId = req.user.id;
-
-  const admitted = await redis.sismember(admittedKey(eventId), userId);
-  if (admitted) return res.json({ admitted: true, position: 0 });
-
-  const highLoad = await redis.get(highLoadKey(eventId));
-  if (!highLoad) return res.json({ admitted: true, position: 0 });
-
-  const rank = await redis.zrank(queueKey(eventId), userId);
-  if (rank === null) return res.json({ admitted: true, position: 0 }); // not in queue = free
-
-  const total = await redis.zcard(queueKey(eventId));
-  res.json({ admitted: false, position: rank + 1, total });
-});
-
-// ── Admin controls ────────────────────────────────────────
-
-/**
- * POST /queue/:eventId/enable  — Admin bật chế độ queue cho sự kiện
- */
-router.post('/:eventId/enable', authenticate, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  await redis.set(highLoadKey(req.params.eventId), '1');
-  res.json({ ok: true, message: 'Virtual queue enabled' });
-});
-
-/**
- * POST /queue/:eventId/disable — Admin tắt queue
- */
-router.post('/:eventId/disable', authenticate, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  const { eventId } = req.params;
-  await redis.del(highLoadKey(eventId), queueKey(eventId), admittedKey(eventId));
-  res.json({ ok: true, message: 'Virtual queue disabled' });
-});
-
-/**
- * POST /queue/:eventId/admit  — Tiến hành cho vào một batch (50 người)
- * Gọi bởi cron job hoặc admin thủ công.
- */
-router.post('/:eventId/admit', authenticate, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  const { eventId } = req.params;
-  const batch = req.body.batch_size || BATCH_SIZE;
-
-  // Pop batch_size oldest entries from sorted set
-  const members = await redis.zpopmin(queueKey(eventId), batch);
-  // members = [userId, score, userId, score, ...]
-  const userIds = members.filter((_, i) => i % 2 === 0);
-
-  if (userIds.length > 0) {
-    await redis.sadd(admittedKey(eventId), ...userIds);
-    // Set 15min expiry on admitted set (cleanup)
-    await redis.expire(admittedKey(eventId), 15 * 60);
-
-    // Notify via Socket.io
-    const io = req.app.get('io');
-    if (io) {
-      userIds.forEach(uid => {
-        io.to(`user:${uid}`).emit('queue:admitted', { eventId });
-      });
+    if (!event.queue_enabled || req.user.role === 'admin') {
+      return res.json({ admitted: true, position: 0, total: 0 });
     }
-  }
 
-  res.json({ admitted: userIds.length, remaining: await redis.zcard(queueKey(eventId)) });
+    const admitted = await redis.sismember(admittedKey(eventId), req.user.id);
+    if (userHasQueueAccess({ queueEnabled: event.queue_enabled, admitted, isAdmin: false })) {
+      return res.json({ admitted: true, position: 0, total: await redis.zcard(queueKey(eventId)) });
+    }
+
+    await redis.zadd(queueKey(eventId), 'NX', Date.now(), req.user.id);
+    const rank = await redis.zrank(queueKey(eventId), req.user.id);
+    const total = await redis.zcard(queueKey(eventId));
+
+    res.json({
+      admitted: false,
+      position: rank === null ? null : rank + 1,
+      total,
+      batch_size: event.queue_batch_size,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/:eventId/status', authenticate, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const event = await getQueueEvent(eventId);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+
+    if (!event.queue_enabled || req.user.role === 'admin') {
+      return res.json({ admitted: true, position: 0, total: 0 });
+    }
+
+    const admitted = await redis.sismember(admittedKey(eventId), req.user.id);
+    if (admitted) return res.json({ admitted: true, position: 0, total: await redis.zcard(queueKey(eventId)) });
+
+    const rank = await redis.zrank(queueKey(eventId), req.user.id);
+    const total = await redis.zcard(queueKey(eventId));
+
+    res.json({
+      admitted: false,
+      position: rank === null ? null : rank + 1,
+      total,
+      batch_size: event.queue_batch_size,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/:eventId/admin-status', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const event = await getQueueEvent(eventId);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+
+    res.json({
+      queue_enabled: event.queue_enabled,
+      queue_batch_size: event.queue_batch_size,
+      ...(await getQueueSnapshot(eventId)),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/:eventId/enable', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const batchSize = normalizeQueueBatchSize(req.body?.batch_size);
+    const { rows } = await pool.query(
+      `UPDATE events
+       SET queue_enabled = TRUE, queue_batch_size = $2
+       WHERE id = $1
+       RETURNING id, queue_enabled, queue_batch_size`,
+      [eventId, batchSize]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Event not found' });
+
+    await redis.set(highLoadKey(eventId), '1');
+    res.json({ ok: true, ...rows[0], ...(await getQueueSnapshot(eventId)) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/:eventId/disable', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { rows } = await pool.query(
+      `UPDATE events
+       SET queue_enabled = FALSE
+       WHERE id = $1
+       RETURNING id, queue_enabled, queue_batch_size`,
+      [eventId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Event not found' });
+
+    await redis.del(highLoadKey(eventId), queueKey(eventId), admittedKey(eventId));
+    res.json({ ok: true, ...rows[0], waiting_count: 0, admitted_count: 0 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/:eventId/admit', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const event = await getQueueEvent(eventId);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+
+    const batchSize = normalizeQueueBatchSize(req.body?.batch_size, event.queue_batch_size);
+    const result = await admitQueueBatch({
+      eventId,
+      batchSize,
+      io: req.app.get('io'),
+    });
+
+    res.json({
+      admitted: result.admitted,
+      ...(await getQueueSnapshot(eventId)),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 export default router;

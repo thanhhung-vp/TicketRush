@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { emailSchema } from '../../../utils/emailValidation.js';
 
 export const registerSchema = z.object({
-  email:      z.string().email(),
+  email:      emailSchema,
   password:   z.string().min(6),
   full_name:  z.string().min(2).max(100),
   gender:     z.enum(['male', 'female', 'other']).optional(),
@@ -9,7 +10,7 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email:    z.string().email(),
+  email:    emailSchema,
   password: z.string().min(1),
 });
 

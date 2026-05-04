@@ -30,15 +30,23 @@ export default function AdminPage() {
     hour: '2-digit', minute: '2-digit',
   });
 
-  useEffect(() => {
-    if (user?.role !== 'admin') { navigate('/'); return; }
-    Promise.all([
-      api.get('/admin/dashboard'),
-      api.get('/admin/events'),
-    ]).then(([d, e]) => {
+  const loadAdminData = async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
+    try {
+      const [d, e] = await Promise.all([
+        api.get('/admin/dashboard'),
+        api.get('/admin/events'),
+      ]);
       setDashboard(d.data);
       setEvents(e.data);
-    }).finally(() => setLoading(false));
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.role !== 'admin') { navigate('/'); return; }
+    loadAdminData().catch(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="text-center py-20 text-gray-400">{t('common.loading')}</div>;
@@ -83,7 +91,16 @@ export default function AdminPage() {
           t={t}
         />
       )}
-      {tab === 'events' && <EventsTab events={events} formatDate={formatDate} formatDateTime={formatDateTime} t={t} locale={locale} />}
+      {tab === 'events' && (
+        <EventsTab
+          events={events}
+          formatDate={formatDate}
+          formatDateTime={formatDateTime}
+          t={t}
+          locale={locale}
+          onChanged={() => loadAdminData({ showLoading: false })}
+        />
+      )}
       {tab === 'customers' && <CustomerManagementTab events={events} formatDateTime={formatDateTime} formatVNDLong={formatVNDLong} t={t} />}
     </div>
   );
@@ -164,43 +181,162 @@ function StatusBadge({ status, t }) {
   return <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${MAP[status]}`}>{LABEL[status]}</span>;
 }
 
-function EventsTab({ events, formatDate, t, locale }) {
+function canDeleteEventFromStats(event) {
+  const soldSeats = Number(event.sold_seats || 0);
+  const lockedSeats = Number(event.locked_seats || 0);
+  const orderCount = Number(event.order_count || 0);
+  const adminActionCount = Number(event.admin_action_count || 0);
+  return soldSeats === 0 && lockedSeats === 0 && orderCount === 0 && adminActionCount === 0;
+}
+
+function EventsTab({ events, t, locale, onChanged }) {
+  const [batchSizes, setBatchSizes] = useState({});
+  const [busy, setBusy] = useState('');
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  const getBatchSize = (event) => Number(batchSizes[event.id] ?? event.queue_batch_size ?? 50);
+
+  const runAction = async (busyKey, action) => {
+    setBusy(busyKey);
+    setNotice('');
+    setError('');
+    try {
+      await action();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Không thể thực hiện thao tác.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const toggleQueue = (event) => runAction(`queue-${event.id}`, async () => {
+    if (event.queue_enabled) {
+      await api.post(`/queue/${event.id}/disable`);
+      setNotice(`Đã tắt phòng chờ cho "${event.title}".`);
+    } else {
+      await api.post(`/queue/${event.id}/enable`, { batch_size: getBatchSize(event) });
+      setNotice(`Đã bật phòng chờ cho "${event.title}".`);
+    }
+    await onChanged();
+  });
+
+  const admitQueue = (event) => runAction(`admit-${event.id}`, async () => {
+    const { data } = await api.post(`/queue/${event.id}/admit`, { batch_size: getBatchSize(event) });
+    setNotice(`Đã cấp quyền cho ${data.admitted || 0} người. Còn chờ: ${data.waiting_count || 0}.`);
+  });
+
+  const deleteEvent = (event) => runAction(`delete-${event.id}`, async () => {
+    if (!window.confirm(`Xóa sự kiện "${event.title}"? Hành động không thể hoàn tác.`)) return;
+    await api.delete(`/events/${event.id}`);
+    setNotice(`Đã xóa sự kiện "${event.title}".`);
+    await onChanged();
+  });
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-      <table className="w-full text-sm">
-        <thead className="border-b border-gray-200 bg-gray-50">
-          <tr>
-            {[t('admin.colEvent'), t('admin.colStatus'), t('admin.colSoldTotal'), t('admin.colRevenue'), ''].map(h => (
-              <th key={h} className="text-left px-4 py-3 font-semibold text-gray-600">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {events.map(e => (
-            <tr key={e.id} className="border-b border-gray-100 hover:bg-blue-50/50 transition">
-              <td className="px-4 py-3">
-                <p className="font-medium text-gray-800">{e.title}</p>
-                <p className="text-xs text-gray-500">{new Date(e.event_date).toLocaleDateString(locale)}</p>
-              </td>
-              <td className="px-4 py-3">
-                <StatusBadge status={e.status} t={t} />
-              </td>
-              <td className="px-4 py-3 text-gray-700">
-                {e.sold_seats} / {e.total_seats}
-                <span className="text-gray-400 ml-1">({e.locked_seats} {t('admin.held')})</span>
-              </td>
-              <td className="px-4 py-3 text-blue-600 font-semibold">
-                {formatVND(e.total_revenue)}
-              </td>
-              <td className="px-4 py-3">
-                <Link to={`/admin/events/${e.id}`} className="text-blue-600 hover:text-blue-700 hover:underline text-xs font-medium transition">
-                  {t('admin.detailsLink')}
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>}
+      {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead className="border-b border-gray-200 bg-gray-50">
+              <tr>
+                {[t('admin.colEvent'), t('admin.colStatus'), t('admin.colSoldTotal'), 'Virtual Queue', t('admin.colRevenue'), ''].map(h => (
+                  <th key={h} className="text-left px-4 py-3 font-semibold text-gray-600">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {events.map(e => {
+                const canDelete = canDeleteEventFromStats(e);
+                const seatsEmpty = Number(e.sold_seats || 0) === 0 && Number(e.locked_seats || 0) === 0;
+                const actionDisabled = busy !== '';
+
+                return (
+                  <tr key={e.id} className="border-b border-gray-100 hover:bg-blue-50/50 transition">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-800">{e.title}</p>
+                      <p className="text-xs text-gray-500">{new Date(e.event_date).toLocaleDateString(locale)}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={e.status} t={t} />
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">
+                      {e.sold_seats} / {e.total_seats}
+                      <span className="text-gray-400 ml-1">({e.locked_seats} {t('admin.held')})</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          e.queue_enabled
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-gray-100 text-gray-500 border border-gray-200'
+                        }`}>
+                          {e.queue_enabled ? 'Đang bật' : 'Đang tắt'}
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="500"
+                          value={getBatchSize(e)}
+                          onChange={event => setBatchSizes(prev => ({ ...prev, [e.id]: event.target.value }))}
+                          className="w-20 rounded-lg border border-gray-300 bg-gray-50 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          aria-label="Queue batch size"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => toggleQueue(e)}
+                          disabled={actionDisabled}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                            e.queue_enabled
+                              ? 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          {busy === `queue-${e.id}` ? 'Đang xử lý...' : e.queue_enabled ? 'Tắt' : 'Bật'}
+                        </button>
+                        {e.queue_enabled && (
+                          <button
+                            type="button"
+                            onClick={() => admitQueue(e)}
+                            disabled={actionDisabled}
+                            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                          >
+                            {busy === `admit-${e.id}` ? 'Đang cấp...' : 'Cấp lượt'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-blue-600 font-semibold">
+                      {formatVND(e.total_revenue)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link to={`/admin/events/${e.id}`} className="text-blue-600 hover:text-blue-700 hover:underline text-xs font-medium transition">
+                          {t('admin.detailsLink')}
+                        </Link>
+                        {seatsEmpty && (
+                          <button
+                            type="button"
+                            onClick={() => deleteEvent(e)}
+                            disabled={actionDisabled || !canDelete}
+                            title={canDelete ? 'Xóa sự kiện' : 'Không thể xóa vì sự kiện đã có lịch sử đơn/vé'}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {busy === `delete-${e.id}` ? 'Đang xóa...' : 'Xóa'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

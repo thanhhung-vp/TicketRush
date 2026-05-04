@@ -307,14 +307,31 @@ export default function SeatMap({ eventId }) {
 
   const frozen = holding || heldSeats.length > 0;
 
+  const handleQueueRequired = useCallback((err) => {
+    const data = err.response?.data;
+    if (data?.code !== 'QUEUE_REQUIRED') return false;
+
+    if (user) {
+      navigate(`/queue/${data.event_id || eventId}`, { replace: true });
+    } else {
+      setError(data.error || t('seatMap.holdError'));
+    }
+    return true;
+  }, [eventId, navigate, t, user]);
+
   // ── Load seats ──
   useEffect(() => {
-    api.get(`/events/${eventId}/seats`).then(r => setSeats(r.data));
-  }, [eventId]);
+    api.get(`/events/${eventId}/seats`)
+      .then(r => setSeats(r.data))
+      .catch(err => {
+        if (handleQueueRequired(err)) return;
+        setError(err.response?.data?.error || t('seatMap.holdError'));
+      });
+  }, [eventId, handleQueueRequired, t]);
 
   // ── Real-time updates via Socket.io ──
   useEffect(() => {
-    const socket = io('/', { auth: { token: localStorage.getItem('token') } });
+    const socket = io('/', { auth: { token: localStorage.getItem('accessToken') || localStorage.getItem('token') } });
     socket.emit('join:event', eventId);
     socket.on('seats:updated', (updatedSeats) => {
       setSeats(prev => {
@@ -382,6 +399,7 @@ export default function SeatMap({ eventId }) {
       setRenewedOnce(false);
       setCountdown(Math.max(0, Math.floor((new Date(data.locked_until) - Date.now()) / 1000)));
     } catch (err) {
+      if (handleQueueRequired(err)) return;
       const msg = err.response?.data?.error || t('seatMap.holdError');
       setError(msg);
       const takenIds = err.response?.data?.seats;
@@ -402,7 +420,12 @@ export default function SeatMap({ eventId }) {
   // ── Dismiss expired modal ──
   const dismissExpired = () => {
     setShowExpired(false);
-    api.get(`/events/${eventId}/seats`).then(r => setSeats(r.data));
+    api.get(`/events/${eventId}/seats`)
+      .then(r => setSeats(r.data))
+      .catch(err => {
+        if (handleQueueRequired(err)) return;
+        setError(err.response?.data?.error || t('seatMap.holdError'));
+      });
   };
 
   // Group seats by zone

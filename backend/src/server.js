@@ -5,6 +5,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { initSocket } from './socket/index.js';
 import { startSeatReleaseWorker, sweepExpiredSeats } from './workers/seatRelease.js';
+import { startVirtualQueueWorker } from './workers/virtualQueue.js';
 
 import authRouter        from './routes/auth.js';
 import eventsRouter      from './routes/events.js';
@@ -87,6 +88,7 @@ app.set('io', io);
 
 // ── BullMQ worker ──────────────────────────────────────────
 startSeatReleaseWorker(io);
+startVirtualQueueWorker(io);
 setInterval(() => sweepExpiredSeats(io), 60_000);
 
 const PORT = process.env.PORT || 4000;

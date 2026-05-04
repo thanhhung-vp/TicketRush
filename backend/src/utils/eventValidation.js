@@ -14,6 +14,8 @@ const eventFields = {
   category:    z.enum(CATEGORIES).default('other'),
   status:      z.enum(['draft', 'on_sale', 'ended']).optional(),
   is_featured: z.boolean().optional(),
+  queue_enabled: z.boolean().optional(),
+  queue_batch_size: z.number().int().min(1).max(500).optional(),
 };
 
 export const eventSchema = z.object(eventFields);

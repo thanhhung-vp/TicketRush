@@ -1,10 +1,58 @@
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import pool from '../config/db.js';
+import redis from '../config/redis.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import { CATEGORIES, eventSchema, eventUpdateSchema } from '../utils/eventValidation.js';
+import { canDeleteEvent } from '../utils/eventDeletionRules.js';
+import { admittedKey, highLoadKey, queueKey } from '../utils/queueKeys.js';
+import { normalizeQueueBatchSize, userHasQueueAccess } from '../utils/virtualQueueRules.js';
 
 const router = Router();
+
+function getOptionalUser(req) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return null;
+  try {
+    return jwt.verify(header.slice(7), process.env.JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+async function userCanReadEventSeats(eventId, req) {
+  const { rows } = await pool.query(
+    `SELECT queue_enabled FROM events WHERE id = $1`,
+    [eventId]
+  );
+  const event = rows[0];
+  if (!event) return { ok: false, status: 404, error: 'Event not found' };
+  if (!event.queue_enabled) return { ok: true };
+
+  const user = getOptionalUser(req);
+  if (!user) {
+    return { ok: false, status: 401, error: 'Vui lòng đăng nhập để vào phòng chờ.', code: 'QUEUE_REQUIRED' };
+  }
+
+  const admitted = await redis.sismember(admittedKey(eventId), user.id);
+  const allowed = userHasQueueAccess({
+    queueEnabled: true,
+    admitted,
+    isAdmin: user.role === 'admin',
+  });
+  if (!allowed) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'Bạn cần vào phòng chờ trước khi chọn ghế.',
+      code: 'QUEUE_REQUIRED',
+      event_id: eventId,
+    };
+  }
+
+  return { ok: true };
+}
 
 // ── Public ────────────────────────────────────────────────
 
@@ -181,6 +229,15 @@ router.get('/:id', async (req, res) => {
 // GET /events/:id/seats
 router.get('/:id/seats', async (req, res) => {
   try {
+    const queueAccess = await userCanReadEventSeats(req.params.id, req);
+    if (!queueAccess.ok) {
+      return res.status(queueAccess.status).json({
+        error: queueAccess.error,
+        code: queueAccess.code,
+        event_id: queueAccess.event_id,
+      });
+    }
+
     const { rows } = await pool.query(
       `SELECT s.id, s.zone_id, s.row_idx, s.col_idx, s.label, s.status,
               z.name AS zone_name, z.price, z.color, z.rows, z.cols
@@ -205,12 +262,34 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
   }
-  const { title, description, venue, event_date, poster_url, category, is_featured = false } = parsed.data;
+  const {
+    title,
+    description,
+    venue,
+    event_date,
+    poster_url,
+    category,
+    is_featured = false,
+    queue_enabled = false,
+    queue_batch_size,
+  } = parsed.data;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO events (title, description, venue, event_date, poster_url, category, is_featured, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [title, description || null, venue, event_date, poster_url || null, category, is_featured, req.user.id]
+      `INSERT INTO events
+         (title, description, venue, event_date, poster_url, category, is_featured, queue_enabled, queue_batch_size, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [
+        title,
+        description || null,
+        venue,
+        event_date,
+        poster_url || null,
+        category,
+        is_featured,
+        queue_enabled,
+        normalizeQueueBatchSize(queue_batch_size),
+        req.user.id,
+      ]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -226,18 +305,36 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
   }
 
-  const allowed = ['title', 'description', 'venue', 'event_date', 'poster_url', 'status', 'category', 'is_featured'];
+  const allowed = [
+    'title',
+    'description',
+    'venue',
+    'event_date',
+    'poster_url',
+    'status',
+    'category',
+    'is_featured',
+    'queue_enabled',
+    'queue_batch_size',
+  ];
   const fields = Object.keys(parsed.data).filter(k => allowed.includes(k));
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
 
   const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
-  const values = fields.map(f => parsed.data[f]);
+  const values = fields.map(f => (
+    f === 'queue_batch_size' ? normalizeQueueBatchSize(parsed.data[f]) : parsed.data[f]
+  ));
   try {
     const { rows } = await pool.query(
       `UPDATE events SET ${sets} WHERE id = $1 RETURNING *`,
       [req.params.id, ...values]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Event not found' });
+    if (parsed.data.queue_enabled === false) {
+      await redis.del(highLoadKey(req.params.id), queueKey(req.params.id), admittedKey(req.params.id));
+    } else if (parsed.data.queue_enabled === true) {
+      await redis.set(highLoadKey(req.params.id), '1');
+    }
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -247,18 +344,57 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
 
 // DELETE /events/:id
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { rowCount } = await pool.query(
-      `DELETE FROM events WHERE id = $1 AND status = 'draft'`,
+    await client.query('BEGIN');
+
+    const { rows: eventRows } = await client.query(
+      `SELECT id FROM events WHERE id = $1 FOR UPDATE`,
       [req.params.id]
     );
-    if (!rowCount) {
-      return res.status(400).json({ error: 'Only draft events can be deleted' });
+    if (!eventRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Event not found' });
     }
+
+    const { rows: [stats] } = await client.query(
+      `SELECT
+         COUNT(s.id) FILTER (WHERE s.status = 'sold') AS sold_seats,
+         COUNT(s.id) FILTER (WHERE s.status = 'locked') AS locked_seats,
+         (SELECT COUNT(*) FROM orders o WHERE o.event_id = $1 AND o.status = 'paid') AS paid_orders,
+         (SELECT COUNT(*) FROM orders o WHERE o.event_id = $1) AS orders,
+         (SELECT COUNT(*) FROM tickets t
+          JOIN orders o ON o.id = t.order_id
+          WHERE o.event_id = $1) AS tickets,
+         (SELECT COUNT(*) FROM admin_ticket_actions a WHERE a.event_id = $1) AS admin_actions
+       FROM seats s
+       WHERE s.event_id = $1`,
+      [req.params.id]
+    );
+
+    const deletion = canDeleteEvent({
+      soldSeats: stats?.sold_seats,
+      lockedSeats: stats?.locked_seats,
+      paidOrders: stats?.paid_orders,
+      orders: stats?.orders,
+      tickets: stats?.tickets,
+      adminActions: stats?.admin_actions,
+    });
+    if (!deletion.ok) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: deletion.error });
+    }
+
+    await client.query('DELETE FROM events WHERE id = $1', [req.params.id]);
+    await client.query('COMMIT');
+    await redis.del(highLoadKey(req.params.id), queueKey(req.params.id), admittedKey(req.params.id));
     res.json({ ok: true });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
   }
 });
 

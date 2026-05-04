@@ -200,7 +200,7 @@ export default function AdminEventPage() {
             </span>
           )}
         </div>
-        {!isNew && form.status === 'draft' && (
+        {!isNew && (
           <button onClick={deleteEvent} disabled={deleting}
             className="text-sm text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition font-medium">
             {deleting ? t('adminEvent.deletingBtn') : t('adminEvent.deleteBtn')}

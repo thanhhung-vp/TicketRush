@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import crypto from 'crypto';
 import { z } from 'zod';
+import { emailSchema } from '../utils/emailValidation.js';
 
 // ── Refresh token helpers ─────────────────────────────────
 
@@ -28,7 +29,7 @@ describe('Auth helpers', () => {
 // ── Registration schema ───────────────────────────────────
 
 const registerSchema = z.object({
-  email:      z.string().email(),
+  email:      emailSchema,
   password:   z.string().min(6),
   full_name:  z.string().min(2).max(100),
   gender:     z.enum(['male', 'female', 'other']).optional(),
@@ -39,6 +40,22 @@ describe('Input validation schemas', () => {
   it('rejects invalid email', () => {
     const r = registerSchema.safeParse({ email: 'not-email', password: 'pass123', full_name: 'Test' });
     expect(r.success).toBe(false);
+  });
+
+  it('rejects malformed Gmail account names', () => {
+    const invalidGmailAddresses = [
+      'abc@gmail.com',
+      '.tester@gmail.com',
+      'tester.@gmail.com',
+      'test..user@gmail.com',
+      'test_user@gmail.com',
+      'test+user@gmail.com',
+    ];
+
+    for (const email of invalidGmailAddresses) {
+      const r = registerSchema.safeParse({ email, password: 'pass123', full_name: 'Test' });
+      expect(r.success, email).toBe(false);
+    }
   });
 
   it('rejects short password', () => {

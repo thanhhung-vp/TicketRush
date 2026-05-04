@@ -3,7 +3,7 @@ import {
   ensureSingleEvent,
   validateSeatIds,
 } from '../utils/seatHoldRules.js';
-import { canDeleteEvent } from '../utils/eventDeletionRules.js';
+import { EVENT_DELETE_BLOCKED_ERROR, canDeleteEvent } from '../utils/eventDeletionRules.js';
 
 describe('seat hold rules', () => {
   it('rejects an empty seat selection', () => {
@@ -51,18 +51,32 @@ describe('seat hold rules', () => {
 
 describe('event deletion rules', () => {
   it('allows deletion when no paid order, ticket, or sold seat exists', () => {
-    expect(canDeleteEvent({ soldSeats: 0, paidOrders: 0, tickets: 0 })).toEqual({ ok: true });
+    expect(canDeleteEvent({ soldSeats: 0, lockedSeats: 0, paidOrders: 0, tickets: 0 })).toEqual({ ok: true });
   });
 
   it('rejects deletion when sold seats exist', () => {
-    expect(canDeleteEvent({ soldSeats: 1, paidOrders: 0, tickets: 0 })).toEqual({
+    expect(canDeleteEvent({ soldSeats: 1, lockedSeats: 0, paidOrders: 0, tickets: 0 })).toEqual({
       ok: false,
-      error: 'Chỉ có thể xóa sự kiện khi số vé đã bán là 0',
+      error: EVENT_DELETE_BLOCKED_ERROR,
+    });
+  });
+
+  it('rejects deletion when seats are temporarily locked', () => {
+    expect(canDeleteEvent({ soldSeats: 0, lockedSeats: 1, paidOrders: 0, tickets: 0 })).toEqual({
+      ok: false,
+      error: EVENT_DELETE_BLOCKED_ERROR,
     });
   });
 
   it('rejects deletion when paid order or tickets exist even if seats were later freed', () => {
-    expect(canDeleteEvent({ soldSeats: 0, paidOrders: 1, tickets: 0 }).ok).toBe(false);
-    expect(canDeleteEvent({ soldSeats: 0, paidOrders: 0, tickets: 1 }).ok).toBe(false);
+    expect(canDeleteEvent({ soldSeats: 0, lockedSeats: 0, paidOrders: 1, tickets: 0 }).ok).toBe(false);
+    expect(canDeleteEvent({ soldSeats: 0, lockedSeats: 0, paidOrders: 0, tickets: 1 }).ok).toBe(false);
+  });
+
+  it('rejects deletion when relational history would block removing the event', () => {
+    expect(canDeleteEvent({ soldSeats: 0, lockedSeats: 0, paidOrders: 0, tickets: 0, orders: 1 }).ok)
+      .toBe(false);
+    expect(canDeleteEvent({ soldSeats: 0, lockedSeats: 0, paidOrders: 0, tickets: 0, adminActions: 1 }).ok)
+      .toBe(false);
   });
 });
