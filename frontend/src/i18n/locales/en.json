@@ -246,6 +246,10 @@
     "pendingOrder": "Awaiting payment",
     "cancelledOrder": "Order cancelled",
     "viewTicket": "View Ticket",
+    "downloadTicket": "Download Ticket",
+    "downloadingTicket": "Downloading...",
+    "downloadHint": "Select a ticket above to download.",
+    "downloadError": "Could not download ticket. Please try again.",
     "loadError": "Could not load ticket history. Please try again.",
     "zone": "Zone"
   },

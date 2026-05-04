@@ -246,6 +246,10 @@
     "pendingOrder": "Đơn đang chờ thanh toán",
     "cancelledOrder": "Đơn đã hủy",
     "viewTicket": "Xem vé",
+    "downloadTicket": "Tải vé",
+    "downloadingTicket": "Đang tải...",
+    "downloadHint": "Chọn từng vé ở trên để tải.",
+    "downloadError": "Không thể tải vé. Vui lòng thử lại.",
     "loadError": "Không thể tải lịch sử vé. Vui lòng thử lại.",
     "zone": "Khu"
   },

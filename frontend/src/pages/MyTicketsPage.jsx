@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Download } from 'lucide-react';
 import api from '../lib/api.js';
 import ticketLogo from '../ticketlogo.png';
 import ticketsBackdrop from '../../24504411_15690.jpg';
+import { downloadTicketsImage, filterTicketsForSeat } from '../utils/ticketDownload.js';
 
 const PAGE_BACKGROUND_STYLE = {
   backgroundImage: `linear-gradient(125deg, rgba(255,255,255,0.92), rgba(255,255,255,0.76) 48%, rgba(255,255,255,0.88)), url(${ticketsBackdrop})`,
@@ -216,6 +218,8 @@ export default function MyTicketsPage() {
 
 function TicketOrderCard({ order, locale }) {
   const { t } = useTranslation();
+  const [downloadingSeatId, setDownloadingSeatId] = useState('');
+  const [downloadError, setDownloadError] = useState('');
 
   const STATUS_LABELS = {
     paid:      t('myTickets.paid'),
@@ -232,6 +236,38 @@ function TicketOrderCard({ order, locale }) {
       : []),
   ];
   const status = order.status === 'cancelled' ? 'cancelled' : order.status;
+  const downloadLabels = {
+    brand: 'TicketRush',
+    ticketCode: t('tickets.ticketCode'),
+    seat: t('tickets.seatZone'),
+    location: t('myTickets.location'),
+    time: t('myTickets.time'),
+    valid: t('tickets.valid'),
+    gate: t('tickets.showAtGate'),
+    price: t('event.price'),
+  };
+
+  const handleDownloadTicket = async (seat) => {
+    setDownloadError('');
+    setDownloadingSeatId(seat.seat_id);
+
+    try {
+      const response = await api.get(`/orders/${order.id}/tickets`);
+      const payload = response.data;
+      const tickets = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
+      const selectedTickets = filterTicketsForSeat(tickets, seat);
+
+      await downloadTicketsImage({ order, tickets: selectedTickets, locale, labels: downloadLabels });
+    } catch {
+      setDownloadError(t('myTickets.downloadError'));
+    } finally {
+      setDownloadingSeatId('');
+    }
+  };
 
   return (
     <article className="overflow-hidden rounded-lg border border-white/80 bg-white/80 shadow-lg shadow-cyan-900/10 backdrop-blur transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-cyan-900/20">
@@ -279,7 +315,12 @@ function TicketOrderCard({ order, locale }) {
 
           <div className="mt-5 space-y-4">
             {activeItems.length > 0 && (
-              <SeatList title={t('myTickets.activeList')} items={activeItems} />
+              <SeatList
+                title={t('myTickets.activeList')}
+                items={activeItems}
+                onDownload={handleDownloadTicket}
+                downloadingSeatId={downloadingSeatId}
+              />
             )}
             {cancelledItems.length > 0 && (
               <SeatList title={t('myTickets.cancelledList')} items={cancelledItems} cancelled />
@@ -289,12 +330,14 @@ function TicketOrderCard({ order, locale }) {
           <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xl font-extrabold text-emerald-600">{formatVND(order.total_amount)}</span>
             {order.status === 'paid' && activeItems.length > 0 ? (
-              <Link
-                to={`/orders/${order.id}/tickets`}
-                className="inline-flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-primary to-secondary px-5 text-sm font-bold text-white shadow-md shadow-primary/20 transition hover:-translate-y-0.5 hover:brightness-105"
-              >
-                {t('myTickets.viewTicket')}
-              </Link>
+              <div className="flex flex-col items-start gap-2 sm:items-end">
+                <span className="text-sm font-semibold text-slate-500">{t('myTickets.downloadHint')}</span>
+                {downloadError && (
+                  <p className="max-w-56 text-sm font-semibold text-rose-600 sm:text-right">
+                    {downloadError}
+                  </p>
+                )}
+              </div>
             ) : (
               <span className="text-sm font-semibold text-slate-500">
                 {order.status === 'pending' ? t('myTickets.pendingOrder') : t('myTickets.cancelledOrder')}
@@ -307,7 +350,7 @@ function TicketOrderCard({ order, locale }) {
   );
 }
 
-function SeatList({ title, items, cancelled = false }) {
+function SeatList({ title, items, cancelled = false, onDownload, downloadingSeatId = '' }) {
   const { t } = useTranslation();
   return (
     <div>
@@ -315,19 +358,38 @@ function SeatList({ title, items, cancelled = false }) {
         {title}
       </p>
       <div className="flex flex-wrap gap-2">
-        {items.map(item => (
-          <span
-            key={item.action_id || item.seat_id}
-            className={`rounded-md border px-3 py-1.5 text-sm font-bold ${
-              cancelled
-                ? 'border-rose-200 bg-rose-50 text-rose-700'
-                : 'border-cyan-200 bg-cyan-50 text-cyan-800'
-            }`}
-            title={item.reason || ''}
-          >
-            {item.zone || t('myTickets.zone')} {item.label || ''}
-          </span>
-        ))}
+        {items.map(item => {
+          const itemLabel = `${item.zone || t('myTickets.zone')} ${item.label || ''}`.trim();
+          if (cancelled || !onDownload) {
+            return (
+              <span
+                key={item.action_id || item.seat_id}
+                className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-bold text-rose-700"
+                title={item.reason || ''}
+              >
+                {itemLabel}
+              </span>
+            );
+          }
+
+          const downloading = downloadingSeatId === item.seat_id;
+          return (
+            <button
+              key={item.seat_id}
+              type="button"
+              onClick={() => onDownload(item)}
+              disabled={Boolean(downloadingSeatId)}
+              className="inline-flex min-h-10 items-center gap-2 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-sm font-bold text-cyan-800 transition hover:border-cyan-300 hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-70"
+              title={t('myTickets.downloadTicket')}
+            >
+              <span>{itemLabel}</span>
+              <Download className="h-4 w-4" aria-hidden="true" />
+              <span className="text-xs font-extrabold text-cyan-700">
+                {downloading ? t('myTickets.downloadingTicket') : t('myTickets.downloadTicket')}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
