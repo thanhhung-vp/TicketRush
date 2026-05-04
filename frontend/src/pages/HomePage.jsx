@@ -1,33 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 
-const CATEGORIES = [
-  { value: '',            label: 'Tất cả' },
-  { value: 'music',       label: 'Nhạc sống' },
-  { value: 'fan_meeting', label: 'Fan Meeting' },
-  { value: 'merchandise', label: 'Merchandise' },
-  { value: 'arts',        label: 'Sân khấu & Nghệ thuật' },
-  { value: 'sports',      label: 'Thể thao' },
-  { value: 'conference',  label: 'Hội thảo & Cộng đồng' },
-  { value: 'education',   label: 'Khoá học' },
-  { value: 'nightlife',   label: 'Nightlife' },
-  { value: 'livestream',  label: 'Livestream' },
-  { value: 'travel',      label: 'Tham quan du lịch' },
+// Only values — labels resolved via t() inside component
+const CATEGORY_KEYS = [
+  { value: '',            key: null },
+  { value: 'music',       key: 'music' },
+  { value: 'fan_meeting', key: 'fan_meeting' },
+  { value: 'merchandise', key: 'merchandise' },
+  { value: 'arts',        key: 'arts' },
+  { value: 'sports',      key: 'sports' },
+  { value: 'conference',  key: 'conference' },
+  { value: 'education',   key: 'education' },
+  { value: 'nightlife',   key: 'nightlife' },
+  { value: 'livestream',  key: 'livestream' },
+  { value: 'travel',      key: 'travel' },
 ];
 
 const CATEGORY_COLORS = {
-  music:       'bg-pink-50 text-pink-600 border-pink-200',
-  fan_meeting: 'bg-rose-50 text-rose-600 border-rose-200',
-  merchandise: 'bg-amber-50 text-amber-600 border-amber-200',
-  arts:        'bg-purple-50 text-purple-600 border-purple-200',
-  sports:      'bg-cyan-50 text-cyan-700 border-cyan-200',
-  conference:  'bg-blue-50 text-blue-600 border-blue-200',
-  education:   'bg-green-50 text-green-700 border-green-200',
-  nightlife:   'bg-indigo-50 text-indigo-600 border-indigo-200',
-  livestream:  'bg-sky-50 text-sky-600 border-sky-200',
-  travel:      'bg-teal-50 text-teal-700 border-teal-200',
-  other:       'bg-gray-100 text-gray-600 border-gray-200',
+  music:       'bg-pink-50 dark:bg-pink-950/60 text-pink-600 dark:text-pink-400 border-pink-200 dark:border-pink-800',
+  fan_meeting: 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+  merchandise: 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  arts:        'bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+  sports:      'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800',
+  conference:  'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+  education:   'bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
+  nightlife:   'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800',
+  livestream:  'bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800',
+  travel:      'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-800',
+  other:       'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700',
 };
 
 function formatDate(d) {
@@ -39,14 +41,15 @@ function formatDate(d) {
   return `${day} ${month}, ${year}`;
 }
 
-const SORT_OPTIONS = [
-  { value: 'date',       label: 'Ngày tổ chức' },
-  { value: 'newest',     label: 'Mới nhất' },
-  { value: 'price_asc',  label: 'Giá thấp → cao' },
-  { value: 'price_desc', label: 'Giá cao → thấp' },
+const SORT_KEYS = [
+  { value: 'date',       key: 'sortDate' },
+  { value: 'newest',     key: 'sortNewest' },
+  { value: 'price_asc',  key: 'sortPriceAsc' },
+  { value: 'price_desc', key: 'sortPriceDesc' },
 ];
 
 export default function HomePage() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents]   = useState([]);
   const [bannerEvents, setBannerEvents] = useState([]);
@@ -54,6 +57,13 @@ export default function HomePage() {
   const [bannerLoading, setBannerLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const tabsRef = useRef(null);
+
+  // Translated labels — re-computed on language change
+  const CATEGORIES = CATEGORY_KEYS.map(c => ({
+    ...c,
+    label: c.key ? t(`event.categories.${c.key}`) : t('common.all'),
+  }));
+  const SORT_OPTIONS = SORT_KEYS.map(o => ({ ...o, label: t(`home.${o.key}`) }));
 
   const search    = searchParams.get('search') || searchParams.get('q') || '';
   const category  = searchParams.get('category') || '';
@@ -72,19 +82,37 @@ export default function HomePage() {
   useEffect(() => {
     const controller = new AbortController();
 
-    async function fetchFeaturedEvents() {
+    async function fetchBannerEvents() {
+      if (controller.signal.aborted) return;
       setBannerLoading(true);
+
+      // 1. Try featured endpoint
+      let banner = [];
       try {
         const { data } = await api.get('/events/featured', { signal: controller.signal });
-        setBannerEvents(Array.isArray(data) ? data : []);
-      } catch {
-        if (!controller.signal.aborted) setBannerEvents([]);
-      } finally {
-        if (!controller.signal.aborted) setBannerLoading(false);
+        if (Array.isArray(data)) banner = data;
+      } catch { /* featured may not exist — fall through */ }
+
+      // Filter out closed/past events from banner
+      const now = new Date();
+      banner = banner.filter(e => e.status !== 'ended' && new Date(e.event_date) >= now);
+
+      // 2. Fall back to upcoming events if featured is empty or all closed
+      if (banner.length === 0 && !controller.signal.aborted) {
+        try {
+          const { data } = await api.get('/events', { params: { sort: 'date' }, signal: controller.signal });
+          if (Array.isArray(data))
+            banner = data.filter(e => e.status !== 'ended' && new Date(e.event_date) >= now).slice(0, 6);
+        } catch { /* ignore */ }
+      }
+
+      if (!controller.signal.aborted) {
+        setBannerEvents(banner);
+        setBannerLoading(false);
       }
     }
 
-    fetchFeaturedEvents();
+    fetchBannerEvents();
 
     return () => controller.abort();
   }, []);
@@ -134,19 +162,19 @@ export default function HomePage() {
 
       {/* Section title + filter toggle */}
       <div className="flex items-center justify-between mb-1">
-        <h2 className="text-xl font-bold text-gray-900">Sự kiện</h2>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('home.upcomingEvents')}</h2>
         <button
           onClick={() => setShowFilters(v => !v)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
             showFilters || activeFilterCount > 0
               ? 'bg-primary text-white border-primary'
-              : 'bg-white text-gray-500 border-gray-300 hover:border-gray-400'
+              : 'bg-white dark:bg-dark-surface text-gray-500 dark:text-gray-400 border-gray-300 dark:border-dark-border hover:border-gray-400'
           }`}
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
           </svg>
-          Lọc{activeFilterCount > 0 && ` (${activeFilterCount})`}
+          {t('common.filter')}{activeFilterCount > 0 && ` (${activeFilterCount})`}
         </button>
       </div>
 
@@ -156,7 +184,7 @@ export default function HomePage() {
             {/* Left scroll button */}
             <button
               onClick={() => scrollTabs(-1)}
-              className="shrink-0 w-7 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition shadow-sm mr-1"
+              className="shrink-0 w-7 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition shadow-sm mr-1"
               aria-label="Scroll left"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -165,15 +193,15 @@ export default function HomePage() {
             </button>
 
             <div ref={tabsRef}
-              className="flex gap-0 overflow-x-auto scrollbar-hide border-b border-gray-200 flex-1">
+              className="flex gap-0 overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-dark-border flex-1">
               {CATEGORIES.map(cat => (
                 <button
                   key={cat.value}
                   onClick={() => setParam('category', cat.value === category ? '' : cat.value)}
                   className={`whitespace-nowrap text-sm px-4 pb-3 pt-1 transition-all border-b-2 -mb-px ${
                     category === cat.value
-                      ? 'text-blue-600 border-blue-600 font-semibold'
-                      : 'text-gray-500 border-transparent hover:text-gray-800 font-normal'
+                      ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 font-semibold'
+                      : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-800 dark:hover:text-gray-200 font-normal'
                   }`}
                 >
                   {cat.label}
@@ -184,7 +212,7 @@ export default function HomePage() {
             {/* Right scroll button */}
             <button
               onClick={() => scrollTabs(1)}
-              className="shrink-0 w-7 h-8 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition shadow-sm ml-1"
+              className="shrink-0 w-7 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition shadow-sm ml-1"
               aria-label="Scroll right"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -196,15 +224,15 @@ export default function HomePage() {
 
         {/* Expandable filter panel */}
         {showFilters && (
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-6 shadow-sm">
+          <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border rounded-2xl p-4 mb-6 shadow-sm">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Sort */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Sắp xếp</label>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">{t('home.sortBy')}</label>
                 <select
                   value={sort}
                   onChange={e => setParam('sort', e.target.value === 'date' ? '' : e.target.value)}
-                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 bg-white"
+                  className="w-full border border-gray-300 dark:border-dark-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 bg-white dark:bg-dark-card text-gray-800 dark:text-gray-100"
                 >
                   {SORT_OPTIONS.map(o => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -214,23 +242,23 @@ export default function HomePage() {
 
               {/* Date from */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Từ ngày</label>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">{t('home.filterByDate')} ↑</label>
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={e => setParam('date_from', e.target.value)}
-                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="w-full border border-gray-300 dark:border-dark-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 bg-white dark:bg-dark-card text-gray-800 dark:text-gray-100"
                 />
               </div>
 
               {/* Date to */}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Đến ngày</label>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">{t('home.filterByDate')} ↓</label>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={e => setParam('date_to', e.target.value)}
-                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  className="w-full border border-gray-300 dark:border-dark-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 bg-white dark:bg-dark-card text-gray-800 dark:text-gray-100"
                 />
               </div>
             </div>
@@ -241,7 +269,7 @@ export default function HomePage() {
                   onClick={clearFilters}
                   className="text-xs text-red-500 hover:text-red-600 font-medium transition hover:underline"
                 >
-                  Xóa tất cả bộ lọc
+                  {t('common.clear')}
                 </button>
               </div>
             )}
@@ -273,35 +301,38 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="animate-pulse">
-                <div className="aspect-[16/10] bg-gray-200 rounded-lg mb-3" />
-                <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
-                <div className="h-3 bg-gray-200 rounded w-2/3 mb-2" />
-                <div className="h-4 bg-gray-200 rounded w-3/4" />
+                <div className="aspect-[16/10] bg-gray-200 dark:bg-gray-700 rounded-lg mb-3" />
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-2" />
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mb-2" />
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
               </div>
             ))}
           </div>
         ) : events.length === 0 ? (
-          <div className="text-center py-20 text-gray-500">
+          <div className="text-center py-20 text-gray-500 dark:text-gray-400">
             <div className="text-5xl mb-3">🎭</div>
-            <p>Không tìm thấy sự kiện nào.</p>
+            <p>{t('common.noResults')}</p>
             {(search || category || dateFrom || dateTo) && (
               <button
                 onClick={clearFilters}
                 className="mt-3 text-primary hover:underline text-sm"
               >
-                Xóa bộ lọc
+                {t('common.clear')}
               </button>
             )}
           </div>
         ) : (
           <div className="relative" aria-busy={isRefreshing}>
             <div className={`grid grid-cols-1 gap-6 transition-opacity duration-200 sm:grid-cols-2 lg:grid-cols-4 ${isRefreshing ? 'opacity-60' : 'opacity-100'}`}>
-              {events.map(event => <EventCard key={event.id} event={event} />)}
+              {[
+                ...events.filter(e => e.status !== 'ended' && new Date(e.event_date) >= new Date()),
+                ...events.filter(e => e.status === 'ended' || new Date(e.event_date) < new Date()),
+              ].map(event => <EventCard key={event.id} event={event} />)}
             </div>
             {isRefreshing && (
               <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-2">
-                <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-xs font-semibold text-gray-600 shadow-sm backdrop-blur">
-                  Đang cập nhật...
+                <span className="rounded-full border border-gray-200 dark:border-dark-border bg-white/90 dark:bg-dark-card/90 px-3 py-1 text-xs font-semibold text-gray-600 dark:text-gray-300 shadow-sm backdrop-blur">
+                  {t('common.loading')}
                 </span>
               </div>
             )}
@@ -319,14 +350,18 @@ function eventStatusInfo(event) {
 }
 
 function EventCard({ event }) {
-  const catLabel = CATEGORIES.find(c => c.value === event.category)?.label || 'Khác';
+  const { t } = useTranslation();
+  const catKey = CATEGORY_KEYS.find(c => c.value === event.category);
+  const catLabel = catKey?.key ? t(`event.categories.${catKey.key}`) : t('event.categories.other');
   const statusInfo = eventStatusInfo(event);
-  const isDimmed = event.status === 'ended' || Number(event.available_seats) === 0;
+  const isPast    = new Date(event.event_date) < new Date();
+  const isClosed  = event.status === 'ended' || isPast;
+  const isDimmed  = isClosed || Number(event.available_seats) === 0;
 
   return (
-    <Link to={`/events/${event.id}`} className="group block">
+    <Link to={`/events/${event.id}`} className={`group block ${isClosed ? 'opacity-60' : ''}`}>
       {/* Image */}
-      <div className="aspect-[16/10] rounded-lg overflow-hidden mb-3 bg-gray-200 relative">
+      <div className="aspect-[16/10] rounded-lg overflow-hidden mb-3 bg-gray-200 dark:bg-gray-800 relative">
         {event.poster_url ? (
           <img
             src={event.poster_url}
@@ -353,28 +388,27 @@ function EventCard({ event }) {
       </span>
 
       {/* Title */}
-      <h3 className="font-bold text-gray-900 leading-snug line-clamp-2 uppercase text-sm mb-2 group-hover:text-primary transition-colors">
+      <h3 className="font-bold text-[var(--color-text)] leading-snug line-clamp-2 uppercase text-sm mb-2 group-hover:text-primary transition-colors">
         {event.title}
       </h3>
 
-      {/* Date & Location (With SVG Icons) */}
-      <div className="space-y-1.5 text-xs text-gray-600 font-medium mt-auto">
+      {/* Date & Location */}
+      <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-400 font-medium mt-auto">
         <div className="flex items-center gap-1.5">
-          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <span className="truncate">{formatDate(event.event_date)}</span>
         </div>
-        <div 
-          className="flex items-center gap-1.5 hover:text-blue-600 transition-colors"
+        <div
+          className="flex items-center gap-1.5 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
             window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue)}`, '_blank');
           }}
-          title="Xem bản đồ chỉ đường"
         >
-          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
@@ -397,6 +431,7 @@ const SLIDE_GRADIENTS = [
 ];
 
 function EventCarousel({ events, loading }) {
+  const { t } = useTranslation();
   const [current, setCurrent] = useState(0);
   const timerRef = useRef(null);
   const slides = events.slice(0, 6); // max 6 slides
@@ -426,8 +461,8 @@ function EventCarousel({ events, loading }) {
       <div className="relative h-64 md:h-80 w-full bg-gradient-to-r from-primary via-purple-600 to-secondary animate-pulse">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-4">
-          <h1 className="text-3xl md:text-5xl font-extrabold mb-3 drop-shadow-lg">Khám phá sự kiện</h1>
-          <p className="text-base md:text-lg opacity-90 max-w-lg">Tìm vé cho hàng nghìn sự kiện trên khắp Việt Nam</p>
+          <h1 className="text-3xl md:text-5xl font-extrabold mb-3 drop-shadow-lg">{t('home.heroTitle')}</h1>
+          <p className="text-base md:text-lg opacity-90 max-w-lg">{t('home.heroSubtitle')}</p>
         </div>
       </div>
     );
@@ -438,8 +473,8 @@ function EventCarousel({ events, loading }) {
       <div className="relative h-64 w-full bg-gradient-to-r from-primary via-purple-600 to-secondary md:h-80">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex h-full flex-col items-center justify-center px-4 text-center text-white">
-          <h1 className="mb-3 text-3xl font-extrabold drop-shadow-lg md:text-5xl">Khám phá sự kiện</h1>
-          <p className="max-w-lg text-base opacity-90 md:text-lg">Tìm vé cho hàng nghìn sự kiện trên khắp Việt Nam</p>
+          <h1 className="mb-3 text-3xl font-extrabold drop-shadow-lg md:text-5xl">{t('home.heroTitle')}</h1>
+          <p className="max-w-lg text-base opacity-90 md:text-lg">{t('home.heroSubtitle')}</p>
         </div>
       </div>
     );
@@ -473,7 +508,7 @@ function EventCarousel({ events, loading }) {
         >
           <div className="text-white max-w-2xl">
             <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-primary/80 backdrop-blur-sm mb-3 uppercase tracking-wide">
-              {CATEGORIES.find(c => c.value === slide.category)?.label || 'Sự kiện'}
+              {slide.category ? t(`event.categories.${slide.category}`) : t('home.upcomingEvents')}
             </span>
             <h2 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight drop-shadow-lg line-clamp-2">
               {slide.title}

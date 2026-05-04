@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 const TILE_SVG = encodeURIComponent(
   `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'>
     <rect x='4' y='4' width='54' height='54' rx='9' fill='rgba(255,255,255,0.12)'/>
@@ -84,8 +86,9 @@ export function AuthDivider({ text }) {
 }
 
 export function GoogleAuthButton() {
+  const { t } = useTranslation();
   const handleClick = () => {
-    alert('Tính năng đăng nhập bằng Google đang được phát triển. Vui lòng sử dụng email và mật khẩu để đăng nhập/đăng ký.');
+    alert(t('auth.googleNotAvailable'));
   };
   return (
     <div className="flex justify-center">

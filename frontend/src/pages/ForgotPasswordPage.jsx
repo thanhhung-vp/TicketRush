@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 import {
   AuthBg, AuthCard, IconInput, PinkButton,
@@ -7,6 +8,7 @@ import {
 } from '../components/AuthLayout.jsx';
 
 function StepIndicator({ step }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center justify-center gap-2.5 mb-6 -mt-2">
       <div className="flex items-center gap-1.5">
@@ -20,7 +22,7 @@ function StepIndicator({ step }) {
           ) : '1'}
         </span>
         <span className={`text-xs font-medium ${step === 1 ? 'text-gray-700' : 'text-gray-400'}`}>
-          Xác thực tài khoản
+          {t('forgotPassword.step1')}
         </span>
       </div>
       <span className="text-gray-300 text-base">›</span>
@@ -29,7 +31,7 @@ function StepIndicator({ step }) {
           step === 2 ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300 text-gray-400'
         }`}>2</span>
         <span className={`text-xs font-medium ${step === 2 ? 'text-gray-700' : 'text-gray-400'}`}>
-          Đổi mật khẩu
+          {t('forgotPassword.step2')}
         </span>
       </div>
     </div>
@@ -38,6 +40,7 @@ function StepIndicator({ step }) {
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -53,15 +56,15 @@ export default function ForgotPasswordPage() {
 
   const sendOtp = async () => {
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) { setError('Vui lòng nhập email trước'); return; }
+    if (!normalizedEmail) { setError(t('forgotPassword.enterEmailFirst')); return; }
     setSending(true); setError(''); setSuccess('');
     try {
       await api.post('/auth/forgot-password', { email: normalizedEmail });
       setEmail(normalizedEmail);
       setOtpSent(true);
-      setSuccess('Nếu email tồn tại trong hệ thống, mã xác minh đã được gửi.');
+      setSuccess(t('forgotPassword.otpSentSuccess'));
     } catch (err) {
-      setError(err.response?.data?.error || 'Không thể gửi mã, vui lòng thử lại');
+      setError(err.response?.data?.error || t('forgotPassword.sendFailed'));
     } finally {
       setSending(false);
     }
@@ -69,8 +72,8 @@ export default function ForgotPasswordPage() {
 
   const goStep2 = (e) => {
     e.preventDefault();
-    if (!otpSent) { setError('Vui lòng nhấn "Gửi mã" trước'); return; }
-    if (otp.length < 6) { setError('Vui lòng nhập đủ 6 số mã xác minh'); return; }
+    if (!otpSent) { setError(t('forgotPassword.sendFirst')); return; }
+    if (otp.length < 6) { setError(t('forgotPassword.enterFullOtp')); return; }
     setError('');
     setSuccess('');
     setStep(2);
@@ -78,14 +81,14 @@ export default function ForgotPasswordPage() {
 
   const resetPassword = async (e) => {
     e.preventDefault();
-    if (newPw !== confirmPw) { setError('Mật khẩu xác nhận không khớp'); return; }
+    if (newPw !== confirmPw) { setError(t('forgotPassword.passwordMismatch')); return; }
     setLoading(true); setError(''); setSuccess('');
     try {
       await api.post('/auth/reset-password', { email, otp, new_password: newPw });
-      setSuccess('Đặt lại mật khẩu thành công! Đang chuyển hướng...');
+      setSuccess(t('forgotPassword.resetSuccess'));
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Mã xác minh không hợp lệ hoặc đã hết hạn');
+      setError(err.response?.data?.error || t('forgotPassword.invalidOtp'));
     } finally {
       setLoading(false);
     }
@@ -93,7 +96,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthBg>
-      <AuthCard title="Đổi mật khẩu">
+      <AuthCard title={t('forgotPassword.title')}>
         <StepIndicator step={step} />
 
         {error && (
@@ -112,7 +115,7 @@ export default function ForgotPasswordPage() {
             <IconInput
               icon={<EnvelopeIcon />}
               type="email"
-              placeholder="Nhập địa chỉ email"
+              placeholder={t('forgotPassword.emailPlaceholder')}
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
@@ -122,7 +125,7 @@ export default function ForgotPasswordPage() {
               icon={<ShieldIcon />}
               type="text"
               inputMode="numeric"
-              placeholder={otpSent ? 'Nhập mã 6 số' : 'Nhấn "Gửi mã", sau đó vui lòng kiểm tra hộp thư đến ...'}
+              placeholder={otpSent ? t('forgotPassword.otpPlaceholder') : t('forgotPassword.otpHintLong')}
               value={otp}
               onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
               maxLength={6}
@@ -133,16 +136,16 @@ export default function ForgotPasswordPage() {
                   disabled={sending}
                   className="text-blue-500 hover:text-blue-600 font-semibold text-sm transition whitespace-nowrap disabled:opacity-50"
                 >
-                  {sending ? '...' : 'Gửi mã'}
+                  {sending ? '...' : t('forgotPassword.sendCode')}
                 </button>
               }
             />
             <p className="text-xs text-gray-400 px-1 -mt-1">
-              Nhấn "Gửi mã", sau đó vui lòng kiểm tra hộp thư đến và làm theo hướng dẫn.
+              {t('forgotPassword.otpTip')}
             </p>
             <div className="pt-1">
               <PinkButton type="submit" disabled={!otpSent || otp.length < 6}>
-                Tiếp tục
+                {t('forgotPassword.continue')}
               </PinkButton>
             </div>
           </form>
@@ -151,7 +154,7 @@ export default function ForgotPasswordPage() {
             <IconInput
               icon={<LockIcon />}
               type={showPw ? 'text' : 'password'}
-              placeholder="Mật khẩu mới"
+              placeholder={t('forgotPassword.newPasswordPlaceholder')}
               value={newPw}
               onChange={e => setNewPw(e.target.value)}
               required
@@ -166,7 +169,7 @@ export default function ForgotPasswordPage() {
             <IconInput
               icon={<LockIcon />}
               type={showConfirm ? 'text' : 'password'}
-              placeholder="Xác nhận mật khẩu mới"
+              placeholder={t('forgotPassword.confirmPasswordPlaceholder')}
               value={confirmPw}
               onChange={e => setConfirmPw(e.target.value)}
               required
@@ -178,7 +181,7 @@ export default function ForgotPasswordPage() {
             />
             <div className="pt-1">
               <PinkButton type="submit" disabled={loading}>
-                {loading ? 'Đang xử lý...' : 'Tiếp tục'}
+                {loading ? t('common.loading') : t('forgotPassword.continue')}
               </PinkButton>
             </div>
           </form>
@@ -186,7 +189,7 @@ export default function ForgotPasswordPage() {
 
         <div className="mt-5 text-center">
           <Link to="/login" className="text-sm text-blue-500 hover:text-blue-600 font-medium transition">
-            Trở về Đăng nhập
+            {t('forgotPassword.backToLogin')}
           </Link>
         </div>
       </AuthCard>

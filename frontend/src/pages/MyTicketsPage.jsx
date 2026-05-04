@@ -1,33 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 import ticketLogo from '../ticketlogo.png';
 import ticketsBackdrop from '../../24504411_15690.jpg';
-
-const STATUS_FILTERS = [
-  { key: 'all', label: 'Tất cả' },
-  { key: 'paid', label: 'Thành công' },
-  { key: 'pending', label: 'Đang xử lý' },
-  { key: 'cancelled', label: 'Đã hủy' },
-];
-
-const TIME_FILTERS = [
-  { key: 'upcoming', label: 'Sắp diễn ra' },
-  { key: 'ended', label: 'Đã kết thúc' },
-];
-
-const STATUS_LABELS = {
-  paid: 'Thành công',
-  pending: 'Đang xử lý',
-  cancelled: 'Đã hủy',
-};
 
 const PAGE_BACKGROUND_STYLE = {
   backgroundImage: `linear-gradient(125deg, rgba(255,255,255,0.92), rgba(255,255,255,0.76) 48%, rgba(255,255,255,0.88)), url(${ticketsBackdrop})`,
 };
 
-function formatDate(d) {
-  return new Date(d).toLocaleString('vi-VN', {
+function formatDate(d, locale = 'vi-VN') {
+  return new Date(d).toLocaleString(locale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -74,6 +57,21 @@ function TicketsPageFrame({ children }) {
 }
 
 export default function MyTicketsPage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === 'vi' ? 'vi-VN' : 'en-US';
+
+  const STATUS_FILTERS = [
+    { key: 'all',       label: t('myTickets.all') },
+    { key: 'paid',      label: t('myTickets.paid') },
+    { key: 'pending',   label: t('myTickets.pending') },
+    { key: 'cancelled', label: t('myTickets.cancelled') },
+  ];
+
+  const TIME_FILTERS = [
+    { key: 'upcoming', label: t('myTickets.upcoming') },
+    { key: 'ended',    label: t('myTickets.ended') },
+  ];
+
   const [orders, setOrders] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('upcoming');
@@ -83,7 +81,7 @@ export default function MyTicketsPage() {
   useEffect(() => {
     api.get('/orders')
       .then(r => setOrders(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setError('Không thể tải lịch sử vé. Vui lòng thử lại.'))
+      .catch(() => setError(t('myTickets.loadError')))
       .finally(() => setLoading(false));
   }, []);
 
@@ -98,19 +96,18 @@ export default function MyTicketsPage() {
       if (order.status === 'cancelled') return total;
       return total + (order.items || []).length;
     }, 0);
-
     return [
-      { label: 'Tổng đơn', value: orders.length },
-      { label: 'Vé hiệu lực', value: activeTickets },
-      { label: 'Thành công', value: paidOrders },
+      { label: t('myTickets.totalOrders'),  value: orders.length },
+      { label: t('myTickets.activeTickets'), value: activeTickets },
+      { label: t('myTickets.successCount'), value: paidOrders },
     ];
-  }, [orders]);
+  }, [orders, t]);
 
   if (loading) {
     return (
       <TicketsPageFrame>
         <div className="mx-auto max-w-6xl px-4 py-20 text-center text-base font-semibold text-slate-700 sm:px-6">
-          Đang tải...
+          {t('common.loading')}
         </div>
       </TicketsPageFrame>
     );
@@ -122,13 +119,13 @@ export default function MyTicketsPage() {
         <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-bold text-cyan-700">TicketRush</p>
-            <h1 className="mt-1 text-3xl font-extrabold text-slate-950 sm:text-4xl">Vé của tôi</h1>
+            <h1 className="mt-1 text-3xl font-extrabold text-slate-950 sm:text-4xl">{t('myTickets.title')}</h1>
           </div>
           <Link
             to="/"
             className="inline-flex h-11 w-fit items-center justify-center rounded-full bg-slate-950 px-5 text-sm font-bold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
           >
-            Khám phá sự kiện
+            {t('myTickets.explore')}
           </Link>
         </header>
 
@@ -148,7 +145,6 @@ export default function MyTicketsPage() {
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             {STATUS_FILTERS.map(filter => {
               const active = statusFilter === filter.key;
-
               return (
                 <button
                   key={filter.key}
@@ -169,7 +165,6 @@ export default function MyTicketsPage() {
             <div className="inline-flex rounded-full border border-slate-200 bg-white/80 p-1">
               {TIME_FILTERS.map(filter => {
                 const active = timeFilter === filter.key;
-
                 return (
                   <button
                     key={filter.key}
@@ -199,18 +194,18 @@ export default function MyTicketsPage() {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-cyan-100 to-yellow-100">
               <img src={ticketLogo} alt="" className="h-7 w-7 object-contain" />
             </div>
-            <p className="mt-4 text-base font-semibold text-slate-700">Không có vé phù hợp.</p>
+            <p className="mt-4 text-base font-semibold text-slate-700">{t('myTickets.noMatch')}</p>
             <Link
               to="/"
               className="mt-4 inline-flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-primary to-secondary px-5 text-sm font-bold text-white shadow-md shadow-primary/20 transition hover:-translate-y-0.5"
             >
-              Xem sự kiện
+              {t('myTickets.exploreEvents')}
             </Link>
           </div>
         ) : (
           <div className="mt-8 space-y-4">
             {filteredOrders.map(order => (
-              <TicketOrderCard key={order.id} order={order} />
+              <TicketOrderCard key={order.id} order={order} locale={locale} />
             ))}
           </div>
         )}
@@ -219,7 +214,15 @@ export default function MyTicketsPage() {
   );
 }
 
-function TicketOrderCard({ order }) {
+function TicketOrderCard({ order, locale }) {
+  const { t } = useTranslation();
+
+  const STATUS_LABELS = {
+    paid:      t('myTickets.paid'),
+    pending:   t('myTickets.pending'),
+    cancelled: t('myTickets.cancelled'),
+  };
+
   const orderItems = order.items || [];
   const activeItems = order.status === 'cancelled' ? [] : orderItems;
   const cancelledItems = [
@@ -253,12 +256,12 @@ function TicketOrderCard({ order }) {
               <h2 className="truncate text-xl font-extrabold text-slate-950">{order.event_title}</h2>
               <dl className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
                 <div>
-                  <dt className="font-bold text-slate-800">Địa điểm</dt>
+                  <dt className="font-bold text-slate-800">{t('myTickets.location')}</dt>
                   <dd className="mt-0.5 truncate">{order.venue}</dd>
                 </div>
                 <div>
-                  <dt className="font-bold text-slate-800">Thời gian</dt>
-                  <dd className="mt-0.5">{formatDate(order.event_date)}</dd>
+                  <dt className="font-bold text-slate-800">{t('myTickets.time')}</dt>
+                  <dd className="mt-0.5">{formatDate(order.event_date, locale)}</dd>
                 </div>
               </dl>
             </div>
@@ -268,7 +271,7 @@ function TicketOrderCard({ order }) {
               </span>
               {cancelledItems.length > 0 && order.status !== 'cancelled' && (
                 <span className="w-fit rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">
-                  Có vé đã hủy
+                  {t('myTickets.hasCancelled')}
                 </span>
               )}
             </div>
@@ -276,10 +279,10 @@ function TicketOrderCard({ order }) {
 
           <div className="mt-5 space-y-4">
             {activeItems.length > 0 && (
-              <SeatList title="Vé đang hiệu lực" items={activeItems} />
+              <SeatList title={t('myTickets.activeList')} items={activeItems} />
             )}
             {cancelledItems.length > 0 && (
-              <SeatList title="Vé đã hủy" items={cancelledItems} cancelled />
+              <SeatList title={t('myTickets.cancelledList')} items={cancelledItems} cancelled />
             )}
           </div>
 
@@ -290,11 +293,11 @@ function TicketOrderCard({ order }) {
                 to={`/orders/${order.id}/tickets`}
                 className="inline-flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-primary to-secondary px-5 text-sm font-bold text-white shadow-md shadow-primary/20 transition hover:-translate-y-0.5 hover:brightness-105"
               >
-                Xem vé
+                {t('myTickets.viewTicket')}
               </Link>
             ) : (
               <span className="text-sm font-semibold text-slate-500">
-                {order.status === 'pending' ? 'Đơn đang chờ thanh toán' : 'Đơn đã hủy'}
+                {order.status === 'pending' ? t('myTickets.pendingOrder') : t('myTickets.cancelledOrder')}
               </span>
             )}
           </div>
@@ -305,6 +308,7 @@ function TicketOrderCard({ order }) {
 }
 
 function SeatList({ title, items, cancelled = false }) {
+  const { t } = useTranslation();
   return (
     <div>
       <p className={`mb-2 text-xs font-bold ${cancelled ? 'text-rose-700' : 'text-cyan-700'}`}>
@@ -321,7 +325,7 @@ function SeatList({ title, items, cancelled = false }) {
             }`}
             title={item.reason || ''}
           >
-            {item.zone || 'Khu'} {item.label || ''}
+            {item.zone || t('myTickets.zone')} {item.label || ''}
           </span>
         ))}
       </div>

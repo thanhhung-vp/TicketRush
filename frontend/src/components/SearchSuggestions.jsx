@@ -1,11 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
-
-const CATEGORY_LABELS = {
-  music: 'Live Music', sports: 'Thể thao', arts: 'Sân khấu',
-  conference: 'Hội nghị', comedy: 'Hài kịch', festival: 'Lễ hội', other: 'Khác',
-};
 
 const CATEGORY_ICONS = {
   music: '🎵', sports: '⚽', arts: '🎭', conference: '🎤',
@@ -20,7 +16,7 @@ function formatDateShort(d) {
 
 function formatVND(n) {
   if (!n) return '';
-  return 'Từ ' + new Intl.NumberFormat('vi-VN').format(Number(n)) + '₫';
+  return new Intl.NumberFormat('vi-VN').format(Number(n)) + '₫';
 }
 
 export default function SearchSuggestions({
@@ -31,6 +27,7 @@ export default function SearchSuggestions({
   className = '',
   autoFocus = false,
 }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [suggestions, setSuggestions] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -82,7 +79,6 @@ export default function SearchSuggestions({
     setShowDropdown(false);
   };
 
-  // Keyboard navigation
   const allItems = suggestions;
   const handleKeyDown = (e) => {
     if (e.key === 'ArrowDown') {
@@ -104,7 +100,7 @@ export default function SearchSuggestions({
     }
   };
 
-  const showResults  = searchValue.trim().length >= 1 && showDropdown;
+  const showResults = searchValue.trim().length >= 1 && showDropdown;
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
@@ -119,7 +115,7 @@ export default function SearchSuggestions({
         value={searchValue}
         onChange={e => { setSearchValue(e.target.value); setShowDropdown(true); }}
         onFocus={() => setShowDropdown(true)}
-        placeholder="Tìm sự kiện, nghệ sĩ, địa điểm..."
+        placeholder={t('search.placeholder')}
         className="w-full bg-gray-50 border border-gray-300 rounded-full pl-10 pr-10 py-2 text-sm
                    focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20
                    placeholder-gray-400 transition text-gray-800"
@@ -135,91 +131,91 @@ export default function SearchSuggestions({
       {/* Dropdown */}
       {showResults && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden z-[9999]">
-            <div className="p-2">
-              {loading && suggestions.length === 0 ? (
-                <div className="flex items-center justify-center py-6 gap-2 text-sm text-gray-400">
-                  <div className="w-4 h-4 border-2 border-gray-300 border-t-primary rounded-full animate-spin" />
-                  Đang tìm kiếm...
-                </div>
-              ) : suggestions.length === 0 ? (
-                <div className="py-6 text-center text-sm text-gray-400">
-                  Không tìm thấy kết quả cho "<span className="font-medium text-gray-600">{searchValue}</span>"
-                </div>
-              ) : (
-                <>
-                  {/* Group by type */}
-                  {['event', 'venue'].map(type => {
-                    const group = suggestions.filter(s => s.type === type);
-                    if (!group.length) return null;
-                    return (
-                      <div key={type} className="mb-1">
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-1.5">
-                          {type === 'event' ? '🎫 Sự kiện' : '📍 Địa điểm'}
-                        </p>
-                        {group.map((s, i) => {
-                          const globalIdx = suggestions.indexOf(s);
-                          return (
-                            <button
-                              key={`${s.type}-${s.label}-${i}`}
-                              onClick={() => handleSelectSuggestion(s)}
-                              className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-left transition-all ${
-                                activeIndex === globalIdx
-                                  ? 'bg-primary/10 text-primary'
-                                  : 'text-gray-700 hover:bg-gray-50'
-                              }`}
-                            >
-                              {/* Icon */}
-                              <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 text-base">
-                                {type === 'event'
-                                  ? (CATEGORY_ICONS[s.extra_info] || '🎫')
-                                  : '📍'}
-                              </span>
+          <div className="p-2">
+            {loading && suggestions.length === 0 ? (
+              <div className="flex items-center justify-center py-6 gap-2 text-sm text-gray-400">
+                <div className="w-4 h-4 border-2 border-gray-300 border-t-primary rounded-full animate-spin" />
+                {t('search.searching')}
+              </div>
+            ) : suggestions.length === 0 ? (
+              <div className="py-6 text-center text-sm text-gray-400">
+                {t('search.noResults')} "<span className="font-medium text-gray-600">{searchValue}</span>"
+              </div>
+            ) : (
+              <>
+                {/* Group by type */}
+                {['event', 'venue'].map(type => {
+                  const group = suggestions.filter(s => s.type === type);
+                  if (!group.length) return null;
+                  return (
+                    <div key={type} className="mb-1">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-1.5">
+                        {type === 'event' ? `🎫 ${t('search.events')}` : `📍 ${t('search.venues')}`}
+                      </p>
+                      {group.map((s, i) => {
+                        const globalIdx = suggestions.indexOf(s);
+                        return (
+                          <button
+                            key={`${s.type}-${s.label}-${i}`}
+                            onClick={() => handleSelectSuggestion(s)}
+                            className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-left transition-all ${
+                              activeIndex === globalIdx
+                                ? 'bg-primary/10 text-primary'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            {/* Icon */}
+                            <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 text-base">
+                              {type === 'event'
+                                ? (CATEGORY_ICONS[s.extra_info] || '🎫')
+                                : '📍'}
+                            </span>
 
-                              {/* Text */}
-                              <div className="flex-1 min-w-0">
-                                <HighlightedText text={s.label} query={searchValue} />
-                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                  {s.extra_info && (
-                                    <span className="text-xs text-gray-400">
-                                      {CATEGORY_LABELS[s.extra_info] || s.extra_info}
-                                    </span>
-                                  )}
-                                  {s.event_date && (
-                                    <span className="text-xs text-gray-400">
-                                      · {formatDateShort(s.event_date)}
-                                    </span>
-                                  )}
-                                  {s.min_price && (
-                                    <span className="text-xs text-primary font-medium">
-                                      · {formatVND(s.min_price)}
-                                    </span>
-                                  )}
-                                </div>
+                            {/* Text */}
+                            <div className="flex-1 min-w-0">
+                              <HighlightedText text={s.label} query={searchValue} />
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                {s.extra_info && (
+                                  <span className="text-xs text-gray-400">
+                                    {t(`event.categories.${s.extra_info}`, { defaultValue: s.extra_info })}
+                                  </span>
+                                )}
+                                {s.event_date && (
+                                  <span className="text-xs text-gray-400">
+                                    · {formatDateShort(s.event_date)}
+                                  </span>
+                                )}
+                                {s.min_price && (
+                                  <span className="text-xs text-primary font-medium">
+                                    · {t('event.priceFrom')} {formatVND(s.min_price)}
+                                  </span>
+                                )}
                               </div>
+                            </div>
 
-                              <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
+                            <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
 
-                  {/* Search all footer */}
-                  <button
-                    onClick={() => { onSubmit(searchValue); setShowDropdown(false); }}
-                    className="flex items-center gap-2 w-full px-3 py-2.5 mt-1 text-sm text-primary hover:bg-primary/5 rounded-xl transition font-medium border-t border-gray-100"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    Xem tất cả kết quả cho "{searchValue}"
-                  </button>
-                </>
-              )}
-            </div>
+                {/* Search all footer */}
+                <button
+                  onClick={() => { onSubmit(searchValue); setShowDropdown(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-2.5 mt-1 text-sm text-primary hover:bg-primary/5 rounded-xl transition font-medium border-t border-gray-100"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  {t('search.viewAll')} "{searchValue}"
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

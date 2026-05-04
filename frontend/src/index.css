@@ -2,12 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Semantic color tokens ─────────────────────────────────────────────────── */
+:root {
+  --color-bg:        #f3f4f6;
+  --color-surface:   #ffffff;
+  --color-card:      #ffffff;
+  --color-border:    #e5e7eb;
+  --color-text:      #111827;
+  --color-muted:     #6b7280;
+}
+
+.dark {
+  --color-bg:        #0a1221;
+  --color-surface:   #111827;
+  --color-card:      #1a2332;
+  --color-border:    #1f2937;
+  --color-text:      #ffffff;
+  --color-muted:     #9ca3af;
+}
+
 @layer base {
   body {
-    @apply bg-gray-100 text-gray-900 antialiased;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    @apply antialiased transition-colors duration-200;
     font-family: 'Inter', system-ui, sans-serif;
   }
 }
+
+/* Utility classes dùng CSS variables — dùng khi Tailwind variant không đủ */
+.bg-surface  { background-color: var(--color-surface); }
+.bg-card     { background-color: var(--color-card); }
+.border-base { border-color: var(--color-border); }
+.text-base   { color: var(--color-text); }
+.text-muted  { color: var(--color-muted); }
 
 /* Hide scrollbar for category tabs */
 .scrollbar-hide::-webkit-scrollbar { display: none; }

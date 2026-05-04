@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import SeatMap from '../components/SeatMap.jsx';
@@ -18,18 +19,18 @@ const CATEGORY_GRADIENTS = {
   other:       'from-slate-700 via-gray-600 to-slate-500',
 };
 
-function formatDateFull(d) {
+function formatDateFull(d, locale = 'vi-VN') {
   const date = new Date(d);
-  const weekday = date.toLocaleDateString('vi-VN', { weekday: 'long' });
+  const weekday = date.toLocaleDateString(locale, { weekday: 'long' });
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
   return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${day}/${month}/${year}`;
 }
 
-function formatTime(d) {
+function formatTime(d, locale = 'vi-VN') {
   const date = new Date(d);
-  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatVND(n) {
@@ -42,7 +43,7 @@ function rrect(ctx, x, y, w, h, r) {
   else { ctx.rect(x, y, w, h); }
 }
 
-function SeatmapPreview({ event, zoom }) {
+function SeatmapPreview({ event, zoom, t }) {
   const canvasRef = useRef();
 
   useEffect(() => {
@@ -89,7 +90,7 @@ function SeatmapPreview({ event, zoom }) {
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.font = `bold ${Math.round(11*Math.min(sx,sy))}px sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(s.label || 'SÂN KHẤU', x+w/2, y+h/2+4);
+        ctx.fillText(s.label || t('event.noSeatmap').toUpperCase(), x+w/2, y+h/2+4);
       }
 
       // Zones
@@ -104,7 +105,7 @@ function SeatmapPreview({ event, zoom }) {
         ctx.fillText(z.name, x+8*sx, y+18*sy);
         ctx.fillStyle = c + '99';
         ctx.font = `${Math.round(9*Math.min(sx,sy))}px sans-serif`;
-        ctx.fillText(`${(z.rows||5)*(z.cols||8)} ghế`, x+8*sx, y+30*sy);
+        ctx.fillText(`${(z.rows||5)*(z.cols||8)} ${t('event.seatsAvailable')}`, x+8*sx, y+30*sy);
       }
     } else if (event.zones?.length) {
       const cols = 2, pad = 20, blockW = (W - pad*(cols+1))/cols, blockH = 72;
@@ -117,14 +118,14 @@ function SeatmapPreview({ event, zoom }) {
         ctx.fillStyle = c; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(z.name, x+blockW/2, y+28);
         ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '11px sans-serif';
-        ctx.fillText(`${z.available_seats}/${z.total_seats} ghế trống`, x+blockW/2, y+46);
+        ctx.fillText(`${z.available_seats}/${z.total_seats} ${t('event.seatsAvailable')}`, x+blockW/2, y+46);
         ctx.fillText(new Intl.NumberFormat('vi-VN').format(z.price)+' VND', x+blockW/2, y+62);
       });
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('Chưa có sơ đồ chỗ ngồi', W/2, H/2);
+      ctx.fillText(t('event.noSeatmap'), W/2, H/2);
     }
-  }, [event]);
+  }, [event, t]);
 
   return (
     <canvas ref={canvasRef} width={760} height={480}
@@ -134,6 +135,7 @@ function SeatmapPreview({ event, zoom }) {
 }
 
 export default function EventDetailPage() {
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -143,13 +145,14 @@ export default function EventDetailPage() {
   const [copied, setCopied] = useState(false);
   const [showSeatmap, setShowSeatmap] = useState(false);
   const [seatmapZoom, setSeatmapZoom] = useState(1);
+  const locale = i18n.language === 'vi' ? 'vi-VN' : 'en-US';
 
   useEffect(() => {
     api.get(`/events/${id}`).then(r => setEvent(r.data)).finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <div className="text-center py-20 text-gray-400">Đang tải...</div>;
-  if (!event) return <div className="text-center py-20 text-red-500">Không tìm thấy sự kiện.</div>;
+  if (loading) return <div className="text-center py-20 text-gray-400">{t('common.loading')}</div>;
+  if (!event) return <div className="text-center py-20 text-red-500">{t('common.error')}</div>;
 
   const gradient = CATEGORY_GRADIENTS[event.category] || CATEGORY_GRADIENTS.other;
   const minPrice = event.zones?.length > 0 ? Math.min(...event.zones.map(z => Number(z.price))) : 0;
@@ -160,9 +163,14 @@ export default function EventDetailPage() {
   const isSoldOut  = !isClosed && event.zones?.length > 0 && event.zones.every(z => Number(z.available_seats) === 0);
   const eventStatus = isClosed ? 'ended' : isSoldOut ? 'soldout' : 'onsale';
 
+  const TABS = [
+    { key: 'seats', label: t('event.tabs.seats') },
+    { key: 'about', label: t('event.tabs.about') },
+  ];
+
   return (
     <div>
-      {/* ═══════════ Hero Banner (CTicket style) ═══════════ */}
+      {/* ═══════════ Hero Banner ═══════════ */}
       <div className={`bg-gradient-to-r ${gradient} relative`}>
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative max-w-6xl mx-auto px-4 py-10">
@@ -180,49 +188,49 @@ export default function EventDetailPage() {
               {/* CTA Button */}
               {eventStatus === 'ended' ? (
                 <button disabled className="mt-4 w-full bg-gray-500/60 text-white/60 font-bold py-3.5 rounded-full text-sm cursor-not-allowed">
-                  Sự kiện đã kết thúc
+                  {t('event.eventEnded')}
                 </button>
               ) : eventStatus === 'soldout' ? (
                 <button disabled className="mt-4 w-full bg-red-500/70 text-white/80 font-bold py-3.5 rounded-full text-sm cursor-not-allowed">
-                  Đã hết vé
+                  {t('event.soldOut')}
                 </button>
               ) : !user ? (
                 <button
                   onClick={() => navigate('/login')}
                   className="mt-4 w-full bg-[#E6007E] hover:bg-[#c4006a] text-white font-bold py-3.5 rounded-full transition shadow-lg text-sm"
                 >
-                  Đăng nhập để mua vé
+                  {t('event.loginToBuy')}
                 </button>
               ) : (
                 <button
                   onClick={() => document.getElementById('seat-section')?.scrollIntoView({ behavior: 'smooth' })}
                   className="mt-4 w-full bg-[#E6007E] hover:bg-[#c4006a] text-white font-bold py-3.5 rounded-full transition shadow-lg text-sm"
                 >
-                  Chọn vé ngay
+                  {t('event.selectTicket')}
                 </button>
               )}
             </div>
 
             {/* Right: Event Info */}
             <div className="flex-1 text-white">
-              {/* Status badge + Wishlist */}
+              {/* Status badge */}
               <div className="flex items-center gap-3 mb-3">
                 {eventStatus === 'onsale' && (
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-green-500/20 text-green-200 border border-green-400/30">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                    Đang mở bán
+                    {t('event.badge.onsale')}
                   </span>
                 )}
                 {eventStatus === 'soldout' && (
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-red-500/20 text-red-200 border border-red-400/30">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                    Đã bán hết vé
+                    {t('event.badge.soldout')}
                   </span>
                 )}
                 {eventStatus === 'ended' && (
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-gray-500/20 text-gray-300 border border-gray-500/30">
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                    Đã đóng
+                    {t('event.badge.ended')}
                   </span>
                 )}
               </div>
@@ -235,23 +243,23 @@ export default function EventDetailPage() {
               <div className="flex items-start gap-3 mb-4">
                 <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-lg shrink-0">📅</div>
                 <div>
-                  <p className="font-semibold text-white">{formatDateFull(event.event_date)}</p>
-                  <p className="text-white/60 text-sm">Từ {formatTime(event.event_date)}</p>
+                  <p className="font-semibold text-white">{formatDateFull(event.event_date, locale)}</p>
+                  <p className="text-white/60 text-sm">{t('event.fromTime')} {formatTime(event.event_date, locale)}</p>
                 </div>
               </div>
 
               {/* Location */}
-              <a 
+              <a
                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-start gap-3 mb-4 group cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-xl transition"
-                title="Mở Google Maps chỉ đường"
+                title={t('event.viewDirections')}
               >
                 <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-lg shrink-0 group-hover:bg-primary/50 transition-colors">📍</div>
                 <div>
                   <p className="font-semibold text-white group-hover:text-blue-200 transition-colors">{event.venue}</p>
-                  <p className="text-white/60 text-sm group-hover:underline">Xem bản đồ chỉ đường ↗</p>
+                  <p className="text-white/60 text-sm group-hover:underline">{t('event.viewDirections')}</p>
                 </div>
               </a>
 
@@ -260,9 +268,9 @@ export default function EventDetailPage() {
                 <div className="flex items-start gap-3 mb-4">
                   <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-lg shrink-0">🎫</div>
                   <div>
-                    <p className="font-semibold text-white">Giá vé</p>
+                    <p className="font-semibold text-white">{t('event.price')}</p>
                     <p className="text-white/60 text-sm">
-                      Từ {formatVND(minPrice)} {maxPrice !== minPrice ? `đến ${formatVND(maxPrice)}` : ''}
+                      {t('event.priceFrom')} {formatVND(minPrice)} {maxPrice !== minPrice ? `${t('event.toPrice')} ${formatVND(maxPrice)}` : ''}
                     </p>
                   </div>
                 </div>
@@ -288,7 +296,7 @@ export default function EventDetailPage() {
                     );
                   }}
                   className="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 border border-white/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95"
-                  title="Chia sẻ lên Facebook"
+                  title="Facebook"
                 >
                   <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M22 12a10 10 0 10-11.563 9.876v-6.988H7.9V12h2.537V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.888H13.56v6.988A10.003 10.003 0 0022 12z"/>
@@ -306,7 +314,7 @@ export default function EventDetailPage() {
                   className={`w-10 h-10 rounded-full border border-white/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${
                     copied ? 'bg-green-500/30 hover:bg-green-500/40' : 'bg-white/15 hover:bg-white/25'
                   }`}
-                  title={copied ? 'Đã sao chép!' : 'Sao chép liên kết'}
+                  title={copied ? t('event.copied') : t('event.copyLink')}
                 >
                   {copied ? (
                     <svg className="w-5 h-5 text-green-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -319,7 +327,7 @@ export default function EventDetailPage() {
                   )}
                 </button>
                 {copied && (
-                  <span className="text-xs text-green-200 font-medium animate-pulse">Đã sao chép!</span>
+                  <span className="text-xs text-green-200 font-medium animate-pulse">{t('event.copied')}</span>
                 )}
               </div>
             </div>
@@ -330,10 +338,7 @@ export default function EventDetailPage() {
       {/* ═══════════ Tabs ═══════════ */}
       <div className="border-b border-gray-200 bg-white sticky top-[57px] z-40">
         <div className="max-w-6xl mx-auto px-4 flex gap-8">
-          {[
-            { key: 'seats', label: 'Lịch sự kiện & Sơ đồ ghế' },
-            { key: 'about', label: 'Thông tin sự kiện' },
-          ].map(tab => (
+          {TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -355,8 +360,8 @@ export default function EventDetailPage() {
           <div>
             {/* Venue info card */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Lịch sự kiện & Sơ đồ ghế</h2>
-              <p className="text-sm text-gray-500 mb-4">Vui lòng chọn khu vực để bắt đầu đặt vé</p>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">{t('event.scheduleAndSeats')}</h2>
+              <p className="text-sm text-gray-500 mb-4">{t('event.selectAreaPrompt')}</p>
 
               {/* Venue */}
               <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
@@ -368,20 +373,20 @@ export default function EventDetailPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 truncate">{event.venue}</p>
-                  <p className="text-sm text-gray-500">{formatDateFull(event.event_date)} · {formatTime(event.event_date)}</p>
+                  <p className="text-sm text-gray-500">{formatDateFull(event.event_date, locale)} · {formatTime(event.event_date, locale)}</p>
                 </div>
                 <button
                   onClick={() => { setShowSeatmap(true); setSeatmapZoom(1); }}
                   className="shrink-0 text-xs font-semibold text-primary border border-primary/30 hover:bg-primary/5 rounded-full px-4 py-1.5 transition"
                 >
-                  Xem sơ đồ
+                  {t('event.viewMap')}
                 </button>
               </div>
 
               {/* Zones/Price table */}
               {event.zones?.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Khu vực & Giá vé</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('event.zonesAndPrices')}</h3>
                   <div className="grid gap-2">
                     {event.zones.map(z => (
                       <div key={z.id} className="flex items-center justify-between py-2.5 px-4 bg-gray-50 rounded-lg">
@@ -389,7 +394,7 @@ export default function EventDetailPage() {
                           <span className="w-4 h-4 rounded" style={{ backgroundColor: z.color }} />
                           <span className="font-medium text-gray-800">{z.name}</span>
                           <span className="text-xs text-gray-400">
-                            ({Number(z.available_seats || 0)}/{Number(z.total_seats || 0)} ghế trống)
+                            ({Number(z.available_seats || 0)}/{Number(z.total_seats || 0)} {t('event.seatsAvailable')})
                           </span>
                         </span>
                         <span className="font-bold text-gray-900">{formatVND(z.price)}</span>
@@ -400,37 +405,40 @@ export default function EventDetailPage() {
               )}
             </div>
 
-            {/* Seat map */}
-            <div className="bg-gray-950 rounded-2xl p-5 text-white">
-              <SeatMap eventId={id} />
-            </div>
+            {/* Seat map — only for open events */}
+            {!isClosed && (
+              <div className="bg-gray-950 rounded-2xl p-5 text-white">
+                <SeatMap eventId={id} />
+              </div>
+            )}
           </div>
         ) : (
           /* About tab */
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Thông tin sự kiện</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{t('event.tabs.about')}</h2>
             <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed">
-              <p>{event.description || 'Chưa có thông tin chi tiết.'}</p>
+              <p>{event.description || t('event.noInfo')}</p>
             </div>
 
             <div className="mt-6 border-t border-gray-200 pt-6 space-y-3">
               <div className="flex items-center gap-3 text-sm">
-                <span className="text-gray-400 w-24">Sự kiện:</span>
+                <span className="text-gray-400 w-24">{t('event.eventTitle')}:</span>
                 <span className="font-medium text-gray-800">{event.title}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
-                <span className="text-gray-400 w-24">Thời gian:</span>
-                <span className="font-medium text-gray-800">{formatDateFull(event.event_date)} · {formatTime(event.event_date)}</span>
+                <span className="text-gray-400 w-24">{t('event.timeLabel')}:</span>
+                <span className="font-medium text-gray-800">{formatDateFull(event.event_date, locale)} · {formatTime(event.event_date, locale)}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
-                <span className="text-gray-400 w-24">Địa điểm:</span>
+                <span className="text-gray-400 w-24">{t('event.venue')}:</span>
                 <span className="font-medium text-gray-800">{event.venue}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
-                <span className="text-gray-400 w-24">Giá vé:</span>
+                <span className="text-gray-400 w-24">{t('event.price')}:</span>
                 <span className="font-medium text-gray-800">
-                  {minPrice > 0 ? `Từ ${formatVND(minPrice)}` : 'Liên hệ'}
-                  {maxPrice !== minPrice ? ` đến ${formatVND(maxPrice)}` : ''}
+                  {minPrice > 0
+                    ? `${t('event.priceFrom')} ${formatVND(minPrice)}${maxPrice !== minPrice ? ` ${t('event.toPrice')} ${formatVND(maxPrice)}` : ''}`
+                    : t('event.contactPrice')}
                 </span>
               </div>
             </div>
@@ -452,7 +460,7 @@ export default function EventDetailPage() {
             <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
               <div>
                 <p className="font-bold text-gray-900 text-base">{event.venue}</p>
-                <p className="text-sm text-gray-500 mt-0.5">{formatDateFull(event.event_date)} · {formatTime(event.event_date)}</p>
+                <p className="text-sm text-gray-500 mt-0.5">{formatDateFull(event.event_date, locale)} · {formatTime(event.event_date, locale)}</p>
               </div>
               <button
                 onClick={() => setShowSeatmap(false)}
@@ -467,7 +475,7 @@ export default function EventDetailPage() {
             {/* Seatmap canvas with zoom */}
             <div className="relative overflow-hidden rounded-b-2xl" style={{ height: '420px', background: '#0d0d14' }}>
               <div className="w-full h-full overflow-auto flex items-center justify-center">
-                <SeatmapPreview event={event} zoom={seatmapZoom} />
+                <SeatmapPreview event={event} zoom={seatmapZoom} t={t} />
               </div>
 
               {/* Zoom controls */}
@@ -475,14 +483,12 @@ export default function EventDetailPage() {
                 <button
                   onClick={() => setSeatmapZoom(z => Math.min(z + 0.25, 3))}
                   className="w-9 h-9 rounded-xl bg-white border border-gray-200 shadow-md flex items-center justify-center hover:bg-gray-50 transition text-gray-700 font-bold text-lg"
-                  title="Phóng to"
                 >
                   +
                 </button>
                 <button
                   onClick={() => setSeatmapZoom(z => Math.max(z - 0.25, 0.5))}
                   className="w-9 h-9 rounded-xl bg-white border border-gray-200 shadow-md flex items-center justify-center hover:bg-gray-50 transition text-gray-700 font-bold text-lg"
-                  title="Thu nhỏ"
                 >
                   −
                 </button>
@@ -490,7 +496,6 @@ export default function EventDetailPage() {
                   <button
                     onClick={() => setSeatmapZoom(1)}
                     className="w-9 h-9 rounded-xl bg-white border border-gray-200 shadow-md flex items-center justify-center hover:bg-gray-50 transition"
-                    title="Đặt lại"
                   >
                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

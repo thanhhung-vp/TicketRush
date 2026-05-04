@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function WishlistButton({ eventId, className = '' }) {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +37,7 @@ export default function WishlistButton({ eventId, className = '' }) {
     <button
       onClick={toggle}
       disabled={loading}
-      title={saved ? 'Bỏ lưu' : 'Lưu sự kiện'}
+      title={saved ? t('wishlist.unsave') : t('wishlist.save')}
       className={`flex items-center justify-center rounded-full transition-all ${className} ${
         saved
           ? 'bg-pink-100 text-pink-600 hover:bg-pink-200'

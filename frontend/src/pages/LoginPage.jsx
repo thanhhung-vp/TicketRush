@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
   AuthBg, AuthCard, IconInput, PinkButton, AuthDivider, GoogleAuthButton, Checkbox,
@@ -9,6 +10,7 @@ import {
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
@@ -22,7 +24,7 @@ export default function LoginPage() {
       const user = await login(form.email, form.password);
       navigate(user.role === 'admin' ? '/admin' : '/');
     } catch (err) {
-      setError(err.response?.data?.error || 'Đăng nhập thất bại');
+      setError(err.response?.data?.error || t('auth.loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -30,7 +32,7 @@ export default function LoginPage() {
 
   return (
     <AuthBg>
-      <AuthCard title="Đăng nhập">
+      <AuthCard title={t('auth.loginTitle')}>
         {error && (
           <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
             {error}
@@ -41,7 +43,7 @@ export default function LoginPage() {
           <IconInput
             icon={<EnvelopeIcon />}
             type="email"
-            placeholder="Nhập địa chỉ email"
+            placeholder={t('auth.emailPlaceholder')}
             value={form.email}
             onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
             required
@@ -50,7 +52,7 @@ export default function LoginPage() {
           <IconInput
             icon={<LockIcon />}
             type={showPw ? 'text' : 'password'}
-            placeholder="Nhập mật khẩu"
+            placeholder={t('auth.passwordPlaceholder')}
             value={form.password}
             onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
             required
@@ -65,27 +67,27 @@ export default function LoginPage() {
             <Checkbox
               checked={remember}
               onChange={setRemember}
-              label={<span className="text-sm text-gray-600">Tự động đăng nhập</span>}
+              label={<span className="text-sm text-gray-600">{t('auth.rememberMe')}</span>}
             />
             <Link to="/forgot-password" className="text-sm text-blue-500 hover:text-blue-600 font-medium transition">
-              Quên mật khẩu?
+              {t('auth.forgotPassword')}
             </Link>
           </div>
 
           <div className="pt-1">
             <PinkButton type="submit" disabled={loading}>
-              {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+              {loading ? t('auth.loggingIn') : t('auth.loginTitle')}
             </PinkButton>
           </div>
         </form>
 
-        <AuthDivider text="Hoặc đăng nhập với" />
+        <AuthDivider text={t('auth.orLoginWith')} />
         <GoogleAuthButton />
 
         <p className="mt-5 text-center text-sm text-gray-500">
-          Bạn chưa có tài khoản?{' '}
+          {t('auth.noAccount')}{' '}
           <Link to="/register" className="text-blue-500 hover:text-blue-600 font-semibold transition">
-            Đăng ký ngay
+            {t('auth.registerNow')}
           </Link>
         </p>
       </AuthCard>

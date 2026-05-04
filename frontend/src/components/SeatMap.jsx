@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
-const WARN_AT  = 120; // seconds — auto-renew triggers here (2 min left)
-const URGENT_AT = 60; // seconds — turn red + pulse
+const WARN_AT  = 120;
+const URGENT_AT = 60;
 
 function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
@@ -19,11 +20,11 @@ function hexToRgba(hex, alpha) {
 
 // ── Seat button ───────────────────────────────────────────────────────────────
 function SeatBtn({ seat, status, zoneColor, onToggle, frozen }) {
+  const { t } = useTranslation();
   let cls = 'transition-all duration-100 ';
   let style = {};
 
   if (frozen && status === 'available') {
-    // Seatmap is locked (API call in-flight) — dim available seats
     cls += 'cursor-not-allowed opacity-40';
     style = { backgroundColor: hexToRgba(zoneColor, 0.12), border: `1.5px solid ${hexToRgba(zoneColor, 0.25)}` };
   } else if (status === 'available') {
@@ -40,11 +41,16 @@ function SeatBtn({ seat, status, zoneColor, onToggle, frozen }) {
     style = { backgroundColor: '#374151', border: '1px solid #4b5563' };
   }
 
-  const label = { available: 'Còn trống', selected: 'Đã chọn', locked: 'Đang giữ', sold: 'Đã bán' }[status] || '';
+  const statusLabel = {
+    available: t('seatMap.available'),
+    selected:  t('event.status.selecting'),
+    locked:    t('seatMap.holdingStatus'),
+    sold:      t('seatMap.sold'),
+  }[status] || '';
 
   return (
     <button
-      title={`${seat.label} · ${label}`}
+      title={`${seat.label} · ${statusLabel}`}
       onClick={() => !frozen && onToggle(seat)}
       className={`w-7 h-7 rounded-t-md rounded-b-sm ${cls}`}
       style={style}
@@ -54,6 +60,7 @@ function SeatBtn({ seat, status, zoneColor, onToggle, frozen }) {
 
 // ── Zone grid ─────────────────────────────────────────────────────────────────
 function ZoneGrid({ zone, selected, heldSeats, onToggle, frozen }) {
+  const { t } = useTranslation();
   const rows = {};
   zone.seats.forEach(s => { (rows[s.row_idx] ??= []).push(s); });
   const sortedRows = Object.entries(rows).sort(([a], [b]) => Number(a) - Number(b));
@@ -65,11 +72,11 @@ function ZoneGrid({ zone, selected, heldSeats, onToggle, frozen }) {
       <div className="flex items-center gap-3 mb-4">
         <div className="w-1 h-6 rounded-full shrink-0" style={{ backgroundColor: zone.color }} />
         <span className="font-bold text-white text-sm tracking-wide">{zone.zone_name}</span>
-        <span className="text-gray-400 text-xs">{formatVND(zone.price)}/ghế</span>
+        <span className="text-gray-400 text-xs">{formatVND(zone.price)}{t('seatMap.perSeat')}</span>
         <div className="ml-auto flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
           style={{ backgroundColor: hexToRgba(zone.color, 0.15), color: zone.color }}>
           <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: zone.color }} />
-          {available}/{zone.seats.length} còn trống
+          {available}/{zone.seats.length} {t('seatMap.available').toLowerCase()}
         </div>
       </div>
 
@@ -113,18 +120,19 @@ function ZoneGrid({ zone, selected, heldSeats, onToggle, frozen }) {
 
 // ── Selection panel ───────────────────────────────────────────────────────────
 function SelectionPanel({ selectedSeats, total, holding, onHold, onClear }) {
+  const { t } = useTranslation();
   return (
     <div className="mt-4 bg-gray-900/80 border border-blue-700/50 rounded-2xl px-5 py-4
                     flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between backdrop-blur-sm">
       <div>
-        <p className="text-xs text-gray-400 mb-0.5">Ghế đã chọn</p>
+        <p className="text-xs text-gray-400 mb-0.5">{t('seatMap.selectedSeats')}</p>
         <p className="font-semibold text-white text-sm">{selectedSeats.map(s => s.label).join(' · ')}</p>
         <p className="text-blue-400 font-bold text-lg mt-1">{formatVND(total)}</p>
       </div>
       <div className="flex gap-2.5">
         <button onClick={onClear} disabled={holding}
           className="text-sm text-gray-400 hover:text-white px-4 py-2.5 border border-gray-700 rounded-xl transition disabled:opacity-40">
-          Bỏ chọn
+          {t('seatMap.deselect')}
         </button>
         <button onClick={onHold} disabled={holding}
           className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-xl transition text-sm">
@@ -134,9 +142,9 @@ function SelectionPanel({ selectedSeats, total, holding, onHold, onClear }) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
               </svg>
-              Đang giữ...
+              {t('seatMap.holding')}
             </span>
-          ) : 'Giữ ghế →'}
+          ) : t('seatMap.hold')}
         </button>
       </div>
     </div>
@@ -145,6 +153,7 @@ function SelectionPanel({ selectedSeats, total, holding, onHold, onClear }) {
 
 // ── Hold panel ────────────────────────────────────────────────────────────────
 function HoldPanel({ heldSeatObjs, countdown, total, renewing, onRelease, onCheckout }) {
+  const { t } = useTranslation();
   const urgent  = countdown !== null && countdown <= URGENT_AT;
   const warning = countdown !== null && countdown <= WARN_AT && countdown > URGENT_AT;
 
@@ -160,18 +169,18 @@ function HoldPanel({ heldSeatObjs, countdown, total, renewing, onRelease, onChec
       }`}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-gray-400 mb-0.5">Ghế đang giữ</p>
+          <p className="text-xs text-gray-400 mb-0.5">{t('seatMap.heldSeats')}</p>
           <p className="font-semibold text-white text-sm">{heldSeatObjs.map(s => s.label).join(' · ')}</p>
         </div>
         <div className="text-right">
           <span className={`text-2xl font-mono font-bold tabular-nums block
             ${urgent ? 'text-red-400 animate-pulse' : warning ? 'text-amber-300' : 'text-amber-400'}`}>
             {renewing ? (
-              <span className="text-base text-emerald-400 animate-pulse">Đang gia hạn...</span>
+              <span className="text-base text-emerald-400 animate-pulse">{t('seatMap.renewing')}</span>
             ) : `⏱ ${fmtCountdown}`}
           </span>
           {warning && !urgent && !renewing && (
-            <span className="text-[11px] text-emerald-400">Đang tự động gia hạn...</span>
+            <span className="text-[11px] text-emerald-400">{t('seatMap.autoRenewing')}</span>
           )}
         </div>
       </div>
@@ -181,7 +190,7 @@ function HoldPanel({ heldSeatObjs, countdown, total, renewing, onRelease, onChec
           <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
           </svg>
-          <p className="text-red-300 text-xs font-medium">Còn ít hơn 1 phút! Hãy hoàn tất thanh toán ngay.</p>
+          <p className="text-red-300 text-xs font-medium">{t('seatMap.urgentWarning')}</p>
         </div>
       )}
 
@@ -190,11 +199,11 @@ function HoldPanel({ heldSeatObjs, countdown, total, renewing, onRelease, onChec
       <div className="flex gap-2.5">
         <button onClick={onRelease}
           className="text-sm text-gray-400 hover:text-white px-4 py-2.5 border border-gray-700 rounded-xl transition">
-          Hủy giữ chỗ
+          {t('seatMap.releaseHold')}
         </button>
         <button onClick={onCheckout}
           className="bg-green-600 hover:bg-green-500 text-white font-semibold px-6 py-2.5 rounded-xl transition text-sm">
-          Thanh toán →
+          {t('seatMap.checkout')}
         </button>
       </div>
     </div>
@@ -203,6 +212,7 @@ function HoldPanel({ heldSeatObjs, countdown, total, renewing, onRelease, onChec
 
 // ── Expired modal ─────────────────────────────────────────────────────────────
 function ExpiredModal({ onClose }) {
+  const { t } = useTranslation();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
       <div className="bg-gray-900 border border-red-500/30 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl">
@@ -212,16 +222,14 @@ function ExpiredModal({ onClose }) {
               d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
         </div>
-        <h3 className="text-white font-bold text-lg mb-2">Thời gian giữ ghế đã hết</h3>
-        <p className="text-gray-400 text-sm leading-relaxed mb-6">
-          Các ghế của bạn đã được trả về hệ thống. Vui lòng chọn lại để tiếp tục mua vé.
-        </p>
+        <h3 className="text-white font-bold text-lg mb-2">{t('seatMap.expiredTitle')}</h3>
+        <p className="text-gray-400 text-sm leading-relaxed mb-6">{t('seatMap.expiredDesc')}</p>
         <button
           onClick={onClose}
           className="w-full py-3 rounded-xl text-white font-semibold text-sm transition"
           style={{ background: 'linear-gradient(90deg, #f9a8d4, #ec4899)' }}
         >
-          Chọn lại ghế
+          {t('seatMap.reselect')}
         </button>
       </div>
     </div>
@@ -230,14 +238,16 @@ function ExpiredModal({ onClose }) {
 
 // ── Legend ────────────────────────────────────────────────────────────────────
 function Legend() {
+  const { t } = useTranslation();
+  const items = [
+    { style: { backgroundColor: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.3)' }, label: t('seatMap.available') },
+    { style: { backgroundColor: '#3b82f6', boxShadow: '0 0 6px rgba(59,130,246,0.6)' },                  label: t('event.status.selecting') },
+    { style: { backgroundColor: '#d97706' },                                                              label: t('seatMap.holdingStatus') },
+    { style: { backgroundColor: '#374151', opacity: 0.4 },                                               label: t('seatMap.sold') },
+  ];
   return (
     <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-400 mb-6">
-      {[
-        { style: { backgroundColor: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.3)' }, label: 'Còn trống' },
-        { style: { backgroundColor: '#3b82f6', boxShadow: '0 0 6px rgba(59,130,246,0.6)' }, label: 'Đang chọn' },
-        { style: { backgroundColor: '#d97706' }, label: 'Đang giữ' },
-        { style: { backgroundColor: '#374151', opacity: 0.4 }, label: 'Đã bán' },
-      ].map(({ style, label }) => (
+      {items.map(({ style, label }) => (
         <span key={label} className="flex items-center gap-1.5">
           <span className="w-4 h-4 rounded-t-md rounded-b-sm inline-block" style={style} />
           {label}
@@ -249,6 +259,7 @@ function Legend() {
 
 // ── Stage ─────────────────────────────────────────────────────────────────────
 function Stage() {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center mb-10 select-none">
       <div className="relative w-full flex justify-center mb-1">
@@ -267,7 +278,9 @@ function Stage() {
           border: '1px solid rgba(255,255,255,0.12)',
           boxShadow: '0 0 30px 6px rgba(180,160,255,0.18)',
         }}>
-        <span className="text-white/60 text-[11px] font-bold tracking-[0.35em] uppercase">Sân khấu</span>
+        <span className="text-white/60 text-[11px] font-bold tracking-[0.35em] uppercase">
+          {t('seatMap.stage')}
+        </span>
       </div>
       <div className="mt-1" style={{
         width: 280, height: 4,
@@ -279,11 +292,12 @@ function Stage() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function SeatMap({ eventId }) {
+  const { t }      = useTranslation();
   const { user }   = useAuth();
   const navigate   = useNavigate();
   const [seats,      setSeats]     = useState([]);
   const [selected,   setSelected]  = useState(new Set());
-  const [holding,    setHolding]   = useState(false);  // API call in-flight
+  const [holding,    setHolding]   = useState(false);
   const [countdown,  setCountdown] = useState(null);
   const [heldSeats,  setHeldSeats] = useState([]);
   const [renewing,   setRenewing]  = useState(false);
@@ -291,7 +305,6 @@ export default function SeatMap({ eventId }) {
   const [showExpired,setShowExpired] = useState(false);
   const [error,      setError]     = useState('');
 
-  // Frozen = seatmap clicks disabled (while API call is in-flight or seats are held)
   const frozen = holding || heldSeats.length > 0;
 
   // ── Load seats ──
@@ -309,7 +322,6 @@ export default function SeatMap({ eventId }) {
         updatedSeats.forEach(u => { if (map.has(u.id)) map.set(u.id, { ...map.get(u.id), status: u.status }); });
         return Array.from(map.values());
       });
-      // Drop client-selected seats that were just locked/sold by someone else
       setSelected(prev => {
         const next = new Set(prev);
         updatedSeats.forEach(u => { if (u.status !== 'available') next.delete(u.id); });
@@ -323,7 +335,6 @@ export default function SeatMap({ eventId }) {
   useEffect(() => {
     if (countdown === null) return;
 
-    // Trigger auto-renew at WARN_AT seconds remaining (once per hold session)
     if (countdown === WARN_AT && !renewedOnce && heldSeats.length > 0) {
       setRenewedOnce(true);
       setRenewing(true);
@@ -332,9 +343,7 @@ export default function SeatMap({ eventId }) {
           const secs = Math.max(0, Math.floor((new Date(data.locked_until) - Date.now()) / 1000));
           setCountdown(secs);
         })
-        .catch(() => {
-          // Renewal failed — seats expired on server side already; let countdown hit 0
-        })
+        .catch(() => {})
         .finally(() => setRenewing(false));
     }
 
@@ -346,11 +355,11 @@ export default function SeatMap({ eventId }) {
       return;
     }
 
-    const t = setTimeout(() => setCountdown(c => (c !== null && c > 0 ? c - 1 : 0)), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setCountdown(c => (c !== null && c > 0 ? c - 1 : 0)), 1000);
+    return () => clearTimeout(timer);
   }, [countdown, heldSeats, renewedOnce]);
 
-  // ── Toggle seat selection (blocked while holding or seats are held) ──
+  // ── Toggle seat selection ──
   const toggleSeat = useCallback((seat) => {
     if (!user || seat.status !== 'available' || frozen) return;
     setSelected(prev => {
@@ -373,9 +382,8 @@ export default function SeatMap({ eventId }) {
       setRenewedOnce(false);
       setCountdown(Math.max(0, Math.floor((new Date(data.locked_until) - Date.now()) / 1000)));
     } catch (err) {
-      const msg = err.response?.data?.error || 'Không thể giữ ghế, vui lòng thử lại.';
+      const msg = err.response?.data?.error || t('seatMap.holdError');
       setError(msg);
-      // If the server says seats are unavailable, deselect them
       const takenIds = err.response?.data?.seats;
       if (takenIds?.length) {
         setSelected(prev => { const n = new Set(prev); takenIds.forEach(id => n.delete(id)); return n; });
@@ -394,7 +402,6 @@ export default function SeatMap({ eventId }) {
   // ── Dismiss expired modal ──
   const dismissExpired = () => {
     setShowExpired(false);
-    // Reload seats so any newly-available seats appear
     api.get(`/events/${eventId}/seats`).then(r => setSeats(r.data));
   };
 

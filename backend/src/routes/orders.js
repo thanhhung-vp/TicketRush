@@ -43,6 +43,17 @@ router.post('/checkout', authenticate, async (req, res) => {
     }
 
     const eventId = seats[0].event_id;
+
+    // Reject checkout on closed or past events
+    const { rows: [evt] } = await client.query(
+      `SELECT status, event_date FROM events WHERE id = $1`,
+      [eventId]
+    );
+    if (!evt || evt.status === 'ended' || new Date(evt.event_date) < new Date()) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Sự kiện đã kết thúc, không thể đặt vé.' });
+    }
+
     const total = seats.reduce((sum, s) => sum + Number(s.price), 0);
 
     // Create order

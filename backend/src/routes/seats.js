@@ -110,6 +110,16 @@ router.post('/hold', authenticate, async (req, res) => {
     }
     eventId = eventCheck.eventId;
 
+    // Reject holds on closed or past events — must be inside the transaction
+    const { rows: [evt] } = await client.query(
+      `SELECT status, event_date FROM events WHERE id = $1`,
+      [eventId]
+    );
+    if (!evt || evt.status === 'ended' || new Date(evt.event_date) < new Date()) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Sự kiện đã kết thúc, không thể đặt vé.' });
+    }
+
     if (await userNeedsQueueAdmission(eventId, req.user.id)) {
       await client.query('ROLLBACK');
       return res.status(403).json({

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 
 function formatVND(n) {
@@ -8,9 +9,10 @@ function formatVND(n) {
 const EMPTY = { name: '', description: '', price: '', stock: '', image_url: '' };
 
 export default function MerchManager({ eventId }) {
+  const { t } = useTranslation();
   const [items, setItems]   = useState([]);
   const [form, setForm]     = useState(EMPTY);
-  const [editing, setEditing] = useState(null); // merch id being edited
+  const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
@@ -24,7 +26,7 @@ export default function MerchManager({ eventId }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.price || !form.stock) { setError('Tên, giá và số lượng là bắt buộc'); return; }
+    if (!form.name || !form.price || !form.stock) { setError(t('merch.required')); return; }
     setSaving(true); setError('');
     const payload = {
       name: form.name,
@@ -44,7 +46,7 @@ export default function MerchManager({ eventId }) {
       }
       setForm(EMPTY);
     } catch (err) {
-      setError(err.response?.data?.error || 'Lỗi lưu vật phẩm');
+      setError(err.response?.data?.error || t('merch.saveError'));
     } finally {
       setSaving(false);
     }
@@ -56,7 +58,7 @@ export default function MerchManager({ eventId }) {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Xóa vật phẩm này?')) return;
+    if (!confirm(t('merch.deleteConfirm'))) return;
     await api.delete(`/merchandise/${eventId}/${id}`);
     setItems(prev => prev.filter(m => m.id !== id));
   };
@@ -67,7 +69,6 @@ export default function MerchManager({ eventId }) {
 
   return (
     <div className="space-y-4">
-      {/* Existing items */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map(m => (
@@ -78,51 +79,50 @@ export default function MerchManager({ eventId }) {
               }
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-800">{m.name}</p>
-                <p className="text-xs text-gray-400">{formatVND(m.price)} · Còn {m.stock}</p>
+                <p className="text-xs text-gray-400">{formatVND(m.price)} · {t('merch.stockLeft', { count: m.stock })}</p>
               </div>
               <div className="flex gap-2 shrink-0">
-                <button onClick={() => startEdit(m)} className="text-xs text-blue-600 hover:underline">Sửa</button>
-                <button onClick={() => handleDelete(m.id)} className="text-xs text-red-500 hover:underline">Xóa</button>
+                <button onClick={() => startEdit(m)} className="text-xs text-blue-600 hover:underline">{t('merch.edit')}</button>
+                <button onClick={() => handleDelete(m.id)} className="text-xs text-red-500 hover:underline">{t('merch.delete')}</button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="border border-gray-200 bg-gray-50 rounded-xl p-4 space-y-3">
-        <p className="text-sm font-medium text-gray-700">{editing ? 'Chỉnh sửa vật phẩm' : '+ Thêm vật phẩm mới'}</p>
+        <p className="text-sm font-medium text-gray-700">{editing ? t('merch.editItem') : t('merch.addItem')}</p>
         {error && <p className="text-red-500 text-xs">{error}</p>}
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Tên vật phẩm *</label>
-            <input value={form.name} onChange={set('name')} placeholder="VD: Lightstick, Áo thun..." className={cls} required />
+            <label className="block text-xs text-gray-500 mb-1">{t('merch.nameLabel')}</label>
+            <input value={form.name} onChange={set('name')} placeholder={t('merch.namePlaceholder')} className={cls} required />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Giá (VNĐ) *</label>
-            <input type="number" min="0" value={form.price} onChange={set('price')} placeholder="VD: 150000" className={cls} required />
+            <label className="block text-xs text-gray-500 mb-1">{t('merch.priceLabel')}</label>
+            <input type="number" min="0" value={form.price} onChange={set('price')} placeholder={t('merch.pricePlaceholder')} className={cls} required />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Số lượng *</label>
-            <input type="number" min="0" value={form.stock} onChange={set('stock')} placeholder="VD: 100" className={cls} required />
+            <label className="block text-xs text-gray-500 mb-1">{t('merch.stockLabel')}</label>
+            <input type="number" min="0" value={form.stock} onChange={set('stock')} placeholder={t('merch.stockPlaceholder')} className={cls} required />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Mô tả</label>
-            <input value={form.description} onChange={set('description')} placeholder="Mô tả ngắn..." className={cls} />
+            <label className="block text-xs text-gray-500 mb-1">{t('merch.descLabel')}</label>
+            <input value={form.description} onChange={set('description')} placeholder={t('merch.descPlaceholder')} className={cls} />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">URL hình ảnh</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('merch.imageUrlLabel')}</label>
             <input type="url" value={form.image_url} onChange={set('image_url')} placeholder="https://..." className={cls} />
           </div>
         </div>
         <div className="flex gap-2">
           <button type="submit" disabled={saving}
             className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 transition">
-            {saving ? 'Đang lưu...' : editing ? 'Cập nhật' : '+ Thêm'}
+            {saving ? t('merch.saving') : editing ? t('merch.update') : t('merch.add')}
           </button>
           {editing && (
             <button type="button" onClick={cancelEdit} className="text-sm text-gray-500 hover:text-gray-800 px-4 py-2">
-              Hủy
+              {t('merch.cancel')}
             </button>
           )}
         </div>

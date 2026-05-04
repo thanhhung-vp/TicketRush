@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -70,6 +71,7 @@ function SectionTitle({ children }) {
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
+  const { t } = useTranslation();
 
   const [form, setForm] = useState({
     full_name:  user?.full_name || '',
@@ -85,7 +87,6 @@ export default function ProfilePage() {
   const [msg, setMsg]       = useState('');
   const [error, setError]   = useState('');
 
-  // Password change state
   const [pw, setPw]       = useState({ old: '', new: '', confirm: '' });
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg]   = useState('');
@@ -104,16 +105,15 @@ export default function ProfilePage() {
       const { data } = await api.patch('/auth/profile', payload);
       updateUser(data);
 
-      // Save local-only fields
       saveLocal('profile_phone',    form.phone);
       saveLocal('profile_province', form.province);
       saveLocal('profile_district', form.district);
       saveLocal('profile_ward',     form.ward);
       saveLocal('profile_street',   form.street);
 
-      setMsg('Lưu thay đổi thành công!');
+      setMsg(t('profile.saveSuccess'));
     } catch (err) {
-      setError(err.response?.data?.error || 'Lỗi cập nhật');
+      setError(err.response?.data?.error || t('profile.saveError'));
     } finally {
       setSaving(false);
     }
@@ -134,14 +134,14 @@ export default function ProfilePage() {
 
   const changePw = async (e) => {
     e.preventDefault();
-    if (pw.new !== pw.confirm) { setPwError('Mật khẩu mới không khớp'); return; }
+    if (pw.new !== pw.confirm) { setPwError(t('profile.pwMismatch')); return; }
     setPwSaving(true); setPwMsg(''); setPwError('');
     try {
       await api.patch('/auth/change-password', { old_password: pw.old, new_password: pw.new });
-      setPwMsg('Đổi mật khẩu thành công');
+      setPwMsg(t('profile.changePasswordSuccess'));
       setPw({ old: '', new: '', confirm: '' });
     } catch (err) {
-      setPwError(err.response?.data?.error || 'Lỗi đổi mật khẩu');
+      setPwError(err.response?.data?.error || t('profile.changePasswordError'));
     } finally {
       setPwSaving(false);
     }
@@ -151,16 +151,14 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
-      <h1 className="text-xl font-semibold text-gray-800 text-center mb-8">Cài đặt tài khoản</h1>
+      <h1 className="text-xl font-semibold text-gray-800 text-center mb-8">{t('profile.pageTitle')}</h1>
 
-      {/* ─── Thông tin cá nhân ─── */}
       <form onSubmit={save} className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-6 mb-5">
-        <SectionTitle>Thông tin cá nhân</SectionTitle>
+        <SectionTitle>{t('profile.personalInfo')}</SectionTitle>
 
         {msg   && <div className="mb-4 text-sm text-green-600 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5">{msg}</div>}
         {error && <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">{error}</div>}
 
-        {/* Avatar */}
         <div className="flex items-center gap-4 mb-6">
           <div className="w-14 h-14 rounded-xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center shrink-0">
             <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -172,24 +170,22 @@ export default function ProfilePage() {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Đổi ảnh đại diện
+            {t('profile.changeAvatar')}
           </button>
         </div>
 
         <div className="space-y-4">
-          {/* Họ tên */}
           <div>
-            <FieldLabel>Họ tên</FieldLabel>
+            <FieldLabel>{t('profile.fullName')}</FieldLabel>
             <TextInput
-              type="text" placeholder="Nhập họ tên"
+              type="text" placeholder={t('profile.fullNamePlaceholder')}
               value={form.full_name} onChange={set('full_name')}
               required minLength={2}
             />
           </div>
 
-          {/* Ngày sinh */}
           <div>
-            <FieldLabel>Ngày sinh</FieldLabel>
+            <FieldLabel>{t('profile.birthDate')}</FieldLabel>
             <div className="relative">
               <TextInput
                 type="date"
@@ -200,9 +196,8 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Số điện thoại */}
           <div>
-            <FieldLabel>Số điện thoại</FieldLabel>
+            <FieldLabel>{t('profile.phoneNumber')}</FieldLabel>
             <div className="flex gap-2">
               <div className="w-24 shrink-0">
                 <SelectInput defaultValue="+84">
@@ -212,91 +207,84 @@ export default function ProfilePage() {
                 </SelectInput>
               </div>
               <TextInput
-                type="tel" placeholder="Nhập số điện thoại"
+                type="tel" placeholder={t('profile.phonePlaceholder')}
                 value={form.phone} onChange={set('phone')}
               />
             </div>
           </div>
         </div>
 
-        {/* ─── Địa chỉ ─── */}
         <div className="mt-6 mb-4">
-          <SectionTitle>Địa chỉ</SectionTitle>
+          <SectionTitle>{t('profile.addressSection')}</SectionTitle>
         </div>
 
         <div className="space-y-4">
-          {/* Tỉnh / Thành phố */}
           <div>
-            <FieldLabel>Tỉnh/Thành phố</FieldLabel>
+            <FieldLabel>{t('profile.province')}</FieldLabel>
             <SelectInput value={form.province} onChange={set('province')}>
-              <option value="">Chọn Tỉnh/Thành phố</option>
+              <option value="">{t('profile.provinceDefault')}</option>
               {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
             </SelectInput>
           </div>
 
-          {/* Quận / Huyện */}
           <div>
-            <FieldLabel>Quận/Huyện</FieldLabel>
+            <FieldLabel>{t('profile.district')}</FieldLabel>
             <TextInput
-              type="text" placeholder="Chọn Quận/Huyện"
+              type="text" placeholder={t('profile.districtPlaceholder')}
               value={form.district} onChange={set('district')}
             />
           </div>
 
-          {/* Phường / Xã */}
           <div>
-            <FieldLabel>Phường/Xã</FieldLabel>
+            <FieldLabel>{t('profile.ward')}</FieldLabel>
             <TextInput
-              type="text" placeholder="Chọn Phường/Xã"
+              type="text" placeholder={t('profile.wardPlaceholder')}
               value={form.ward} onChange={set('ward')}
             />
           </div>
 
-          {/* Số nhà, tên đường */}
           <div>
-            <FieldLabel>Số nhà, tên đường</FieldLabel>
+            <FieldLabel>{t('profile.street')}</FieldLabel>
             <TextInput
-              type="text" placeholder="Nhập số nhà, tên đường"
+              type="text" placeholder={t('profile.streetPlaceholder')}
               value={form.street} onChange={set('street')}
             />
           </div>
         </div>
 
-        {/* Buttons */}
         <div className="flex justify-end gap-3 mt-6">
           <button type="button" onClick={cancel}
             className="px-5 py-2.5 rounded-xl bg-gray-100 text-sm text-gray-600 hover:bg-gray-200 transition font-medium">
-            Hủy
+            {t('profile.cancelBtn')}
           </button>
           <button type="submit" disabled={saving}
             className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition disabled:opacity-50 hover:opacity-90"
             style={{ background: 'linear-gradient(90deg, #f9a8d4, #ec4899)' }}
           >
-            {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
+            {saving ? t('profile.savingText') : t('profile.saveChanges')}
           </button>
         </div>
       </form>
 
-      {/* ─── Đổi mật khẩu ─── */}
       <form onSubmit={changePw} className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-6">
-        <SectionTitle>Đổi mật khẩu</SectionTitle>
+        <SectionTitle>{t('profile.changePasswordSection')}</SectionTitle>
 
         {pwMsg   && <div className="mb-4 text-sm text-green-600 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5">{pwMsg}</div>}
         {pwError && <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">{pwError}</div>}
 
         <div className="space-y-4">
           <div>
-            <FieldLabel>Mật khẩu hiện tại</FieldLabel>
+            <FieldLabel>{t('profile.currentPasswordLabel')}</FieldLabel>
             <TextInput type="password" placeholder="••••••••" required
               value={pw.old} onChange={e => setPw(p => ({ ...p, old: e.target.value }))} />
           </div>
           <div>
-            <FieldLabel>Mật khẩu mới</FieldLabel>
-            <TextInput type="password" placeholder="Ít nhất 6 ký tự" required minLength={6}
+            <FieldLabel>{t('profile.newPasswordLabel')}</FieldLabel>
+            <TextInput type="password" placeholder={t('profile.minPasswordHint')} required minLength={6}
               value={pw.new} onChange={e => setPw(p => ({ ...p, new: e.target.value }))} />
           </div>
           <div>
-            <FieldLabel>Xác nhận mật khẩu mới</FieldLabel>
+            <FieldLabel>{t('profile.confirmNewPasswordLabel')}</FieldLabel>
             <TextInput type="password" placeholder="••••••••" required minLength={6}
               value={pw.confirm} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} />
           </div>
@@ -307,7 +295,7 @@ export default function ProfilePage() {
             className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition disabled:opacity-50 hover:opacity-90"
             style={{ background: 'linear-gradient(90deg, #f9a8d4, #ec4899)' }}
           >
-            {pwSaving ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}
+            {pwSaving ? t('profile.processingText') : t('profile.updatePasswordBtn')}
           </button>
         </div>
       </form>

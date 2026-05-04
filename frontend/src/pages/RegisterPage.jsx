@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
   AuthBg, AuthCard, IconInput, PinkButton, AuthDivider, GoogleAuthButton, Checkbox,
@@ -9,7 +10,8 @@ import {
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState(1); // 1: form, 2: success
+  const { t } = useTranslation();
+  const [step, setStep] = useState(1);
   const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '' });
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -19,14 +21,14 @@ export default function RegisterPage() {
 
   const handle = async (e) => {
     e.preventDefault();
-    if (form.password !== form.confirm) { setError('Mật khẩu xác nhận không khớp'); return; }
-    if (!agreed) { setError('Vui lòng đồng ý với điều kiện và điều khoản'); return; }
+    if (form.password !== form.confirm) { setError(t('auth.passwordMismatch')); return; }
+    if (!agreed) { setError(t('auth.agreeTermsRequired')); return; }
     setError(''); setLoading(true);
     try {
       await register({ email: form.email, password: form.password, full_name: form.full_name });
       setStep(2);
     } catch (err) {
-      setError(err.response?.data?.error || 'Đăng ký thất bại');
+      setError(err.response?.data?.error || t('auth.registerFailed'));
     } finally {
       setLoading(false);
     }
@@ -41,15 +43,15 @@ export default function RegisterPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Đăng ký thành công</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">{t('auth.registerSuccessTitle')}</h2>
           <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-            Vui lòng nhấn nút bên dưới để quay lại trang đăng nhập
+            {t('auth.registerSuccessDesc')}
           </p>
           <button
             onClick={() => navigate('/login')}
             className="w-full py-3.5 rounded-2xl border-2 border-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-50 transition"
           >
-            Trở về Đăng nhập
+            {t('auth.backToLogin')}
           </button>
         </div>
       </AuthBg>
@@ -58,7 +60,7 @@ export default function RegisterPage() {
 
   return (
     <AuthBg>
-      <AuthCard title="Đăng ký tài khoản">
+      <AuthCard title={t('auth.registerTitle')}>
         {error && (
           <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
             {error}
@@ -69,7 +71,7 @@ export default function RegisterPage() {
           <IconInput
             icon={<UserIcon />}
             type="text"
-            placeholder="Nhập họ và tên"
+            placeholder={t('auth.namePlaceholder')}
             value={form.full_name}
             onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
             required
@@ -79,7 +81,7 @@ export default function RegisterPage() {
           <IconInput
             icon={<EnvelopeIcon />}
             type="email"
-            placeholder="Nhập địa chỉ email"
+            placeholder={t('auth.emailPlaceholder')}
             value={form.email}
             onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
             required
@@ -87,7 +89,7 @@ export default function RegisterPage() {
           <IconInput
             icon={<LockIcon />}
             type={showPw ? 'text' : 'password'}
-            placeholder="Nhập mật khẩu"
+            placeholder={t('auth.passwordPlaceholder')}
             value={form.password}
             onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
             required
@@ -101,7 +103,7 @@ export default function RegisterPage() {
           <IconInput
             icon={<LockIcon />}
             type={showConfirm ? 'text' : 'password'}
-            placeholder="Xác nhận mật khẩu"
+            placeholder={t('auth.confirmPwPlaceholder')}
             value={form.confirm}
             onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))}
             required
@@ -117,26 +119,26 @@ export default function RegisterPage() {
             onChange={setAgreed}
             label={
               <span className="text-sm text-gray-600">
-                Đồng ý với{' '}
-                <Link to="/terms" target="_blank" className="text-blue-500 hover:underline">Điều kiện và điều khoản</Link>
+                {t('auth.agreeWith')}{' '}
+                <Link to="/terms" target="_blank" className="text-blue-500 hover:underline">{t('auth.termsLink')}</Link>
               </span>
             }
           />
 
           <div className="pt-1">
             <PinkButton type="submit" disabled={loading}>
-              {loading ? 'Đang đăng ký...' : 'Tiếp tục'}
+              {loading ? t('auth.registering') : t('auth.continueBtn')}
             </PinkButton>
           </div>
         </form>
 
-        <AuthDivider text="Hoặc đăng ký với" />
+        <AuthDivider text={t('auth.orRegisterWith')} />
         <GoogleAuthButton />
 
         <p className="mt-5 text-center text-sm text-gray-500">
-          Bạn đã có tài khoản?{' '}
+          {t('auth.hasAccount')}{' '}
           <Link to="/login" className="text-blue-500 hover:text-blue-600 font-semibold transition">
-            Đăng nhập
+            {t('auth.loginNow')}
           </Link>
         </p>
       </AuthCard>

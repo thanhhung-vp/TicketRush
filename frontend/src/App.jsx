@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { ThemeProvider } from './context/ThemeContext.jsx';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 
@@ -33,7 +34,7 @@ function AppRoutes() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-gray-100 text-gray-900">
+      <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <Routes>
           <Route path="/"                  element={<HomePage />} />
           <Route path="/events/:id"        element={<EventDetailPage />} />
@@ -62,8 +63,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

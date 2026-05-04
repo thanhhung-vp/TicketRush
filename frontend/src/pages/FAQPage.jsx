@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
-const FAQS = [
+const FAQS_VI = [
   {
     category: 'Đặt vé',
     items: [
@@ -65,7 +66,7 @@ const FAQS = [
       },
       {
         q: 'Quên mật khẩu thì làm gì?',
-        a: 'Hiện tại tính năng quên mật khẩu đang được phát triển. Vui lòng liên hệ bộ phận hỗ trợ để được hỗ trợ đặt lại mật khẩu.',
+        a: 'Nhấn "Quên mật khẩu?" trên trang đăng nhập, nhập email của bạn và làm theo hướng dẫn để đặt lại mật khẩu.',
       },
       {
         q: 'Tôi có thể dùng một tài khoản để mua vé cho nhiều người không?',
@@ -92,6 +93,98 @@ const FAQS = [
   },
 ];
 
+const FAQS_EN = [
+  {
+    category: 'Booking',
+    items: [
+      {
+        q: 'How do I book tickets on TicketRush?',
+        a: 'Select the event you want to attend → Choose a zone and seat on the seat map → Click "Hold Seat" → Select a payment method → Confirm. Your e-ticket (QR Code) will be delivered instantly after successful payment.',
+      },
+      {
+        q: 'How many seats can I book at once?',
+        a: 'You can select up to 8 seats per booking. Seats are held for 10 minutes for you to complete payment.',
+      },
+      {
+        q: 'Can someone else take the seat I selected?',
+        a: 'No. When you click "Hold Seat", the system locks that seat exclusively for you for 10 minutes. If you do not complete payment in time, the seat is released.',
+      },
+      {
+        q: 'How do I know my booking was successful?',
+        a: 'After payment, you will receive a confirmation email with your order details. Your QR e-tickets will also appear under "My Tickets" in your account.',
+      },
+    ],
+  },
+  {
+    category: 'Payment',
+    items: [
+      {
+        q: 'What payment methods does TicketRush support?',
+        a: 'We support: Simulated payment (Demo), VNPay (ATM/Internet Banking), and MoMo e-wallet. All transactions are encrypted to international security standards.',
+      },
+      {
+        q: 'My payment failed but money was deducted — what should I do?',
+        a: 'In this case, the amount will be refunded to your account within 5–7 business days. Please contact support with your transaction ID for faster resolution.',
+      },
+      {
+        q: 'Can I cancel my ticket and get a refund?',
+        a: 'Refund policies depend on each event. Please check the event terms before booking. Generally, tickets paid for within 72 hours before the event are non-refundable.',
+      },
+    ],
+  },
+  {
+    category: 'E-Tickets',
+    items: [
+      {
+        q: 'How do I use my QR Code ticket?',
+        a: 'At the event entrance, staff will scan the QR code on your phone. Make sure your screen brightness is high enough for scanning. Each QR code can only be used once.',
+      },
+      {
+        q: 'Can I print my ticket?',
+        a: 'Yes, you can download and print your QR ticket from "My Tickets". However, we encourage using the digital ticket on your phone for convenience and environmental reasons.',
+      },
+      {
+        q: 'Where are my e-tickets after purchase?',
+        a: 'Log in to TicketRush → Go to "My Tickets" → Select your order to view the QR code for each ticket. You can also download tickets as PNG images.',
+      },
+    ],
+  },
+  {
+    category: 'Account',
+    items: [
+      {
+        q: 'Do I need an account to buy tickets?',
+        a: 'Yes, you need to register an account to book and manage tickets. Registration is completely free and takes just a few seconds.',
+      },
+      {
+        q: 'What do I do if I forget my password?',
+        a: 'Click "Forgot password?" on the login page, enter your email and follow the instructions to reset your password.',
+      },
+      {
+        q: 'Can I use one account to buy tickets for multiple people?',
+        a: 'Yes. You can select multiple seats in one booking (up to 8 seats). Each seat will have its own unique QR code.',
+      },
+    ],
+  },
+  {
+    category: 'Events & Merchandise',
+    items: [
+      {
+        q: 'Can I buy merchandise together with my ticket?',
+        a: 'Yes! During checkout, if the event sells merchandise (lightsticks, T-shirts, albums...), you will see an "Add Merchandise" section to include items in your order.',
+      },
+      {
+        q: 'How can I get notified when an event goes on sale?',
+        a: 'Click the heart icon ❤️ on the event page to save it to your wishlist. You will be notified when tickets go on sale.',
+      },
+      {
+        q: 'Are children allowed to attend?',
+        a: 'Age requirements depend on each event. Please read the event details carefully or contact the organizer for more information.',
+      },
+    ],
+  },
+];
+
 function FAQItem({ q, a }) {
   const [open, setOpen] = useState(false);
   return (
@@ -111,23 +204,24 @@ function FAQItem({ q, a }) {
 }
 
 export default function FAQPage() {
-  const [activeCategory, setActiveCategory] = useState(FAQS[0].category);
+  const { t, i18n } = useTranslation();
+  const FAQS = i18n.language === 'vi' ? FAQS_VI : FAQS_EN;
+  const [activeIdx, setActiveIdx] = useState(0);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Câu hỏi thường gặp</h1>
-        <p className="text-gray-500">Tìm câu trả lời nhanh cho các thắc mắc phổ biến về TicketRush</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('faq.title')}</h1>
+        <p className="text-gray-500">{t('faq.subtitle')}</p>
       </div>
 
-      {/* Category tabs */}
       <div className="flex gap-2 flex-wrap mb-8 justify-center">
-        {FAQS.map(g => (
+        {FAQS.map((g, idx) => (
           <button
-            key={g.category}
-            onClick={() => setActiveCategory(g.category)}
+            key={idx}
+            onClick={() => setActiveIdx(idx)}
             className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-              activeCategory === g.category
+              activeIdx === idx
                 ? 'bg-primary text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
@@ -137,19 +231,15 @@ export default function FAQPage() {
         ))}
       </div>
 
-      {/* FAQ items */}
-      {FAQS.filter(g => g.category === activeCategory).map(g => (
-        <div key={g.category} className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-2">
-          {g.items.map((item, i) => (
-            <FAQItem key={i} q={item.q} a={item.a} />
-          ))}
-        </div>
-      ))}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-2">
+        {FAQS[activeIdx].items.map((item, i) => (
+          <FAQItem key={i} q={item.q} a={item.a} />
+        ))}
+      </div>
 
-      {/* Contact */}
       <div className="mt-10 text-center p-6 bg-primary/5 rounded-2xl border border-primary/10">
-        <p className="text-gray-600 text-sm mb-1">Không tìm thấy câu trả lời?</p>
-        <p className="font-semibold text-gray-900">Liên hệ hỗ trợ: <span className="text-primary">support@ticketrush.vn</span></p>
+        <p className="text-gray-600 text-sm mb-1">{t('faq.notFound')}</p>
+        <p className="font-semibold text-gray-900">{t('faq.contactLabel')} <span className="text-primary">support@ticketrush.vn</span></p>
       </div>
     </div>
   );

@@ -1,27 +1,5 @@
 import { Link } from 'react-router-dom';
-
-const COL1 = [
-  { label: 'Về chúng tôi',                   to: '/about' },
-  { label: 'Quy chế hoạt động',              to: '/terms' },
-  { label: 'Chính sách bảo mật thông tin',   to: '/terms#bao-mat' },
-  { label: 'Chính sách bảo mật thanh toán',  to: '/terms#thanh-toan' },
-  { label: 'Phương thức thanh toán',          to: '/faq' },
-  { label: 'Đối tác của chúng tôi',          to: '/about' },
-  { label: 'Điều khoản sử dụng',             to: '/terms' },
-];
-
-const COL2 = [
-  { label: 'Dành cho Khách hàng', to: '/faq' },
-  { label: 'Khuyến mại',          to: '/' },
-];
-
-const COL3 = [
-  { label: 'Liên hệ chúng tôi',          to: '/faq' },
-  { label: 'Câu hỏi thường gặp',         to: '/faq' },
-  { label: 'Bài viết liên quan',          to: '/faq' },
-  { label: 'Hướng dẫn sử dụng',          to: '/faq' },
-  { label: 'Danh sách phản ánh/ góp ý',  to: '/feedback' },
-];
+import { useTranslation } from 'react-i18next';
 
 function FooterLink({ to, label }) {
   const isExternal = to.startsWith('http');
@@ -42,6 +20,31 @@ function FooterLink({ to, label }) {
 }
 
 export default function Footer() {
+  const { t } = useTranslation();
+
+  const COL1 = [
+    { key: 'links.aboutUs',        to: '/about' },
+    { key: 'links.regulations',    to: '/terms' },
+    { key: 'links.privacyInfo',    to: '/terms#bao-mat' },
+    { key: 'links.privacyPayment', to: '/terms#thanh-toan' },
+    { key: 'links.paymentMethods', to: '/faq' },
+    { key: 'links.partners',       to: '/about' },
+    { key: 'links.termsOfUse',     to: '/terms' },
+  ];
+
+  const COL2 = [
+    { key: 'links.forCustomers', to: '/faq' },
+    { key: 'links.promotions',   to: '/' },
+  ];
+
+  const COL3 = [
+    { key: 'links.contactUs',    to: '/faq' },
+    { key: 'links.faqLinks',     to: '/faq' },
+    { key: 'links.relatedPosts', to: '/faq' },
+    { key: 'links.guide',        to: '/faq' },
+    { key: 'links.feedback',     to: '/feedback' },
+  ];
+
   return (
     <footer style={{ backgroundColor: '#0f1117' }}>
       {/* ── Main grid ── */}
@@ -55,32 +58,38 @@ export default function Footer() {
               <span className="text-2xl font-extrabold text-white">Rush</span>
             </Link>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Nền tảng bán vé trực tuyến hàng đầu Việt Nam.<br />
-              TicketRush – Mua vé dễ dàng, nâng tầm trải nghiệm.
+              {t('footer.tagline1')}<br />
+              {t('footer.tagline2')}
             </p>
           </div>
 
-          {/* Col 1 — TicketRush xin chào! */}
+          {/* Col 1 */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-5">TicketRush xin chào!</h4>
+            <h4 className="text-white font-bold text-sm mb-5">{t('footer.col1Title')}</h4>
             <div className="space-y-3">
-              {COL1.map(item => <FooterLink key={item.label} {...item} />)}
+              {COL1.map(item => (
+                <FooterLink key={item.key} to={item.to} label={t(`footer.${item.key}`)} />
+              ))}
             </div>
           </div>
 
-          {/* Col 2 — Dịch vụ và Ưu đãi */}
+          {/* Col 2 */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-5">Dịch vụ và Ưu đãi</h4>
+            <h4 className="text-white font-bold text-sm mb-5">{t('footer.col2Title')}</h4>
             <div className="space-y-3">
-              {COL2.map(item => <FooterLink key={item.label} {...item} />)}
+              {COL2.map(item => (
+                <FooterLink key={item.key} to={item.to} label={t(`footer.${item.key}`)} />
+              ))}
             </div>
           </div>
 
-          {/* Col 3 — Liên hệ và Hỗ trợ */}
+          {/* Col 3 */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-5">Liên hệ và Hỗ trợ</h4>
+            <h4 className="text-white font-bold text-sm mb-5">{t('footer.col3Title')}</h4>
             <div className="space-y-3">
-              {COL3.map(item => <FooterLink key={item.label} {...item} />)}
+              {COL3.map(item => (
+                <FooterLink key={item.key} to={item.to} label={t(`footer.${item.key}`)} />
+              ))}
             </div>
           </div>
         </div>
@@ -89,12 +98,12 @@ export default function Footer() {
       {/* ── Company info ── */}
       <div className="border-t border-white/10">
         <div className="max-w-6xl mx-auto px-6 py-8">
-          <p className="text-white font-bold text-sm mb-3 tracking-wide">CÔNG TY TNHH TICKETRUSH VIỆT NAM</p>
+          <p className="text-white font-bold text-sm mb-3 tracking-wide">{t('footer.companyName')}</p>
           <div className="text-xs text-gray-500 space-y-1 leading-relaxed">
-            <p>Đại diện theo pháp luật: Đỗ Thành Hưng</p>
-            <p>Địa chỉ: 144 Xuân Thủy, Cầu Giấy, Hà Nội, Việt Nam</p>
-            <p>Đăng ký kinh doanh số: 0312345678 do Phòng Đăng ký kinh doanh – Sở Kế hoạch và Đầu tư Hà Nội cấp ngày 01/01/2026.</p>
-            <p>Hotline: 1800 6789 · Email: support@ticketrush.vn</p>
+            <p>{t('footer.legalRep')}</p>
+            <p>{t('footer.addressLine')}</p>
+            <p>{t('footer.bizReg')}</p>
+            <p>{t('footer.hotline')}</p>
           </div>
         </div>
       </div>
@@ -102,7 +111,7 @@ export default function Footer() {
       {/* ── Bottom bar ── */}
       <div className="border-t border-white/10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-center">
-          <p className="text-xs text-gray-500">All rights reserved 2026 © TicketRush</p>
+          <p className="text-xs text-gray-500">{t('footer.copyright')}</p>
         </div>
       </div>
     </footer>
