@@ -4,6 +4,8 @@ import { z } from 'zod';
 import pool from '../config/db.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import { getAdminDashboard } from '../services/adminDashboard.js';
+import { attachDynamicQrToTicket } from '../utils/ticketQr.js';
+import { recalculateOrderAfterTicketRemoval } from '../utils/orderTotals.js';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
@@ -21,32 +23,6 @@ async function broadcastSeatUpdate(app, eventId, seatIds, status) {
   const io = app.get('io');
   if (!io) return;
   io.to(`event:${eventId}`).emit('seats:updated', seatIds.map(id => ({ id, event_id: eventId, status })));
-}
-
-async function recalculateOrderAfterTicketDelete(client, orderId) {
-  const { rows } = await client.query(
-    `SELECT COALESCE(SUM(price), 0) AS total, COUNT(*) AS item_count
-     FROM order_items
-     WHERE order_id = $1`,
-    [orderId]
-  );
-  const total = Number(rows[0]?.total || 0);
-  const itemCount = Number(rows[0]?.item_count || 0);
-
-  if (itemCount === 0) {
-    await client.query(
-      `UPDATE orders
-       SET status = 'cancelled', total_amount = 0
-       WHERE id = $1`,
-      [orderId]
-    );
-    return;
-  }
-
-  await client.query(
-    `UPDATE orders SET total_amount = $1 WHERE id = $2`,
-    [total, orderId]
-  );
 }
 
 // GET /admin/events - all events (draft + on_sale + ended)
@@ -353,7 +329,7 @@ router.post('/customers/:id/tickets', async (req, res) => {
        RETURNING *`,
       [order.id, seat.id, req.params.id, qr]
     );
-    const ticket = ticketRows[0];
+    const ticket = await attachDynamicQrToTicket({ ...ticketRows[0], event_id: seat.event_id });
 
     await client.query(
       `INSERT INTO admin_ticket_actions
@@ -415,7 +391,7 @@ router.delete('/tickets/:id', async (req, res) => {
        WHERE id = $1`,
       [ticket.seat_id]
     );
-    await recalculateOrderAfterTicketDelete(client, ticket.order_id);
+    await recalculateOrderAfterTicketRemoval(client, ticket.order_id);
     await client.query(
       `INSERT INTO admin_ticket_actions
          (action_type, admin_id, user_id, event_id, order_id, ticket_id, seat_id, price, reason)
@@ -432,6 +408,128 @@ router.delete('/tickets/:id', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   } finally {
     client.release();
+  }
+});
+
+// GET /admin/refunds - list refund requests
+router.get('/refunds', async (req, res) => {
+  const statusFilter = req.query.status;
+  try {
+    let query = `
+      SELECT r.*,
+             u.email as user_email, u.full_name as user_name,
+             e.title as event_title, e.event_date,
+             s.label as seat_label, z.name as zone_name
+      FROM ticket_refund_requests r
+      JOIN users u ON u.id = r.user_id
+      JOIN events e ON e.id = r.event_id
+      JOIN seats s ON s.id = r.seat_id
+      LEFT JOIN zones z ON z.id = s.zone_id
+    `;
+    const params = [];
+    if (statusFilter && ['pending', 'approved', 'rejected'].includes(statusFilter)) {
+      query += ` WHERE r.status = $1`;
+      params.push(statusFilter);
+    }
+    query += ` ORDER BY r.created_at DESC`;
+    
+    const { rows } = await pool.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /admin/refunds/:id/approve - approve a refund request
+router.post('/refunds/:id/approve', async (req, res) => {
+  const refundId = uuidSchema.safeParse(req.params.id);
+  if (!refundId.success) return res.status(400).json({ error: 'Invalid refund id' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    const { rows: refundRows } = await client.query(
+      `SELECT * FROM ticket_refund_requests WHERE id = $1 FOR UPDATE`,
+      [req.params.id]
+    );
+    const refund = refundRows[0];
+    
+    if (!refund) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Refund request not found' });
+    }
+    if (refund.status !== 'pending') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Refund request is not pending' });
+    }
+
+    // lock order
+    await client.query('SELECT id FROM orders WHERE id = $1 FOR UPDATE', [refund.order_id]);
+    
+    // delete ticket
+    await client.query('DELETE FROM tickets WHERE id = $1', [refund.ticket_id]);
+    
+    // delete order item
+    await client.query(
+      `DELETE FROM order_items WHERE order_id = $1 AND seat_id = $2`,
+      [refund.order_id, refund.seat_id]
+    );
+    
+    // update seat
+    await client.query(
+      `UPDATE seats
+       SET status = 'available', locked_by = NULL, locked_at = NULL, locked_until = NULL
+       WHERE id = $1`,
+      [refund.seat_id]
+    );
+    
+    // recalculate order
+    await recalculateOrderAfterTicketRemoval(client, refund.order_id);
+    
+    // update refund status
+    await client.query(
+      `UPDATE ticket_refund_requests 
+       SET status = 'approved', resolved_at = NOW() 
+       WHERE id = $1`,
+      [refund.id]
+    );
+
+    await client.query('COMMIT');
+    await broadcastSeatUpdate(req.app, refund.event_id, [refund.seat_id], 'available');
+    
+    res.json({ ok: true, message: 'Refund approved successfully' });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /admin/refunds/:id/reject - reject a refund request
+router.post('/refunds/:id/reject', async (req, res) => {
+  const refundId = uuidSchema.safeParse(req.params.id);
+  if (!refundId.success) return res.status(400).json({ error: 'Invalid refund id' });
+
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE ticket_refund_requests 
+       SET status = 'rejected', resolved_at = NOW() 
+       WHERE id = $1 AND status = 'pending'`,
+      [req.params.id]
+    );
+    
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'Pending refund request not found' });
+    }
+    
+    res.json({ ok: true, message: 'Refund rejected successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

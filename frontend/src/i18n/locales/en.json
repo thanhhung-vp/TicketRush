@@ -19,7 +19,6 @@
     "learnMore": "View details",
     "required": "Required"
   },
-
   "nav": {
     "home": "Home",
     "myTickets": "My Tickets",
@@ -32,7 +31,6 @@
     "about": "About",
     "searchPlaceholder": "Search events, artists, venues..."
   },
-
   "auth": {
     "login": "Log in",
     "register": "Sign up",
@@ -74,7 +72,6 @@
     "termsLink": "Terms and Conditions",
     "googleNotAvailable": "Google sign-in is coming soon. Please use email and password to log in or sign up."
   },
-
   "forgotPassword": {
     "title": "Reset Password",
     "step1": "Verify account",
@@ -97,7 +94,6 @@
     "otpSentSuccess": "If this email exists in our system, a verification code has been sent.",
     "resetSuccess": "Password reset successfully! Redirecting..."
   },
-
   "home": {
     "heroTitle": "Book Event Tickets",
     "heroSubtitle": "Discover thousands of music, sports and entertainment events",
@@ -116,7 +112,6 @@
     "loadMore": "Load more",
     "noMore": "All events shown"
   },
-
   "search": {
     "placeholder": "Search events, artists, venues...",
     "searching": "Searching...",
@@ -125,7 +120,6 @@
     "events": "Events",
     "venues": "Venues"
   },
-
   "event": {
     "bookTicket": "Book Now",
     "selectSeat": "Select Seat",
@@ -212,7 +206,6 @@
       "other": "Other"
     }
   },
-
   "seatMap": {
     "deselect": "Deselect",
     "hold": "Hold Seats →",
@@ -235,7 +228,6 @@
     "selectedSeats": "Selected Seats",
     "holdError": "Could not hold seats, please try again."
   },
-
   "myTickets": {
     "title": "My Tickets",
     "explore": "Explore Events",
@@ -262,10 +254,41 @@
     "downloadingTicket": "Downloading...",
     "downloadHint": "Select a ticket above to download.",
     "downloadError": "Could not download ticket. Please try again.",
+    "transferTicket": "Transfer",
+    "transferEmailPlaceholder": "Recipient email",
+    "transferSend": "Send",
+    "transferSending": "Sending...",
+    "transferSuccess": "Transfer request sent. The recipient can accept it from their My Tickets page.",
+    "transferError": "Could not send transfer request. Please try again.",
+    "transferEmailRequired": "Please enter the recipient email.",
+    "incomingTransfers": "Incoming transfers",
+    "incomingTransfersHint": "Accepting a transfer moves the ticket into your account.",
+    "outgoingTransfers": "Pending transfers",
+    "outgoingTransfersHint": "Requests stay pending until the recipient accepts or declines.",
+    "transferFrom": "From {{email}}",
+    "transferTo": "To {{email}}",
+    "acceptTransfer": "Accept",
+    "declineTransfer": "Decline",
+    "cancelTransfer": "Cancel",
+    "acceptingTransfer": "Accepting...",
+    "decliningTransfer": "Declining...",
+    "cancellingTransfer": "Cancelling...",
+    "transferAccepted": "Ticket transfer accepted.",
+    "transferDeclined": "Ticket transfer declined.",
+    "transferCancelled": "Ticket transfer cancelled.",
+    "transferActionError": "Could not update transfer request.",
+    "transferredOrder": "No active tickets left in this order",
+    "refundTicket": "Refund",
+    "refundReasonPlaceholder": "Reason (optional)",
+    "refundSubmit": "Confirm refund",
+    "refundSubmitting": "Refunding...",
+    "refundDemoNote": "Your ticket will be moved to pending status for Admin approval.",
+    "refundSuccess": "Refund request submitted. Please wait for Admin approval.",
+    "refundError": "Could not refund this ticket. Please try again.",
     "loadError": "Could not load ticket history. Please try again.",
-    "zone": "Zone"
+    "zone": "Zone",
+    "refundPendingDesc": "Refund request is pending Admin approval."
   },
-
   "checkout": {
     "title": "Checkout",
     "orderSummary": "Order Summary",
@@ -288,17 +311,25 @@
     "confirmPayment": "✓ Confirm Payment",
     "noSeats": "No seats selected.",
     "goHome": "Go to home",
-    "demoWarning": "Demo mode: Click \"Confirm\" to simulate a successful payment.",
+    "demoWarning": "{{method}} is running in demo mode. Click \"Confirm\" to simulate a successful payment. No real money is transferred.",
     "paymentFailed": "Payment failed",
     "initiationFailed": "Could not initiate payment",
     "seatsCount": "{{count}} seats selected",
     "methodLabel": "Payment method",
     "processingPayment": "Processing payment…",
-    "mock": { "label": "Simulated payment", "desc": "For demo / testing" },
-    "vnpay": { "label": "VNPay", "desc": "Pay via VNPay Gateway" },
-    "momo": { "label": "MoMo", "desc": "MoMo e-wallet" }
+    "mock": {
+      "label": "Simulated payment",
+      "desc": "For demo / testing"
+    },
+    "vnpay": {
+      "label": "VNPay demo",
+      "desc": "Simulated VNPay flow, no real gateway redirect"
+    },
+    "momo": {
+      "label": "MoMo demo",
+      "desc": "Simulated MoMo wallet flow, no real payment"
+    }
   },
-
   "tickets": {
     "myTickets": "My Tickets",
     "noTickets": "You have no tickets yet",
@@ -324,7 +355,6 @@
       "used": "Used"
     }
   },
-
   "profile": {
     "title": "My Profile",
     "editProfile": "Edit Profile",
@@ -365,7 +395,6 @@
     "changePasswordSuccess": "Password changed successfully",
     "changePasswordError": "Failed to change password"
   },
-
   "admin": {
     "dashboard": "Dashboard",
     "events": "Events",
@@ -431,9 +460,19 @@
     "loadSeatsError": "Could not load available seats.",
     "selectCustomerAndSeat": "Please select a customer and an available seat.",
     "issueTicketError": "Could not add ticket for customer.",
-    "cancelTicketError": "Could not cancel ticket."
+    "cancelTicketError": "Could not cancel ticket.",
+    "tabRefunds": "Refund Requests",
+    "searchRefunds": "Search users...",
+    "refundList": "Refund Requests List",
+    "refundStatus": "Status",
+    "refundReason": "Reason",
+    "approveRefund": "Approve",
+    "rejectRefund": "Reject",
+    "approving": "Approving...",
+    "rejecting": "Rejecting...",
+    "approveConfirm": "Are you sure you want to approve this refund? The seat will be released.",
+    "rejectConfirm": "Are you sure you want to reject this refund request?"
   },
-
   "checkin": {
     "title": "Door Check-in",
     "totalTickets": "Total tickets",
@@ -451,14 +490,12 @@
     "scannedAt": "Scanned at:",
     "historyTitle": "Check-in history"
   },
-
   "faq": {
     "title": "Frequently Asked Questions",
     "subtitle": "Find quick answers to common questions about TicketRush",
     "notFound": "Can't find your answer?",
     "contactLabel": "Contact support:"
   },
-
   "about": {
     "heroLabel": "About us",
     "heroTitle1": "Vietnam's leading",
@@ -479,13 +516,24 @@
       "satisfaction": "Customer satisfaction"
     },
     "values": {
-      "trust": { "title": "Trust & Security", "desc": "All transactions are encrypted with SSL/TLS 256-bit. Anti-counterfeit e-tickets with unique QR codes." },
-      "speed": { "title": "Speed & Convenience", "desc": "Book in 60 seconds. Receive your QR ticket instantly. No queuing, no printing." },
-      "fair": { "title": "Fairness & Transparency", "desc": "Our virtual waiting room ensures everyone has an equal chance. No hidden priority tickets." },
-      "user": { "title": "User-focused", "desc": "Support 7 days a week. Clear refund policy. We always listen to feedback." }
+      "trust": {
+        "title": "Trust & Security",
+        "desc": "All transactions are encrypted with SSL/TLS 256-bit. Anti-counterfeit e-tickets with unique QR codes."
+      },
+      "speed": {
+        "title": "Speed & Convenience",
+        "desc": "Book in 60 seconds. Receive your QR ticket instantly. No queuing, no printing."
+      },
+      "fair": {
+        "title": "Fairness & Transparency",
+        "desc": "Our virtual waiting room ensures everyone has an equal chance. No hidden priority tickets."
+      },
+      "user": {
+        "title": "User-focused",
+        "desc": "Support 7 days a week. Clear refund policy. We always listen to feedback."
+      }
     }
   },
-
   "review": {
     "title": "Audience Reviews",
     "countLabel": "reviews",
@@ -501,7 +549,6 @@
     "confirmDelete": "Delete your review?",
     "noReviews": "No reviews yet. Be the first!"
   },
-
   "merch": {
     "editItem": "Edit item",
     "addItem": "+ Add new item",
@@ -525,12 +572,10 @@
     "deleteConfirm": "Delete this item?",
     "stockLeft": "{{count}} left"
   },
-
   "wishlist": {
     "save": "Save event",
     "unsave": "Unsave"
   },
-
   "adminEvent": {
     "backBtn": "← Back",
     "newEventTitle": "Create new event",
@@ -583,7 +628,6 @@
     "genderOther": "Other",
     "genderUnknown": "Unknown"
   },
-
   "waitingRoom": {
     "joining": "Joining the queue...",
     "title": "Virtual Waiting Room",
@@ -592,7 +636,6 @@
     "doNotRefresh": "Please do not refresh the page.",
     "autoUpdate": "Auto-updating every 5 seconds..."
   },
-
   "feedback": {
     "label": "Customer Support",
     "title": "Create a support ticket",
@@ -620,13 +663,11 @@
     "workingHours": "Working hours",
     "workingHoursValue": "Mon–Sat · 8:00–21:00"
   },
-
   "terms": {
     "title": "Terms of Service",
     "lastUpdated": "Last updated: 01/05/2026 · Effective from: 01/01/2026",
     "toc": "Table of Contents"
   },
-
   "footer": {
     "about": "About TicketRush",
     "contact": "Contact",

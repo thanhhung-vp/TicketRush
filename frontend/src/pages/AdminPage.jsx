@@ -59,6 +59,7 @@ export default function AdminPage() {
     ['dashboard', t('admin.tabOverview')],
     ['events',    t('admin.tabEvents')],
     ['customers', t('admin.tabCustomers')],
+    ['refunds',   t('admin.tabRefunds')],
   ];
 
   return (
@@ -102,6 +103,7 @@ export default function AdminPage() {
         />
       )}
       {tab === 'customers' && <CustomerManagementTab events={events} formatDateTime={formatDateTime} formatVNDLong={formatVNDLong} t={t} />}
+      {tab === 'refunds' && <RefundsTab formatDateTime={formatDateTime} formatVNDLong={formatVNDLong} t={t} />}
     </div>
   );
 }
@@ -656,6 +658,123 @@ function CustomerOrderCard({ order, busy, onCancelTicket, formatDateTime, format
               )}
             </span>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RefundsTab({ formatDateTime, formatVNDLong, t }) {
+  const [refunds, setRefunds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
+  const [statusFilter, setStatusFilter] = useState('pending');
+
+  const fetchRefunds = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/admin/refunds', { params: { status: statusFilter !== 'all' ? statusFilter : undefined } });
+      setRefunds(data);
+    } catch (err) {
+      setError('Cannot load refund requests.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRefunds();
+  }, [statusFilter]);
+
+  const handleAction = async (id, action) => {
+    if (action === 'approve' && !window.confirm(t('admin.approveConfirm'))) return;
+    if (action === 'reject' && !window.confirm(t('admin.rejectConfirm'))) return;
+
+    setBusy(id);
+    try {
+      await api.post(`/admin/refunds/${id}/${action}`);
+      await fetchRefunds();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Action failed');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 mb-4">
+        {['pending', 'approved', 'rejected', 'all'].map(s => (
+          <button key={s} onClick={() => setStatusFilter(s)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+            {s === 'all' ? t('common.all') : s}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="text-center py-10 text-gray-400">{t('common.loading')}</div>
+      ) : error ? (
+        <div className="text-red-500">{error}</div>
+      ) : refunds.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
+          {t('common.noResults')}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+              <tr>
+                <th className="px-4 py-3">User</th>
+                <th className="px-4 py-3">Event / Seat</th>
+                <th className="px-4 py-3">Price</th>
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {refunds.map(r => (
+                <tr key={r.id} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-gray-800">{r.user_name}</p>
+                    <p className="text-xs text-gray-500">{r.user_email}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-800">{r.event_title}</p>
+                    <p className="text-xs text-gray-500">{r.zone_name} {r.seat_label}</p>
+                    {r.reason && <p className="text-xs text-amber-600 mt-1" title={r.reason}>Note: {r.reason}</p>}
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-blue-600">{formatVNDLong(r.price)}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">{formatDateTime(r.created_at)}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      r.status === 'approved' ? 'bg-emerald-50 text-emerald-600' :
+                      r.status === 'rejected' ? 'bg-red-50 text-red-600' :
+                      'bg-amber-50 text-amber-600'
+                    }`}>
+                      {r.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {r.status === 'pending' && (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => handleAction(r.id, 'approve')} disabled={busy === r.id}
+                          className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded border border-emerald-200 disabled:opacity-50 transition font-medium">
+                          {busy === r.id ? '...' : t('admin.approveRefund')}
+                        </button>
+                        <button onClick={() => handleAction(r.id, 'reject')} disabled={busy === r.id}
+                          className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded border border-red-200 disabled:opacity-50 transition font-medium">
+                          {busy === r.id ? '...' : t('admin.rejectRefund')}
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

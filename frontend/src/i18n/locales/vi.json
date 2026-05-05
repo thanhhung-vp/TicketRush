@@ -19,7 +19,6 @@
     "learnMore": "Xem chi tiết",
     "required": "Bắt buộc"
   },
-
   "nav": {
     "home": "Trang chủ",
     "myTickets": "Vé của tôi",
@@ -32,7 +31,6 @@
     "about": "Về chúng tôi",
     "searchPlaceholder": "Tìm sự kiện, nghệ sĩ, địa điểm..."
   },
-
   "auth": {
     "login": "Đăng nhập",
     "register": "Đăng ký",
@@ -74,7 +72,6 @@
     "termsLink": "Điều kiện và điều khoản",
     "googleNotAvailable": "Tính năng đăng nhập bằng Google đang được phát triển. Vui lòng sử dụng email và mật khẩu để đăng nhập/đăng ký."
   },
-
   "forgotPassword": {
     "title": "Đổi mật khẩu",
     "step1": "Xác thực tài khoản",
@@ -97,7 +94,6 @@
     "otpSentSuccess": "Nếu email tồn tại trong hệ thống, mã xác minh đã được gửi.",
     "resetSuccess": "Đặt lại mật khẩu thành công! Đang chuyển hướng..."
   },
-
   "home": {
     "heroTitle": "Đặt vé sự kiện",
     "heroSubtitle": "Khám phá hàng nghìn sự kiện âm nhạc, thể thao và giải trí",
@@ -116,7 +112,6 @@
     "loadMore": "Xem thêm",
     "noMore": "Đã hiển thị tất cả sự kiện"
   },
-
   "search": {
     "placeholder": "Tìm sự kiện, nghệ sĩ, địa điểm...",
     "searching": "Đang tìm kiếm...",
@@ -125,7 +120,6 @@
     "events": "Sự kiện",
     "venues": "Địa điểm"
   },
-
   "event": {
     "bookTicket": "Đặt vé ngay",
     "selectSeat": "Chọn chỗ ngồi",
@@ -212,7 +206,6 @@
       "other": "Khác"
     }
   },
-
   "seatMap": {
     "deselect": "Bỏ chọn",
     "hold": "Giữ ghế →",
@@ -235,7 +228,6 @@
     "selectedSeats": "Ghế đã chọn",
     "holdError": "Không thể giữ ghế, vui lòng thử lại."
   },
-
   "myTickets": {
     "title": "Vé của tôi",
     "explore": "Khám phá sự kiện",
@@ -263,9 +255,11 @@
     "downloadHint": "Chọn từng vé ở trên để tải.",
     "downloadError": "Không thể tải vé. Vui lòng thử lại.",
     "loadError": "Không thể tải lịch sử vé. Vui lòng thử lại.",
-    "zone": "Khu"
+    "zone": "Khu",
+    "refundDemoNote": "Vé của bạn sẽ được chuyển sang trạng thái chờ Admin phê duyệt.",
+    "refundSuccess": "Đã gửi yêu cầu hoàn vé. Vui lòng chờ Admin phê duyệt.",
+    "refundPendingDesc": "Yêu cầu hoàn vé đang chờ Admin duyệt."
   },
-
   "checkout": {
     "title": "Thanh toán",
     "orderSummary": "Tóm tắt đơn hàng",
@@ -294,11 +288,19 @@
     "seatsCount": "{{count}} ghế đã chọn",
     "methodLabel": "Phương thức thanh toán",
     "processingPayment": "Đang xử lý thanh toán…",
-    "mock": { "label": "Thanh toán mô phỏng", "desc": "Dùng cho demo / kiểm thử" },
-    "vnpay": { "label": "VNPay", "desc": "Thanh toán qua VNPay Gateway" },
-    "momo": { "label": "MoMo", "desc": "Ví điện tử MoMo" }
+    "mock": {
+      "label": "Thanh toán mô phỏng",
+      "desc": "Dùng cho demo / kiểm thử"
+    },
+    "vnpay": {
+      "label": "VNPay",
+      "desc": "Thanh toán qua VNPay Gateway"
+    },
+    "momo": {
+      "label": "MoMo",
+      "desc": "Ví điện tử MoMo"
+    }
   },
-
   "tickets": {
     "myTickets": "Vé của tôi",
     "noTickets": "Bạn chưa có vé nào",
@@ -324,7 +326,6 @@
       "used": "Đã sử dụng"
     }
   },
-
   "profile": {
     "title": "Hồ sơ cá nhân",
     "editProfile": "Chỉnh sửa hồ sơ",
@@ -365,7 +366,6 @@
     "changePasswordSuccess": "Đổi mật khẩu thành công",
     "changePasswordError": "Lỗi đổi mật khẩu"
   },
-
   "admin": {
     "dashboard": "Bảng điều khiển",
     "events": "Sự kiện",
@@ -431,9 +431,19 @@
     "loadSeatsError": "Không thể tải ghế còn trống.",
     "selectCustomerAndSeat": "Vui lòng chọn khách hàng và ghế còn trống.",
     "issueTicketError": "Không thể thêm vé cho khách hàng.",
-    "cancelTicketError": "Không thể hủy vé."
+    "cancelTicketError": "Không thể hủy vé.",
+    "tabRefunds": "Yêu cầu hoàn vé",
+    "searchRefunds": "Tìm người dùng...",
+    "refundList": "Danh sách yêu cầu hoàn vé",
+    "refundStatus": "Trạng thái",
+    "refundReason": "Lý do",
+    "approveRefund": "Duyệt",
+    "rejectRefund": "Từ chối",
+    "approving": "Đang duyệt...",
+    "rejecting": "Đang từ chối...",
+    "approveConfirm": "Bạn có chắc chắn muốn duyệt hoàn vé này? Ghế sẽ được mở lại.",
+    "rejectConfirm": "Bạn có chắc chắn muốn từ chối yêu cầu hoàn vé này?"
   },
-
   "checkin": {
     "title": "Kiểm soát vào cửa (Check-in)",
     "totalTickets": "Tổng vé",
@@ -451,14 +461,12 @@
     "scannedAt": "Đã quét lúc:",
     "historyTitle": "Lịch sử check-in"
   },
-
   "faq": {
     "title": "Câu hỏi thường gặp",
     "subtitle": "Tìm câu trả lời nhanh cho các thắc mắc phổ biến về TicketRush",
     "notFound": "Không tìm thấy câu trả lời?",
     "contactLabel": "Liên hệ hỗ trợ:"
   },
-
   "about": {
     "heroLabel": "Về chúng tôi",
     "heroTitle1": "Nền tảng bán vé sự kiện",
@@ -479,13 +487,24 @@
       "satisfaction": "Khách hàng hài lòng"
     },
     "values": {
-      "trust": { "title": "Tin cậy & Bảo mật", "desc": "Mọi giao dịch được mã hóa SSL/TLS 256-bit. Vé điện tử chống giả mạo với mã QR độc nhất." },
-      "speed": { "title": "Nhanh chóng & Tiện lợi", "desc": "Đặt vé chỉ trong 60 giây. Nhận vé QR ngay lập tức. Không cần xếp hàng, không cần in ấn." },
-      "fair": { "title": "Công bằng & Minh bạch", "desc": "Hệ thống hàng chờ ảo đảm bảo mọi người có cơ hội như nhau. Không có vé ưu tiên ngầm." },
-      "user": { "title": "Vì người dùng", "desc": "Dịch vụ hỗ trợ 7 ngày/tuần. Chính sách hoàn tiền rõ ràng. Luôn lắng nghe phản hồi." }
+      "trust": {
+        "title": "Tin cậy & Bảo mật",
+        "desc": "Mọi giao dịch được mã hóa SSL/TLS 256-bit. Vé điện tử chống giả mạo với mã QR độc nhất."
+      },
+      "speed": {
+        "title": "Nhanh chóng & Tiện lợi",
+        "desc": "Đặt vé chỉ trong 60 giây. Nhận vé QR ngay lập tức. Không cần xếp hàng, không cần in ấn."
+      },
+      "fair": {
+        "title": "Công bằng & Minh bạch",
+        "desc": "Hệ thống hàng chờ ảo đảm bảo mọi người có cơ hội như nhau. Không có vé ưu tiên ngầm."
+      },
+      "user": {
+        "title": "Vì người dùng",
+        "desc": "Dịch vụ hỗ trợ 7 ngày/tuần. Chính sách hoàn tiền rõ ràng. Luôn lắng nghe phản hồi."
+      }
     }
   },
-
   "review": {
     "title": "Đánh giá từ khán giả",
     "countLabel": "đánh giá",
@@ -501,7 +520,6 @@
     "confirmDelete": "Xóa đánh giá của bạn?",
     "noReviews": "Chưa có đánh giá nào. Hãy là người đầu tiên!"
   },
-
   "merch": {
     "editItem": "Chỉnh sửa vật phẩm",
     "addItem": "+ Thêm vật phẩm mới",
@@ -525,12 +543,10 @@
     "deleteConfirm": "Xóa vật phẩm này?",
     "stockLeft": "Còn {{count}}"
   },
-
   "wishlist": {
     "save": "Lưu sự kiện",
     "unsave": "Bỏ lưu"
   },
-
   "adminEvent": {
     "backBtn": "← Quay lại",
     "newEventTitle": "Tạo sự kiện mới",
@@ -583,7 +599,6 @@
     "genderOther": "Khác",
     "genderUnknown": "Chưa rõ"
   },
-
   "waitingRoom": {
     "joining": "Đang tham gia hàng chờ...",
     "title": "Phòng chờ ảo",
@@ -592,7 +607,6 @@
     "doNotRefresh": "Vui lòng không tải lại trang.",
     "autoUpdate": "Tự động cập nhật mỗi 5 giây..."
   },
-
   "feedback": {
     "label": "Hỗ trợ khách hàng",
     "title": "Tạo ticket yêu cầu hỗ trợ",
@@ -620,13 +634,11 @@
     "workingHours": "Giờ làm việc",
     "workingHoursValue": "T2–T7 · 8:00–21:00"
   },
-
   "terms": {
     "title": "Điều khoản sử dụng dịch vụ",
     "lastUpdated": "Cập nhật lần cuối: 01/05/2026 · Có hiệu lực từ 01/01/2026",
     "toc": "Mục lục"
   },
-
   "footer": {
     "about": "Về TicketRush",
     "contact": "Liên hệ",

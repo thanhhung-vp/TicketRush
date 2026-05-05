@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Download } from 'lucide-react';
+import { Check, Download, RotateCcw, Send, X } from 'lucide-react';
 import api from '../lib/api.js';
 import ticketLogo from '../ticketlogo.png';
 import ticketsBackdrop from '../../24504411_15690.jpg';
@@ -79,13 +79,72 @@ export default function MyTicketsPage() {
   const [timeFilter, setTimeFilter] = useState('upcoming');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [incomingTransfers, setIncomingTransfers] = useState([]);
+  const [outgoingTransfers, setOutgoingTransfers] = useState([]);
+  const [transferActionId, setTransferActionId] = useState('');
+  const [transferNotice, setTransferNotice] = useState(null);
 
   useEffect(() => {
     api.get('/orders')
       .then(r => setOrders(Array.isArray(r.data) ? r.data : []))
       .catch(() => setError(t('myTickets.loadError')))
       .finally(() => setLoading(false));
+  }, [t]);
+
+  const refreshOrders = useCallback(async () => {
+    const response = await api.get('/orders');
+    setOrders(Array.isArray(response.data) ? response.data : []);
   }, []);
+
+  const loadIncomingTransfers = useCallback(async () => {
+    try {
+      const response = await api.get('/ticket-transfers/incoming');
+      setIncomingTransfers(Array.isArray(response.data) ? response.data : []);
+    } catch {
+      setIncomingTransfers([]);
+    }
+  }, []);
+
+  const loadOutgoingTransfers = useCallback(async () => {
+    try {
+      const response = await api.get('/ticket-transfers/outgoing');
+      setOutgoingTransfers(Array.isArray(response.data) ? response.data : []);
+    } catch {
+      setOutgoingTransfers([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadIncomingTransfers();
+    loadOutgoingTransfers();
+  }, [loadIncomingTransfers, loadOutgoingTransfers]);
+
+  const handleTransferAction = useCallback(async (transferId, action) => {
+    const actionKey = `${action}:${transferId}`;
+    setTransferActionId(actionKey);
+    setTransferNotice(null);
+
+    try {
+      await api.post(`/ticket-transfers/${transferId}/${action}`);
+      const messageKey = action === 'accept'
+        ? 'myTickets.transferAccepted'
+        : action === 'decline'
+          ? 'myTickets.transferDeclined'
+          : 'myTickets.transferCancelled';
+      setTransferNotice({
+        type: 'success',
+        text: t(messageKey),
+      });
+      await Promise.all([refreshOrders(), loadIncomingTransfers(), loadOutgoingTransfers()]);
+    } catch (err) {
+      setTransferNotice({
+        type: 'error',
+        text: err.response?.data?.error || t('myTickets.transferActionError'),
+      });
+    } finally {
+      setTransferActionId('');
+    }
+  }, [loadIncomingTransfers, loadOutgoingTransfers, refreshOrders, t]);
 
   const filteredOrders = useMemo(
     () => orders.filter(order => {
@@ -198,6 +257,32 @@ export default function MyTicketsPage() {
           </div>
         )}
 
+        {transferNotice?.text && (
+          <div
+            className={`mt-6 rounded-lg border px-4 py-3 text-sm font-semibold shadow-sm ${
+              transferNotice.type === 'error'
+                ? 'border-rose-200 bg-rose-50/90 text-rose-700'
+                : 'border-emerald-200 bg-emerald-50/90 text-emerald-700'
+            }`}
+          >
+            {transferNotice.text}
+          </div>
+        )}
+
+        <IncomingTransfers
+          transfers={incomingTransfers}
+          actionId={transferActionId}
+          onAction={handleTransferAction}
+          locale={locale}
+        />
+
+        <OutgoingTransfers
+          transfers={outgoingTransfers.filter(transfer => transfer.status === 'pending')}
+          actionId={transferActionId}
+          onCancel={(transferId) => handleTransferAction(transferId, 'cancel')}
+          locale={locale}
+        />
+
         {filteredOrders.length === 0 ? (
           <div className="mt-8 rounded-lg border border-white/80 bg-white/80 px-6 py-12 text-center shadow-lg shadow-cyan-900/10 backdrop-blur">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-cyan-100 to-yellow-100">
@@ -214,7 +299,14 @@ export default function MyTicketsPage() {
         ) : (
           <div className="mt-8 space-y-4">
             {filteredOrders.map(order => (
-              <TicketOrderCard key={order.id} order={order} locale={locale} />
+              <TicketOrderCard
+                key={order.id}
+                order={order}
+                locale={locale}
+                onOrdersRefresh={refreshOrders}
+                onTransfersRefresh={loadOutgoingTransfers}
+                onTransferNotice={setTransferNotice}
+              />
             ))}
           </div>
         )}
@@ -223,10 +315,130 @@ export default function MyTicketsPage() {
   );
 }
 
-function TicketOrderCard({ order, locale }) {
+function IncomingTransfers({ transfers, actionId, onAction, locale }) {
+  const { t } = useTranslation();
+
+  if (!transfers.length) return null;
+
+  return (
+    <section className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50/90 p-4 shadow-lg shadow-emerald-900/10 backdrop-blur">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-extrabold text-emerald-800">{t('myTickets.incomingTransfers')}</p>
+          <p className="text-sm font-semibold text-emerald-700">{t('myTickets.incomingTransfersHint')}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {transfers.map(transfer => {
+          const accepting = actionId === `accept:${transfer.id}`;
+          const declining = actionId === `decline:${transfer.id}`;
+          const seatLabel = `${transfer.zone || t('myTickets.zone')} ${transfer.label || ''}`.trim();
+
+          return (
+            <div
+              key={transfer.id}
+              className="flex flex-col gap-3 rounded-md border border-emerald-200 bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-extrabold text-slate-950">{transfer.event_title}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-600">
+                  {t('myTickets.transferFrom', { email: transfer.sender_email })}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-600">
+                  {seatLabel} · {formatDate(transfer.event_date, locale)} · {formatVND(transfer.price)}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => onAction(transfer.id, 'accept')}
+                  disabled={Boolean(actionId)}
+                  className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70"
+                >
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                  {accepting ? t('myTickets.acceptingTransfer') : t('myTickets.acceptTransfer')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onAction(transfer.id, 'decline')}
+                  disabled={Boolean(actionId)}
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-rose-200 hover:text-rose-700 disabled:cursor-wait disabled:opacity-70"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  {declining ? t('myTickets.decliningTransfer') : t('myTickets.declineTransfer')}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function OutgoingTransfers({ transfers, actionId, onCancel, locale }) {
+  const { t } = useTranslation();
+
+  if (!transfers.length) return null;
+
+  return (
+    <section className="mt-6 rounded-lg border border-cyan-200 bg-cyan-50/90 p-4 shadow-lg shadow-cyan-900/10 backdrop-blur">
+      <div>
+        <p className="text-sm font-extrabold text-cyan-800">{t('myTickets.outgoingTransfers')}</p>
+        <p className="text-sm font-semibold text-cyan-700">{t('myTickets.outgoingTransfersHint')}</p>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {transfers.map(transfer => {
+          const cancelling = actionId === `cancel:${transfer.id}`;
+          const seatLabel = `${transfer.zone || t('myTickets.zone')} ${transfer.label || ''}`.trim();
+
+          return (
+            <div
+              key={transfer.id}
+              className="flex flex-col gap-3 rounded-md border border-cyan-200 bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-extrabold text-slate-950">{transfer.event_title}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-600">
+                  {t('myTickets.transferTo', { email: transfer.recipient_email })}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-600">
+                  {seatLabel} · {formatDate(transfer.event_date, locale)} · {formatVND(transfer.price)}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onCancel(transfer.id)}
+                disabled={Boolean(actionId)}
+                className="inline-flex h-10 w-fit items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-rose-200 hover:text-rose-700 disabled:cursor-wait disabled:opacity-70"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+                {cancelling ? t('myTickets.cancellingTransfer') : t('myTickets.cancelTransfer')}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function TicketOrderCard({ order, locale, onOrdersRefresh, onTransfersRefresh, onTransferNotice }) {
   const { t } = useTranslation();
   const [downloadingSeatId, setDownloadingSeatId] = useState('');
   const [downloadError, setDownloadError] = useState('');
+  const [transferTicketId, setTransferTicketId] = useState('');
+  const [transferEmail, setTransferEmail] = useState('');
+  const [transferLoadingId, setTransferLoadingId] = useState('');
+  const [transferError, setTransferError] = useState('');
+  const [refundTicketId, setRefundTicketId] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [refundLoadingId, setRefundLoadingId] = useState('');
+  const [refundError, setRefundError] = useState('');
 
   const STATUS_LABELS = {
     paid:      t('myTickets.paid'),
@@ -272,6 +484,81 @@ function TicketOrderCard({ order, locale }) {
       setDownloadError(t('myTickets.downloadError'));
     } finally {
       setDownloadingSeatId('');
+    }
+  };
+
+  const handleOpenTransfer = (seat) => {
+    setTransferTicketId(seat.ticket_id || '');
+    setTransferEmail('');
+    setTransferError('');
+    setRefundTicketId('');
+    setRefundReason('');
+    setRefundError('');
+    onTransferNotice?.(null);
+  };
+
+  const handleSubmitTransfer = async (seat) => {
+    if (!seat.ticket_id) return;
+    if (!transferEmail.trim()) {
+      setTransferError(t('myTickets.transferEmailRequired'));
+      return;
+    }
+
+    setTransferLoadingId(seat.ticket_id);
+    setTransferError('');
+    onTransferNotice?.(null);
+
+    try {
+      await api.post(`/ticket-transfers/tickets/${seat.ticket_id}`, {
+        recipient_email: transferEmail,
+      });
+      setTransferTicketId('');
+      setTransferEmail('');
+      onTransferNotice?.({ type: 'success', text: t('myTickets.transferSuccess') });
+      await Promise.all([
+        onOrdersRefresh?.(),
+        onTransfersRefresh?.(),
+      ]);
+    } catch (err) {
+      const message = err.response?.data?.error || t('myTickets.transferError');
+      setTransferError(message);
+      onTransferNotice?.({ type: 'error', text: message });
+    } finally {
+      setTransferLoadingId('');
+    }
+  };
+
+  const handleOpenRefund = (seat) => {
+    setRefundTicketId(seat.ticket_id || '');
+    setRefundReason('');
+    setRefundError('');
+    setTransferTicketId('');
+    setTransferEmail('');
+    setTransferError('');
+    onTransferNotice?.(null);
+  };
+
+  const handleSubmitRefund = async (seat) => {
+    if (!seat.ticket_id) return;
+
+    setRefundLoadingId(seat.ticket_id);
+    setRefundError('');
+    onTransferNotice?.(null);
+
+    try {
+      await api.post(`/ticket-refunds/tickets/${seat.ticket_id}`, {
+        reason: refundReason,
+      });
+      setRefundTicketId('');
+      setRefundReason('');
+      onTransferNotice?.({ type: 'success', text: t('myTickets.refundSuccess') });
+      await onOrdersRefresh?.();
+    } catch (err) {
+      const message = err.response?.data?.error || t('myTickets.refundError');
+      setRefundError(message);
+      onTransferNotice?.({ type: 'error', text: message });
+    } finally {
+      setRefundLoadingId('');
     }
   };
 
@@ -326,6 +613,30 @@ function TicketOrderCard({ order, locale }) {
                 items={activeItems}
                 onDownload={handleDownloadTicket}
                 downloadingSeatId={downloadingSeatId}
+                onTransfer={handleOpenTransfer}
+                onRefund={handleOpenRefund}
+                transferTicketId={transferTicketId}
+                transferEmail={transferEmail}
+                onTransferEmailChange={setTransferEmail}
+                onSubmitTransfer={handleSubmitTransfer}
+                onCancelTransfer={() => {
+                  setTransferTicketId('');
+                  setTransferEmail('');
+                  setTransferError('');
+                }}
+                transferLoadingId={transferLoadingId}
+                transferError={transferError}
+                refundTicketId={refundTicketId}
+                refundReason={refundReason}
+                onRefundReasonChange={setRefundReason}
+                onSubmitRefund={handleSubmitRefund}
+                onCancelRefund={() => {
+                  setRefundTicketId('');
+                  setRefundReason('');
+                  setRefundError('');
+                }}
+                refundLoadingId={refundLoadingId}
+                refundError={refundError}
               />
             )}
             {cancelledItems.length > 0 && (
@@ -346,7 +657,11 @@ function TicketOrderCard({ order, locale }) {
               </div>
             ) : (
               <span className="text-sm font-semibold text-slate-500">
-                {order.status === 'pending' ? t('myTickets.pendingOrder') : t('myTickets.cancelledOrder')}
+                {order.status === 'pending'
+                  ? t('myTickets.pendingOrder')
+                  : order.status === 'paid'
+                    ? t('myTickets.transferredOrder')
+                    : t('myTickets.cancelledOrder')}
               </span>
             )}
           </div>
@@ -356,7 +671,29 @@ function TicketOrderCard({ order, locale }) {
   );
 }
 
-function SeatList({ title, items, cancelled = false, onDownload, downloadingSeatId = '' }) {
+function SeatList({
+  title,
+  items,
+  cancelled = false,
+  onDownload,
+  downloadingSeatId = '',
+  onTransfer,
+  onRefund,
+  transferTicketId = '',
+  transferEmail = '',
+  onTransferEmailChange,
+  onSubmitTransfer,
+  onCancelTransfer,
+  transferLoadingId = '',
+  transferError = '',
+  refundTicketId = '',
+  refundReason = '',
+  onRefundReasonChange,
+  onSubmitRefund,
+  onCancelRefund,
+  refundLoadingId = '',
+  refundError = '',
+}) {
   const { t } = useTranslation();
   return (
     <div>
@@ -379,21 +716,133 @@ function SeatList({ title, items, cancelled = false, onDownload, downloadingSeat
           }
 
           const downloading = downloadingSeatId === item.seat_id;
+          const transferOpen = transferTicketId === item.ticket_id;
+          const transferLoading = transferLoadingId === item.ticket_id;
+          const refundOpen = refundTicketId === item.ticket_id;
+          const refundLoading = refundLoadingId === item.ticket_id;
           return (
-            <button
-              key={item.seat_id}
-              type="button"
-              onClick={() => onDownload(item)}
-              disabled={Boolean(downloadingSeatId)}
-              className="inline-flex min-h-10 items-center gap-2 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-sm font-bold text-cyan-800 transition hover:border-cyan-300 hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-70"
-              title={t('myTickets.downloadTicket')}
+            <div
+              key={item.ticket_id || item.seat_id}
+              className="max-w-full rounded-md border border-cyan-100 bg-white/75 p-2"
             >
-              <span>{itemLabel}</span>
-              <Download className="h-4 w-4" aria-hidden="true" />
-              <span className="text-xs font-extrabold text-cyan-700">
-                {downloading ? t('myTickets.downloadingTicket') : t('myTickets.downloadTicket')}
-              </span>
-            </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onDownload(item)}
+                  disabled={Boolean(downloadingSeatId)}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-sm font-bold text-cyan-800 transition hover:border-cyan-300 hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-70"
+                  title={t('myTickets.downloadTicket')}
+                >
+                  <span>{itemLabel}</span>
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  <span className="text-xs font-extrabold text-cyan-700">
+                    {downloading ? t('myTickets.downloadingTicket') : t('myTickets.downloadTicket')}
+                  </span>
+                </button>
+
+                {item.refund_status === 'pending' && (
+                  <span className="inline-flex min-h-10 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-800" title={t('myTickets.refundPendingDesc')}>
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-xs font-extrabold">{t('myTickets.refundPendingDesc')}</span>
+                  </span>
+                )}
+
+                {item.ticket_id && onTransfer && item.refund_status !== 'pending' && (
+                  <button
+                    type="button"
+                    onClick={() => onTransfer(item)}
+                    disabled={Boolean(transferLoadingId)}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
+                    title={t('myTickets.transferTicket')}
+                  >
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-xs font-extrabold">{t('myTickets.transferTicket')}</span>
+                  </button>
+                )}
+
+                {item.can_refund && onRefund && item.refund_status !== 'pending' && (
+                  <button
+                    type="button"
+                    onClick={() => onRefund(item)}
+                    disabled={Boolean(refundLoadingId)}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-70"
+                    title={t('myTickets.refundTicket')}
+                  >
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-xs font-extrabold">{t('myTickets.refundTicket')}</span>
+                  </button>
+                )}
+              </div>
+
+              {transferOpen && item.refund_status !== 'pending' && (
+                <div className="mt-2 flex w-full flex-col gap-2 sm:flex-row">
+                  <input
+                    type="email"
+                    value={transferEmail}
+                    onChange={(event) => onTransferEmailChange?.(event.target.value)}
+                    placeholder={t('myTickets.transferEmailPlaceholder')}
+                    className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onSubmitTransfer?.(item)}
+                    disabled={transferLoading}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                    {transferLoading ? t('myTickets.transferSending') : t('myTickets.transferSend')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onCancelTransfer}
+                    disabled={transferLoading}
+                    className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+
+              {transferOpen && transferError && (
+                <p className="mt-2 text-xs font-semibold text-rose-600">{transferError}</p>
+              )}
+
+              {refundOpen && (
+                <div className="mt-2 flex w-full flex-col gap-2">
+                  <input
+                    type="text"
+                    value={refundReason}
+                    onChange={(event) => onRefundReasonChange?.(event.target.value)}
+                    placeholder={t('myTickets.refundReasonPlaceholder')}
+                    className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-amber-400"
+                  />
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => onSubmitRefund?.(item)}
+                      disabled={refundLoading}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-amber-500 px-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400 disabled:cursor-wait disabled:opacity-70"
+                    >
+                      <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                      {refundLoading ? t('myTickets.refundSubmitting') : t('myTickets.refundSubmit')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onCancelRefund}
+                      disabled={refundLoading}
+                      className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-wait disabled:opacity-70"
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <p className="text-xs font-semibold text-amber-700">{t('myTickets.refundDemoNote')}</p>
+                </div>
+              )}
+
+              {refundOpen && refundError && (
+                <p className="mt-2 text-xs font-semibold text-rose-600">{refundError}</p>
+              )}
+            </div>
           );
         })}
       </div>
