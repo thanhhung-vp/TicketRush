@@ -2,6 +2,7 @@ import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
+import { config } from '../config/index.js';
 
 export function initSocket(httpServer) {
   const io = new Server(httpServer, {
@@ -26,7 +27,7 @@ export function initSocket(httpServer) {
     const token = socket.handshake.auth?.token;
     if (!token) return next();
     try {
-      socket.user = jwt.verify(token, process.env.JWT_SECRET);
+      socket.user = jwt.verify(token, config.jwt.secret);
     } catch {}
     next();
   });

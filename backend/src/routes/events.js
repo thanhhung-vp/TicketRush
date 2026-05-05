@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import pool from '../config/db.js';
 import redis from '../config/redis.js';
+import { config } from '../config/index.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import { CATEGORIES, eventSchema, eventUpdateSchema } from '../utils/eventValidation.js';
 import { canDeleteEvent } from '../utils/eventDeletionRules.js';
@@ -15,7 +16,7 @@ function getOptionalUser(req) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) return null;
   try {
-    return jwt.verify(header.slice(7), process.env.JWT_SECRET);
+    return jwt.verify(header.slice(7), config.jwt.secret);
   } catch {
     return null;
   }

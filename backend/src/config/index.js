@@ -1,3 +1,14 @@
+const DEVELOPMENT_JWT_SECRET = 'ticketrush-local-development-secret';
+
+function resolveJwtSecret(env = process.env) {
+  const secret = env.JWT_SECRET?.trim();
+  if (secret) return secret;
+  if (env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be configured in production');
+  }
+  return DEVELOPMENT_JWT_SECRET;
+}
+
 export const config = {
   port: Number(process.env.PORT) || 4000,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -15,7 +26,7 @@ export const config = {
     port: Number(process.env.REDIS_PORT) || 6379,
   },
   jwt: {
-    secret: process.env.JWT_SECRET || 'change-me',
+    secret: resolveJwtSecret(),
     expiresIn: process.env.JWT_EXPIRES_IN || '15m',
     refreshExpiresInDays: 30,
   },

@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import pool from '../config/db.js';
+import { config } from '../config/index.js';
 import { authenticate } from '../middleware/auth.js';
 import redis from '../config/redis.js';
 import { sendPasswordResetOTP } from '../services/email.js';
@@ -12,13 +13,11 @@ import { emailSchema } from '../utils/emailValidation.js';
 
 const router = Router();
 
-const REFRESH_TOKEN_EXPIRES_DAYS = 30;
-
 function generateTokens(user) {
   const accessToken = jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
+    config.jwt.secret,
+    { expiresIn: config.jwt.expiresIn }
   );
   const refreshToken = crypto.randomBytes(48).toString('hex');
   return { accessToken, refreshToken };
@@ -26,7 +25,7 @@ function generateTokens(user) {
 
 async function storeRefreshToken(userId, rawToken, db = pool) {
   const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
-  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + config.jwt.refreshExpiresInDays * 24 * 60 * 60 * 1000);
   await db.query(
     'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
     [userId, hash, expiresAt]
