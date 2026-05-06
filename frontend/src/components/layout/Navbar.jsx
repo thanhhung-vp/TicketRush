@@ -8,7 +8,6 @@ export function Navbar() {
   const [open, setOpen]  = useState(false);
   const menuRef          = useRef(null);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -28,67 +27,65 @@ export function Navbar() {
   const initials = user?.full_name?.charAt(0)?.toUpperCase() || 'U';
 
   return (
-    <nav className="sticky top-0 z-50 bg-gray-900 border-b border-gray-800 px-4 sm:px-6 py-3 flex items-center justify-between">
+    <nav className="sticky top-0 z-50 bg-surface-elevated-translucent backdrop-blur-xl border-b border-separator
+                    px-4 sm:px-6 py-3 flex items-center justify-between
+                    transition-colors duration-fast">
       {/* Brand */}
       <Link
         to="/"
-        className="text-xl font-bold text-white flex items-center gap-2 hover:text-blue-400 transition"
+        className="text-title-3 font-bold text-label-primary flex items-center gap-2 hover:text-accent transition-colors duration-fast"
       >
         <span className="text-2xl">🎫</span>
         <span>TicketRush</span>
       </Link>
 
       {/* Right side */}
-      <div className="flex items-center gap-3 text-sm">
+      <div className="flex items-center gap-3 text-subhead">
         {user ? (
           <>
-            {/* Admin link — desktop */}
             {user.role === 'admin' && (
               <Link
                 to="/admin"
-                className="hidden sm:block text-yellow-400 hover:text-yellow-300 font-medium transition"
+                className="hidden sm:block text-warning hover:opacity-80 font-medium transition-opacity duration-fast"
               >
                 Admin
               </Link>
             )}
 
-            {/* My tickets — desktop */}
             <Link
               to="/my-tickets"
-              className="hidden sm:block text-gray-300 hover:text-white transition"
+              className="hidden sm:block text-label-secondary hover:text-label-primary transition-colors duration-fast"
             >
               Vé của tôi
             </Link>
 
-            {/* User dropdown */}
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setOpen(v => !v)}
-                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl px-3 py-1.5 transition"
+                className="flex items-center gap-2 bg-fill-tertiary hover:bg-fill-quaternary border border-separator rounded-xl px-3 py-1.5 transition-colors duration-fast"
                 aria-haspopup="true"
                 aria-expanded={open}
               >
-                <span className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                <span className="w-6 h-6 rounded-full bg-fill-quaternary flex items-center justify-center text-caption-1 font-bold text-label-primary flex-shrink-0">
                   {initials}
                 </span>
-                <span className="hidden sm:block text-gray-300 max-w-[100px] truncate">
+                <span className="hidden sm:block text-label-primary max-w-[100px] truncate">
                   {user.full_name}
                 </span>
-                <span className="text-gray-500 text-xs">{open ? '▲' : '▼'}</span>
+                <span className="text-label-tertiary text-caption-2">{open ? '▲' : '▼'}</span>
               </button>
 
               {open && (
-                <div className="absolute right-0 mt-2 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden z-50">
-                  {/* User info row */}
-                  <div className="px-4 py-3 border-b border-gray-800">
-                    <p className="font-semibold text-sm truncate">{user.full_name}</p>
-                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                <div className="absolute right-0 mt-2 w-52 bg-surface border border-separator rounded-xl shadow-popover overflow-hidden z-50">
+                  <div className="px-4 py-3 border-b border-separator">
+                    <p className="font-semibold text-subhead text-label-primary truncate">{user.full_name}</p>
+                    <p className="text-footnote text-label-tertiary truncate">{user.email}</p>
                   </div>
 
                   <Link
                     to="/profile"
                     onClick={() => setOpen(false)}
-                    className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition"
+                    className="flex items-center gap-2 px-4 py-3 text-subhead text-label-primary hover:bg-fill-quaternary transition-colors duration-fast"
                   >
                     Tài khoản
                   </Link>
@@ -96,7 +93,7 @@ export function Navbar() {
                   <Link
                     to="/my-tickets"
                     onClick={() => setOpen(false)}
-                    className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition sm:hidden"
+                    className="flex items-center gap-2 px-4 py-3 text-subhead text-label-primary hover:bg-fill-quaternary transition-colors duration-fast sm:hidden"
                   >
                     Vé của tôi
                   </Link>
@@ -105,17 +102,17 @@ export function Navbar() {
                     <Link
                       to="/admin"
                       onClick={() => setOpen(false)}
-                      className="flex items-center gap-2 px-4 py-3 text-sm text-yellow-400 hover:bg-gray-800 hover:text-yellow-300 transition sm:hidden"
+                      className="flex items-center gap-2 px-4 py-3 text-subhead text-warning hover:bg-fill-quaternary transition-colors duration-fast sm:hidden"
                     >
                       Admin
                     </Link>
                   )}
 
-                  <div className="border-t border-gray-800" />
+                  <div className="border-t border-separator" />
 
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-gray-800 hover:text-red-300 transition"
+                    className="flex items-center gap-2 w-full text-left px-4 py-3 text-subhead text-danger hover:bg-fill-quaternary transition-colors duration-fast"
                   >
                     Đăng xuất
                   </button>
@@ -127,13 +124,13 @@ export function Navbar() {
           <>
             <Link
               to="/login"
-              className="text-gray-300 hover:text-white transition"
+              className="text-label-secondary hover:text-label-primary transition-colors duration-fast"
             >
               Đăng nhập
             </Link>
             <Link
               to="/register"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg font-medium transition"
+              className="bg-accent hover:bg-accent-hover text-white px-4 py-1.5 rounded-lg font-medium transition-colors duration-fast"
             >
               Đăng ký
             </Link>
