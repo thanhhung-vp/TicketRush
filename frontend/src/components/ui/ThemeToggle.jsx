@@ -9,16 +9,16 @@ export default function ThemeToggle({ className = '' }) {
       aria-label={isDark ? 'Chuyển sang sáng' : 'Chuyển sang tối'}
       title={isDark ? 'Light mode' : 'Dark mode'}
       className={`relative w-9 h-9 flex items-center justify-center rounded-xl
-                  text-gray-500 dark:text-gray-400
-                  hover:bg-gray-100 dark:hover:bg-gray-800
-                  transition-colors duration-150 ${className}`}
+                  text-label-secondary
+                  hover:bg-fill-quaternary
+                  transition-colors duration-fast ease-standard ${className}`}
     >
       {/* Sun icon — hiện ở dark mode */}
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
         strokeLinecap="round" strokeLinejoin="round"
-        className={`w-5 h-5 absolute transition-all duration-200
+        className={`w-5 h-5 absolute transition-all duration-base
                     ${isDark ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 rotate-90 scale-75'}`}
       >
         <circle cx="12" cy="12" r="5"/>
@@ -37,7 +37,7 @@ export default function ThemeToggle({ className = '' }) {
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
         strokeLinecap="round" strokeLinejoin="round"
-        className={`w-5 h-5 absolute transition-all duration-200
+        className={`w-5 h-5 absolute transition-all duration-base
                     ${isDark ? 'opacity-0 -rotate-90 scale-75' : 'opacity-100 rotate-0 scale-100'}`}
       >
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
