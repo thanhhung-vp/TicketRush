@@ -6,7 +6,7 @@ function FooterLink({ to, label }) {
   if (isExternal) {
     return (
       <a href={to} target="_blank" rel="noopener noreferrer"
-        className="block text-sm text-gray-400 hover:text-white transition leading-relaxed">
+        className="block text-footnote text-label-secondary hover:text-label-primary transition-colors duration-fast leading-relaxed">
         {label}
       </a>
     );
@@ -45,7 +45,7 @@ export default function Footer() {
   ];
 
   return (
-    <footer style={{ backgroundColor: '#0f1117' }}>
+    <footer className="bg-canvas border-t border-separator">
       {/* ── Main grid ── */}
       <div className="max-w-6xl mx-auto px-6 pt-12 pb-10">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
@@ -53,10 +53,10 @@ export default function Footer() {
           {/* Col 0 — Logo + tagline */}
           <div>
             <Link to="/" className="inline-flex items-center gap-0.5 mb-4">
-              <span className="text-2xl font-extrabold text-primary">Ticket</span>
-              <span className="text-2xl font-extrabold text-white">Rush</span>
+              <span className="text-2xl font-extrabold text-accent">Ticket</span>
+              <span className="text-2xl font-extrabold text-label-primary">Rush</span>
             </Link>
-            <p className="text-sm text-gray-400 leading-relaxed">
+            <p className="text-footnote text-label-secondary leading-relaxed">
               {t('footer.tagline1')}<br />
               {t('footer.tagline2')}
             </p>
@@ -64,7 +64,7 @@ export default function Footer() {
 
           {/* Col 1 */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-5">{t('footer.col1Title')}</h4>
+            <h4 className="text-label-primary font-bold text-subhead mb-5">{t('footer.col1Title')}</h4>
             <div className="space-y-3">
               {COL1.map(item => (
                 <FooterLink key={item.key} to={item.to} label={t(`footer.${item.key}`)} />
@@ -74,7 +74,7 @@ export default function Footer() {
 
           {/* Col 2 */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-5">{t('footer.col2Title')}</h4>
+            <h4 className="text-label-primary font-bold text-subhead mb-5">{t('footer.col2Title')}</h4>
             <div className="space-y-3">
               {COL2.map(item => (
                 <FooterLink key={item.key} to={item.to} label={t(`footer.${item.key}`)} />
@@ -84,7 +84,7 @@ export default function Footer() {
 
           {/* Col 3 */}
           <div>
-            <h4 className="text-white font-bold text-sm mb-5">{t('footer.col3Title')}</h4>
+            <h4 className="text-label-primary font-bold text-subhead mb-5">{t('footer.col3Title')}</h4>
             <div className="space-y-3">
               {COL3.map(item => (
                 <FooterLink key={item.key} to={item.to} label={t(`footer.${item.key}`)} />
@@ -95,10 +95,10 @@ export default function Footer() {
       </div>
 
       {/* ── Company info ── */}
-      <div className="border-t border-white/10">
+      <div className="border-t border-separator">
         <div className="max-w-6xl mx-auto px-6 py-8">
-          <p className="text-white font-bold text-sm mb-3 tracking-wide">{t('footer.companyName')}</p>
-          <div className="text-xs text-gray-500 space-y-1 leading-relaxed">
+          <p className="text-label-primary font-bold text-subhead mb-3 tracking-wide">{t('footer.companyName')}</p>
+          <div className="text-caption-1 text-label-tertiary space-y-1 leading-relaxed">
             <p>{t('footer.legalRep')}</p>
             <p>{t('footer.addressLine')}</p>
             <p>{t('footer.bizReg')}</p>
@@ -108,9 +108,9 @@ export default function Footer() {
       </div>
 
       {/* ── Bottom bar ── */}
-      <div className="border-t border-white/10">
+      <div className="border-t border-separator">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-center">
-          <p className="text-xs text-gray-500">{t('footer.copyright')}</p>
+          <p className="text-caption-1 text-label-tertiary">{t('footer.copyright')}</p>
         </div>
       </div>
     </footer>
