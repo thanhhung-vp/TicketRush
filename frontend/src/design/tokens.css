@@ -1,0 +1,158 @@
+/* TicketRush design tokens — single source of truth.
+ * Three tiers: primitives (raw values, not for direct use) → semantic (use these via Tailwind classes) → legacy aliases (deprecated, kept until Phase 2).
+ * Light values live in :root; dark overrides live in .dark. Components consume these via Tailwind classes generated from src/design/tokens.js.
+ */
+
+:root {
+  /* ── Primitive tokens (raw scales — do NOT reference from components) ── */
+
+  /* Apple grays */
+  --primitive-gray-50:  #f5f5f7;
+  --primitive-gray-100: #ececee;
+  --primitive-gray-200: #d1d1d6;
+  --primitive-gray-300: #c7c7cc;
+  --primitive-gray-400: #aeaeb2;
+  --primitive-gray-500: #8e8e93;
+  --primitive-gray-600: #636366;
+  --primitive-gray-700: #48484a;
+  --primitive-gray-800: #38383a;
+  --primitive-gray-900: #2c2c2e;
+  --primitive-gray-950: #1c1c1e;
+  --primitive-black:    #000000;
+  --primitive-white:    #ffffff;
+
+  /* Brand pink */
+  --primitive-pink-400: #FF2D7E;  /* dark mode accent */
+  --primitive-pink-500: #E6007E;  /* canonical brand */
+  --primitive-pink-600: #C70069;  /* light hover */
+  --primitive-pink-700: #A80058;  /* light pressed */
+  --primitive-pink-800: #FF4D8E;  /* dark hover */
+  --primitive-pink-900: #E61D6E;  /* dark pressed */
+
+  /* System status colors */
+  --primitive-blue-500:   #007AFF;
+  --primitive-blue-600:   #0A84FF;
+  --primitive-green-500:  #34C759;
+  --primitive-green-600:  #30D158;
+  --primitive-orange-500: #FF9500;
+  --primitive-orange-600: #FF9F0A;
+  --primitive-red-500:    #FF3B30;
+  --primitive-red-600:    #FF453A;
+
+  /* ── Semantic tokens — LIGHT (default) ── */
+
+  /* Backgrounds */
+  --bg-canvas:           var(--primitive-gray-50);
+  --bg-surface:          var(--primitive-white);
+  --bg-surface-elevated: var(--primitive-white);
+  --bg-surface-grouped:  var(--primitive-white);
+
+  /* Fills (subtle background tints) */
+  --fill-tertiary:   rgba(118,118,128,.12);
+  --fill-quaternary: rgba(116,116,128,.08);
+
+  /* Text labels */
+  --text-label-primary:   #1d1d1f;
+  --text-label-secondary: rgba(60,60,67,.60);
+  --text-label-tertiary:  rgba(60,60,67,.30);
+  --text-label-link:      var(--fill-accent);
+
+  /* Borders */
+  --border-separator:        rgba(60,60,67,.18);
+  --border-separator-opaque: var(--primitive-gray-200);
+
+  /* Accent (brand) */
+  --fill-accent:         var(--primitive-pink-500);
+  --fill-accent-hover:   var(--primitive-pink-600);
+  --fill-accent-pressed: var(--primitive-pink-700);
+
+  /* Status fills */
+  --fill-success: var(--primitive-green-500);
+  --fill-warning: var(--primitive-orange-500);
+  --fill-danger:  var(--primitive-red-500);
+  --fill-info:    var(--primitive-blue-500);
+
+  /* Status tints (for badge/alert backgrounds — opacity baked in because Tailwind
+     opacity modifiers don't work on var()-based color tokens) */
+  --fill-success-tint: rgba(52,199,89,.15);
+  --fill-warning-tint: rgba(255,149,0,.15);
+  --fill-danger-tint:  rgba(255,59,48,.15);
+  --fill-info-tint:    rgba(0,122,255,.15);
+  --fill-accent-tint:  rgba(230,0,126,.12);
+
+  /* Focus */
+  --focus-ring:          rgba(0,122,255,.5);
+  --shadow-focus:        0 0 0 4px rgba(0,122,255,.30);
+  --shadow-focus-danger: 0 0 0 4px rgba(255,59,48,.30);
+
+  /* Shadows — light */
+  --shadow-1:       0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.06);
+  --shadow-2:       0 4px 12px rgba(0,0,0,.08);
+  --shadow-popover: 0 10px 30px rgba(0,0,0,.12);
+
+  /* Translucent surfaces (for backdrop-blur vibrancy in Navbar) */
+  --bg-surface-elevated-translucent: rgba(255,255,255,.85);
+
+  /* ── Legacy CSS-var aliases (kept until Phase 2) ──
+     Many pages still reference var(--color-*) directly via bg-[var(--color-bg)] etc. */
+  --color-bg:      var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-card:    var(--bg-surface);
+  --color-border:  var(--border-separator);
+  --color-text:    var(--text-label-primary);
+  --color-muted:   var(--text-label-secondary);
+}
+
+.dark {
+  /* Backgrounds */
+  --bg-canvas:           var(--primitive-black);
+  --bg-surface:          var(--primitive-gray-950);
+  --bg-surface-elevated: var(--primitive-gray-900);
+  --bg-surface-grouped:  var(--primitive-gray-950);
+
+  /* Fills */
+  --fill-tertiary:   rgba(118,118,128,.24);
+  --fill-quaternary: rgba(118,118,128,.18);
+
+  /* Text labels */
+  --text-label-primary:   var(--primitive-gray-50);
+  --text-label-secondary: rgba(235,235,245,.60);
+  --text-label-tertiary:  rgba(235,235,245,.30);
+
+  /* Borders */
+  --border-separator:        rgba(84,84,88,.34);
+  --border-separator-opaque: var(--primitive-gray-800);
+
+  /* Accent — lighter in dark for AA contrast */
+  --fill-accent:         var(--primitive-pink-400);
+  --fill-accent-hover:   var(--primitive-pink-800);
+  --fill-accent-pressed: var(--primitive-pink-900);
+
+  /* Status fills */
+  --fill-success: var(--primitive-green-600);
+  --fill-warning: var(--primitive-orange-600);
+  --fill-danger:  var(--primitive-red-600);
+  --fill-info:    var(--primitive-blue-600);
+
+  /* Status tints (slightly more opacity on dark for visibility) */
+  --fill-success-tint: rgba(48,209,88,.20);
+  --fill-warning-tint: rgba(255,159,10,.20);
+  --fill-danger-tint:  rgba(255,69,58,.20);
+  --fill-info-tint:    rgba(10,132,255,.20);
+  --fill-accent-tint:  rgba(255,45,126,.18);
+
+  /* Focus */
+  --focus-ring:          rgba(10,132,255,.5);
+  --shadow-focus:        0 0 0 4px rgba(10,132,255,.40);
+  --shadow-focus-danger: 0 0 0 4px rgba(255,69,58,.40);
+
+  /* Shadows — heavier on dark */
+  --shadow-1:       0 1px 2px rgba(0,0,0,.4);
+  --shadow-2:       0 4px 12px rgba(0,0,0,.5);
+  --shadow-popover: 0 12px 36px rgba(0,0,0,.6);
+
+  /* Translucent surface for navbar vibrancy */
+  --bg-surface-elevated-translucent: rgba(28,28,30,.80);
+
+  /* Legacy aliases inherit dark via cascade since they reference --bg-* / --text-* / --border-* */
+}

@@ -1,41 +1,27 @@
+@import './design/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Semantic color tokens ─────────────────────────────────────────────────── */
-:root {
-  --color-bg:        #f3f4f6;
-  --color-surface:   #ffffff;
-  --color-card:      #ffffff;
-  --color-border:    #e5e7eb;
-  --color-text:      #111827;
-  --color-muted:     #6b7280;
-}
-
-.dark {
-  --color-bg:        #0a1221;
-  --color-surface:   #111827;
-  --color-card:      #1a2332;
-  --color-border:    #1f2937;
-  --color-text:      #ffffff;
-  --color-muted:     #9ca3af;
-}
-
 @layer base {
   body {
-    background-color: var(--color-bg);
-    color: var(--color-text);
-    @apply antialiased transition-colors duration-200;
-    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--bg-canvas);
+    color: var(--text-label-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif;
+    @apply antialiased;
+    transition: background-color 200ms cubic-bezier(.4,0,.2,1), color 200ms cubic-bezier(.4,0,.2,1);
   }
 }
 
-/* Utility classes dùng CSS variables — dùng khi Tailwind variant không đủ */
-.bg-surface  { background-color: var(--color-surface); }
-.bg-card     { background-color: var(--color-card); }
-.border-base { border-color: var(--color-border); }
-.text-base   { color: var(--color-text); }
-.text-muted  { color: var(--color-muted); }
+/* ── Legacy utility classes (kept until Phase 2) ──
+ * Many pages reference these by name. Tailwind also generates `bg-surface`, `border-separator`, etc.
+ * from the new tokens; these explicit definitions ensure the OLD class names continue working. */
+.bg-surface  { background-color: var(--bg-surface); }
+.bg-card     { background-color: var(--bg-surface); }
+.border-base { border-color: var(--border-separator); }
+.text-base   { color: var(--text-label-primary); }
+.text-muted  { color: var(--text-label-secondary); }
 
 /* Hide scrollbar for category tabs */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
