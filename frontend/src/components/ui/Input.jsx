@@ -1,40 +1,52 @@
-export function Input({ label, error, className = '', ...props }) {
+const baseControl =
+  'w-full bg-fill-tertiary rounded-md px-4 py-2.5 text-body text-label-primary placeholder-label-tertiary ' +
+  'border border-transparent ' +
+  'focus:outline-none focus:border-info focus:shadow-focus ' +
+  'transition-[box-shadow,border-color] duration-fast ease-standard';
+
+const errorControl = 'border-danger focus:border-danger focus:shadow-focus-danger';
+
+function Field({ label, error, children }) {
   return (
     <div>
-      {label && <label className="block text-sm text-gray-400 mb-1">{label}</label>}
+      {label && <label className="block text-subhead text-label-secondary mb-1">{label}</label>}
+      {children}
+      {error && <p className="text-footnote text-danger mt-1">{error}</p>}
+    </div>
+  );
+}
+
+export function Input({ label, error, className = '', ...props }) {
+  return (
+    <Field label={label} error={error}>
       <input
         {...props}
-        className={`w-full bg-gray-800 border ${error ? 'border-red-500' : 'border-gray-700'} rounded-xl px-4 py-2.5 focus:outline-none focus:border-blue-500 placeholder-gray-500 ${className}`}
+        className={`${baseControl} ${error ? errorControl : ''} ${className}`}
       />
-      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
-    </div>
+    </Field>
   );
 }
 
 export function Textarea({ label, error, className = '', ...props }) {
   return (
-    <div>
-      {label && <label className="block text-sm text-gray-400 mb-1">{label}</label>}
+    <Field label={label} error={error}>
       <textarea
         {...props}
-        className={`w-full bg-gray-800 border ${error ? 'border-red-500' : 'border-gray-700'} rounded-xl px-4 py-2.5 focus:outline-none focus:border-blue-500 resize-none ${className}`}
+        className={`${baseControl} resize-none ${error ? errorControl : ''} ${className}`}
       />
-      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
-    </div>
+    </Field>
   );
 }
 
 export function Select({ label, error, children, className = '', ...props }) {
   return (
-    <div>
-      {label && <label className="block text-sm text-gray-400 mb-1">{label}</label>}
+    <Field label={label} error={error}>
       <select
         {...props}
-        className={`w-full bg-gray-800 border ${error ? 'border-red-500' : 'border-gray-700'} rounded-xl px-4 py-2.5 focus:outline-none focus:border-blue-500 ${className}`}
+        className={`${baseControl} ${error ? errorControl : ''} ${className}`}
       >
         {children}
       </select>
-      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
-    </div>
+    </Field>
   );
 }
