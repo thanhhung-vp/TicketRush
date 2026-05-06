@@ -44,6 +44,7 @@ export default function AdminEventPage() {
   const [saving,      setSaving]      = useState(false);
   const [savingLayout,setSavingLayout]= useState(false);
   const [uploading,   setUploading]   = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
   const [error,       setError]       = useState('');
   const [success,     setSuccess]     = useState('');
   const [deleting,    setDeleting]    = useState(false);
@@ -79,6 +80,24 @@ export default function AdminEventPage() {
 
   const set  = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const setChecked = k => e => setForm(f => ({ ...f, [k]: e.target.checked }));
+
+  const generateFromPoster = async () => {
+    if (!form.poster_url) return;
+    setAiGenerating(true); setError(''); setSuccess('');
+    try {
+      const { data } = await api.post('/ai/event-from-image', { image_url: form.poster_url });
+      setForm(f => ({
+        ...f,
+        title:       data.title       || f.title,
+        description: data.description || f.description,
+      }));
+      setSuccess('Đã tạo title + mô tả từ poster ✨');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Không tạo được nội dung từ poster');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
 
   const uploadImage = async (file) => {
     setUploading(true); setError('');
@@ -317,8 +336,17 @@ export default function AdminEventPage() {
                 onChange={e => e.target.files[0] && uploadImage(e.target.files[0])} />
             </div>
             {form.poster_url && (
-              <img src={form.poster_url} alt="Preview"
-                className="mt-3 h-32 rounded-xl object-cover border border-gray-200" />
+              <div className="mt-3 flex items-start gap-3">
+                <img src={form.poster_url} alt="Preview"
+                  className="h-32 rounded-xl object-cover border border-separator" />
+                <button type="button"
+                  onClick={generateFromPoster}
+                  disabled={aiGenerating}
+                  title="Dùng AI đọc poster để tạo title + mô tả tiếng Việt"
+                  className="bg-accent hover:bg-accent-hover text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors duration-fast disabled:opacity-50">
+                  {aiGenerating ? '⏳ Đang tạo…' : '✨ Tạo title + mô tả từ poster'}
+                </button>
+              </div>
             )}
           </div>
 

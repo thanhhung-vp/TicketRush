@@ -23,6 +23,7 @@ import merchandiseRouter from './routes/merchandise.js';
 import checkinRouter     from './routes/checkin.js';
 import ticketRefundsRouter from './routes/ticketRefunds.js';
 import ticketTransfersRouter from './routes/ticketTransfers.js';
+import aiRouter             from './routes/ai.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -78,6 +79,7 @@ app.use('/api/merchandise', merchandiseRouter);
 app.use('/api/checkin',     checkinRouter);
 app.use('/api/ticket-refunds',   ticketRefundsRouter);
 app.use('/api/ticket-transfers', ticketTransfersRouter);
+app.use('/api/ai',                aiRouter);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 
