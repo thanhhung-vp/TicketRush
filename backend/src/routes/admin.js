@@ -18,6 +18,19 @@ const ticketAddSchema = z.object({
 const ticketDeleteSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
+const newsStatusSchema = z.enum(['draft', 'published']);
+const newsCreateSchema = z.object({
+  title: z.string().trim().min(3).max(180),
+  summary: z.string().trim().max(280).optional().or(z.literal('')),
+  content: z.string().trim().min(1).max(10000),
+  image_url: z.string().trim().url().max(500).optional().or(z.literal('')),
+  status: newsStatusSchema.default('draft'),
+});
+const newsUpdateSchema = newsCreateSchema.partial();
+
+function normalizeOptionalText(value) {
+  return value?.trim() || null;
+}
 
 async function broadcastSeatUpdate(app, eventId, seatIds, status) {
   const io = app.get('io');
@@ -54,6 +67,106 @@ router.get('/events', async (req, res) => {
 router.get('/dashboard', async (req, res) => {
   try {
     res.json(await getAdminDashboard(pool));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /admin/news - list all news posts for admins
+router.get('/news', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT n.*, u.full_name AS author_name, u.email AS author_email
+       FROM news_posts n
+       LEFT JOIN users u ON u.id = n.created_by
+       ORDER BY n.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /admin/news - create a news post
+router.post('/news', async (req, res) => {
+  const parsed = newsCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+  }
+
+  const { title, content, status } = parsed.data;
+  const summary = normalizeOptionalText(parsed.data.summary);
+  const imageUrl = normalizeOptionalText(parsed.data.image_url);
+  const publishedAt = status === 'published' ? new Date() : null;
+
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO news_posts (title, summary, content, image_url, status, created_by, published_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [title, summary, content, imageUrl, status, req.user.id, publishedAt]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PATCH /admin/news/:id - update a news post
+router.patch('/news/:id', async (req, res) => {
+  const newsId = uuidSchema.safeParse(req.params.id);
+  if (!newsId.success) return res.status(400).json({ error: 'Invalid news id' });
+
+  const parsed = newsUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+  }
+
+  const fields = Object.keys(parsed.data);
+  if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
+
+  const values = [req.params.id];
+  const sets = [];
+  const pushSet = (column, value) => {
+    values.push(value);
+    sets.push(`${column} = $${values.length}`);
+  };
+
+  if (Object.hasOwn(parsed.data, 'title')) pushSet('title', parsed.data.title);
+  if (Object.hasOwn(parsed.data, 'summary')) pushSet('summary', normalizeOptionalText(parsed.data.summary));
+  if (Object.hasOwn(parsed.data, 'content')) pushSet('content', parsed.data.content);
+  if (Object.hasOwn(parsed.data, 'image_url')) pushSet('image_url', normalizeOptionalText(parsed.data.image_url));
+  if (Object.hasOwn(parsed.data, 'status')) {
+    pushSet('status', parsed.data.status);
+    sets.push(parsed.data.status === 'published' ? 'published_at = COALESCE(published_at, NOW())' : 'published_at = NULL');
+  }
+  sets.push('updated_at = NOW()');
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE news_posts SET ${sets.join(', ')} WHERE id = $1 RETURNING *`,
+      values
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'News post not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DELETE /admin/news/:id
+router.delete('/news/:id', async (req, res) => {
+  const newsId = uuidSchema.safeParse(req.params.id);
+  if (!newsId.success) return res.status(400).json({ error: 'Invalid news id' });
+
+  try {
+    const { rowCount } = await pool.query('DELETE FROM news_posts WHERE id = $1', [req.params.id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'News post not found' });
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import pool from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { sendOrderConfirmation } from '../services/email.js';
+import { createOrReusePendingOrderForSeats } from '../utils/pendingHoldOrders.js';
 
 const router = Router();
 
@@ -30,7 +31,8 @@ router.post('/initiate', authenticate, async (req, res) => {
 
     const placeholders = seat_ids.map((_, i) => `$${i + 2}`).join(',');
     const { rows: seats } = await client.query(
-      `SELECT s.id, s.status, s.locked_by, s.event_id, z.price
+      `SELECT s.id, s.status, s.locked_by, s.locked_until, s.event_id, z.price,
+              (s.locked_until IS NULL OR s.locked_until > NOW()) AS hold_active
        FROM seats s JOIN zones z ON z.id = s.zone_id
        WHERE s.id IN (${placeholders}) AND s.locked_by = $1
        FOR UPDATE`,
@@ -41,27 +43,17 @@ router.post('/initiate', authenticate, async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Seats not found or not held by you' });
     }
-    if (seats.some(s => s.status !== 'locked')) {
+    if (seats.some(s => s.status !== 'locked' || !s.hold_active)) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Some seats are no longer locked' });
+      return res.status(409).json({ error: 'Some seats are no longer locked (hold may have expired)' });
     }
 
     const eventId = seats[0].event_id;
-    const total = seats.reduce((s, seat) => s + Number(seat.price), 0);
-
-    const { rows: orderRows } = await client.query(
-      `INSERT INTO orders (user_id, event_id, total_amount, status)
-       VALUES ($1,$2,$3,'pending') RETURNING *`,
-      [req.user.id, eventId, total]
-    );
-    const order = orderRows[0];
-
-    const itemValues = seats.map((_, i) => `($1,$${i * 2 + 2},$${i * 2 + 3})`).join(',');
-    const itemParams = [order.id, ...seats.flatMap(s => [s.id, s.price])];
-    await client.query(
-      `INSERT INTO order_items (order_id, seat_id, price) VALUES ${itemValues}`,
-      itemParams
-    );
+    const order = await createOrReusePendingOrderForSeats(client, {
+      userId: req.user.id,
+      eventId,
+      seats,
+    });
 
     await client.query('COMMIT');
 
@@ -111,17 +103,41 @@ router.post('/confirm', authenticate, async (req, res) => {
     }
 
     const { rows: items } = await client.query(
-      `SELECT oi.seat_id, oi.price FROM order_items oi WHERE oi.order_id = $1`,
+      `SELECT oi.seat_id, oi.price, s.status, s.locked_by, s.locked_until, s.event_id,
+              (s.locked_until IS NULL OR s.locked_until > NOW()) AS hold_active
+       FROM order_items oi
+       JOIN seats s ON s.id = oi.seat_id
+       WHERE oi.order_id = $1
+       FOR UPDATE OF s`,
       [order_id]
     );
 
+    const invalidItems = items.filter(item =>
+      item.status !== 'locked' ||
+      item.locked_by !== req.user.id ||
+      !item.hold_active
+    );
+    if (items.length === 0 || invalidItems.length > 0) {
+      await client.query(`UPDATE orders SET status = 'cancelled' WHERE id = $1`, [order_id]);
+      await client.query('COMMIT');
+      return res.status(409).json({ error: 'Some seats are no longer locked (hold may have expired)' });
+    }
+
     // Mark seats sold
     const seatIds = items.map(i => i.seat_id);
-    const sp = seatIds.map((_, i) => `$${i + 1}`).join(',');
-    await client.query(
-      `UPDATE seats SET status='sold', locked_by=NULL, locked_at=NULL WHERE id IN (${sp})`,
-      seatIds
+    const sp = seatIds.map((_, i) => `$${i + 2}`).join(',');
+    const { rowCount: soldCount } = await client.query(
+      `UPDATE seats
+       SET status='sold', locked_by=NULL, locked_at=NULL, locked_until=NULL
+       WHERE locked_by = $1
+         AND status = 'locked'
+         AND id IN (${sp})`,
+      [req.user.id, ...seatIds]
     );
+    if (soldCount !== seatIds.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Some seats could not be finalized' });
+    }
 
     // Update order
     await client.query(
@@ -211,21 +227,37 @@ router.post('/cancel', authenticate, async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Pending order not found' });
     }
+    const order = orders[0];
 
     const { rows: items } = await client.query(
       'SELECT seat_id FROM order_items WHERE order_id = $1', [order_id]
     );
     const seatIds = items.map(i => i.seat_id);
+    let releasedSeatIds = [];
     if (seatIds.length) {
-      const sp = seatIds.map((_, i) => `$${i + 1}`).join(',');
-      await client.query(
-        `UPDATE seats SET status='available', locked_by=NULL, locked_at=NULL WHERE id IN (${sp})`,
-        seatIds
+      const sp = seatIds.map((_, i) => `$${i + 2}`).join(',');
+      const { rows: releasedSeats } = await client.query(
+        `UPDATE seats
+         SET status='available', locked_by=NULL, locked_at=NULL, locked_until=NULL
+         WHERE locked_by = $1
+           AND status = 'locked'
+           AND id IN (${sp})
+         RETURNING id`,
+        [req.user.id, ...seatIds]
       );
+      releasedSeatIds = releasedSeats.map(seat => seat.id);
     }
 
     await client.query(`UPDATE orders SET status='cancelled' WHERE id = $1`, [order_id]);
     await client.query('COMMIT');
+
+    const io = req.app.get('io');
+    if (io && releasedSeatIds.length > 0) {
+      io.to(`event:${order.event_id}`).emit('seats:updated',
+        releasedSeatIds.map(id => ({ id, event_id: order.event_id, status: 'available' }))
+      );
+    }
+
     res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK');

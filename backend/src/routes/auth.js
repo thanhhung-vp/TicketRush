@@ -54,7 +54,7 @@ router.post('/register', async (req, res) => {
     await client.query('BEGIN');
     const { rows } = await client.query(
       `INSERT INTO users (email, password, full_name, gender, birth_year)
-       VALUES ($1,$2,$3,$4,$5) RETURNING id, email, full_name, role`,
+       VALUES ($1,$2,$3,$4,$5) RETURNING id, email, full_name, role, avatar_url`,
       [email, hash, full_name, gender || null, birth_year || null]
     );
     const user = rows[0];
@@ -108,7 +108,7 @@ router.post('/refresh', async (req, res) => {
   const hash = crypto.createHash('sha256').update(refreshToken).digest('hex');
   try {
     const { rows } = await pool.query(
-      `SELECT rt.*, u.id AS uid, u.email, u.role, u.full_name
+      `SELECT rt.*, u.id AS uid, u.email, u.role, u.full_name, u.avatar_url
        FROM refresh_tokens rt
        JOIN users u ON u.id = rt.user_id
        WHERE rt.token_hash = $1 AND rt.expires_at > NOW()`,
@@ -116,8 +116,8 @@ router.post('/refresh', async (req, res) => {
     );
     if (!rows[0]) return res.status(401).json({ error: 'Invalid or expired refresh token' });
 
-    const { uid, email, role, full_name, id: tokenId } = rows[0];
-    const user = { id: uid, email, role, full_name };
+    const { uid, email, role, full_name, avatar_url, id: tokenId } = rows[0];
+    const user = { id: uid, email, role, full_name, avatar_url };
 
     // Rotate: delete old, issue new
     await pool.query('DELETE FROM refresh_tokens WHERE id = $1', [tokenId]);
@@ -161,7 +161,7 @@ router.post('/logout-all', authenticate, async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, full_name, gender, birth_year, role, created_at FROM users WHERE id=$1',
+      'SELECT id, email, full_name, gender, birth_year, role, avatar_url, created_at FROM users WHERE id=$1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });
@@ -191,7 +191,7 @@ router.patch('/profile', authenticate, async (req, res) => {
   const values = fields.map(f => parsed.data[f]);
   try {
     const { rows } = await pool.query(
-      `UPDATE users SET ${sets} WHERE id = $1 RETURNING id, email, full_name, gender, birth_year, role`,
+      `UPDATE users SET ${sets} WHERE id = $1 RETURNING id, email, full_name, gender, birth_year, role, avatar_url`,
       [req.user.id, ...values]
     );
     res.json(rows[0]);

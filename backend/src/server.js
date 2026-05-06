@@ -13,6 +13,7 @@ import eventsRouter      from './routes/events.js';
 import seatsRouter       from './routes/seats.js';
 import ordersRouter      from './routes/orders.js';
 import adminRouter       from './routes/admin.js';
+import newsRouter        from './routes/news.js';
 import queueRouter       from './routes/queue.js';
 import uploadRouter      from './routes/upload.js';
 import paymentRouter     from './routes/payment.js';
@@ -20,6 +21,8 @@ import wishlistsRouter   from './routes/wishlists.js';
 import reviewsRouter     from './routes/reviews.js';
 import merchandiseRouter from './routes/merchandise.js';
 import checkinRouter     from './routes/checkin.js';
+import ticketRefundsRouter from './routes/ticketRefunds.js';
+import ticketTransfersRouter from './routes/ticketTransfers.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -65,6 +68,7 @@ app.use('/api/events',      eventsRouter);
 app.use('/api/seats',       seatsRouter);
 app.use('/api/orders',      ordersRouter);
 app.use('/api/admin',       adminRouter);
+app.use('/api/news',        newsRouter);
 app.use('/api/queue',       queueRouter);
 app.use('/api/upload',      uploadRouter);
 app.use('/api/payment',     paymentRouter);
@@ -72,6 +76,8 @@ app.use('/api/wishlists',   wishlistsRouter);
 app.use('/api/reviews',     reviewsRouter);
 app.use('/api/merchandise', merchandiseRouter);
 app.use('/api/checkin',     checkinRouter);
+app.use('/api/ticket-refunds',   ticketRefundsRouter);
+app.use('/api/ticket-transfers', ticketTransfersRouter);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 

@@ -46,9 +46,8 @@ npm run dev            # → http://localhost:4000
 ### 3. Frontend
 
 ```bash
-cd frontend
-npm install
-npm run dev   # → http://localhost:3000
+
+   # → http://localhost:3000
 ```
 
 ### 4. Tests

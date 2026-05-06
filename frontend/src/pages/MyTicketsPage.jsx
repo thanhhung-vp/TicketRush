@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Check, Download, RotateCcw, Send, X } from 'lucide-react';
+import { Check, CreditCard, Download, RotateCcw, Send, X } from 'lucide-react';
 import api from '../lib/api.js';
 import ticketLogo from '../ticketlogo.png';
 import ticketsBackdrop from '../../24504411_15690.jpg';
 import { downloadTicketsImage, filterTicketsForSeat } from '../utils/ticketDownload.js';
+import {
+  buildPendingOrderCheckoutState,
+  isPendingOrderActionable,
+} from '../utils/pendingOrderActions.js';
 
 const PAGE_BACKGROUND_STYLE = {
   backgroundImage: `linear-gradient(125deg, rgba(255,255,255,0.92), rgba(255,255,255,0.76) 48%, rgba(255,255,255,0.88)), url(${ticketsBackdrop})`,
@@ -159,7 +163,7 @@ export default function MyTicketsPage() {
   const stats = useMemo(() => {
     const paidOrders = orders.filter(order => order.status === 'paid').length;
     const activeTickets = orders.reduce((total, order) => {
-      if (order.status === 'cancelled') return total;
+      if (order.status !== 'paid') return total;
       return total + (order.items || []).length;
     }, 0);
     return [
@@ -429,8 +433,10 @@ function OutgoingTransfers({ transfers, actionId, onCancel, locale }) {
 
 function TicketOrderCard({ order, locale, onOrdersRefresh, onTransfersRefresh, onTransferNotice }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [downloadingSeatId, setDownloadingSeatId] = useState('');
   const [downloadError, setDownloadError] = useState('');
+  const [pendingAction, setPendingAction] = useState('');
   const [transferTicketId, setTransferTicketId] = useState('');
   const [transferEmail, setTransferEmail] = useState('');
   const [transferLoadingId, setTransferLoadingId] = useState('');
@@ -455,6 +461,8 @@ function TicketOrderCard({ order, locale, onOrdersRefresh, onTransfersRefresh, o
       : []),
   ];
   const status = order.status === 'cancelled' ? 'cancelled' : order.status;
+  const canManageTickets = order.status === 'paid';
+  const canActOnPendingOrder = isPendingOrderActionable(order);
   const downloadLabels = {
     brand: 'TicketRush',
     ticketCode: t('tickets.ticketCode'),
@@ -562,6 +570,29 @@ function TicketOrderCard({ order, locale, onOrdersRefresh, onTransfersRefresh, o
     }
   };
 
+  const handlePayPendingOrder = () => {
+    navigate('/checkout', { state: buildPendingOrderCheckoutState(order) });
+  };
+
+  const handleCancelPendingOrder = async () => {
+    if (!window.confirm(t('myTickets.cancelPendingConfirm'))) return;
+
+    setPendingAction('cancel');
+    onTransferNotice?.(null);
+
+    try {
+      await api.post('/payment/cancel', { order_id: order.id });
+      onTransferNotice?.({ type: 'success', text: t('myTickets.cancelPendingSuccess') });
+      await onOrdersRefresh?.();
+    } catch (err) {
+      const message = err.response?.data?.error || t('myTickets.cancelPendingError');
+      onTransferNotice?.({ type: 'error', text: message });
+      await onOrdersRefresh?.();
+    } finally {
+      setPendingAction('');
+    }
+  };
+
   return (
     <article className="overflow-hidden rounded-lg border border-white/80 bg-white/80 shadow-lg shadow-cyan-900/10 backdrop-blur transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-cyan-900/20">
       <div className="grid gap-0 md:grid-cols-[190px_1fr]">
@@ -609,12 +640,13 @@ function TicketOrderCard({ order, locale, onOrdersRefresh, onTransfersRefresh, o
           <div className="mt-5 space-y-4">
             {activeItems.length > 0 && (
               <SeatList
-                title={t('myTickets.activeList')}
+                title={canManageTickets ? t('myTickets.activeList') : t('myTickets.pendingOrder')}
                 items={activeItems}
-                onDownload={handleDownloadTicket}
+                readOnly={!canManageTickets}
+                onDownload={canManageTickets ? handleDownloadTicket : undefined}
                 downloadingSeatId={downloadingSeatId}
-                onTransfer={handleOpenTransfer}
-                onRefund={handleOpenRefund}
+                onTransfer={canManageTickets ? handleOpenTransfer : undefined}
+                onRefund={canManageTickets ? handleOpenRefund : undefined}
                 transferTicketId={transferTicketId}
                 transferEmail={transferEmail}
                 onTransferEmailChange={setTransferEmail}
@@ -646,7 +678,30 @@ function TicketOrderCard({ order, locale, onOrdersRefresh, onTransfersRefresh, o
 
           <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xl font-extrabold text-emerald-600">{formatVND(order.total_amount)}</span>
-            {order.status === 'paid' && activeItems.length > 0 ? (
+            {order.status === 'pending' && canActOnPendingOrder ? (
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <button
+                  type="button"
+                  onClick={handlePayPendingOrder}
+                  disabled={Boolean(pendingAction)}
+                  className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70"
+                >
+                  <CreditCard className="h-4 w-4" aria-hidden="true" />
+                  {t('myTickets.payPendingOrder')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelPendingOrder}
+                  disabled={Boolean(pendingAction)}
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 text-sm font-bold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 disabled:cursor-wait disabled:opacity-70"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  {pendingAction === 'cancel'
+                    ? t('myTickets.cancellingPendingOrder')
+                    : t('myTickets.cancelPendingOrder')}
+                </button>
+              </div>
+            ) : order.status === 'paid' && activeItems.length > 0 ? (
               <div className="flex flex-col items-start gap-2 sm:items-end">
                 <span className="text-sm font-semibold text-slate-500">{t('myTickets.downloadHint')}</span>
                 {downloadError && (
@@ -675,6 +730,7 @@ function SeatList({
   title,
   items,
   cancelled = false,
+  readOnly = false,
   onDownload,
   downloadingSeatId = '',
   onTransfer,
@@ -695,19 +751,30 @@ function SeatList({
   refundError = '',
 }) {
   const { t } = useTranslation();
+  const titleClass = cancelled
+    ? 'text-rose-700'
+    : readOnly
+      ? 'text-amber-700'
+      : 'text-cyan-700';
+  const readOnlyClass = readOnly
+    ? 'border-amber-200 bg-amber-50 text-amber-800'
+    : 'border-cyan-100 bg-cyan-50 text-cyan-800';
+
   return (
     <div>
-      <p className={`mb-2 text-xs font-bold ${cancelled ? 'text-rose-700' : 'text-cyan-700'}`}>
+      <p className={`mb-2 text-xs font-bold ${titleClass}`}>
         {title}
       </p>
       <div className="flex flex-wrap gap-2">
         {items.map(item => {
           const itemLabel = `${item.zone || t('myTickets.zone')} ${item.label || ''}`.trim();
-          if (cancelled || !onDownload) {
+          if (cancelled || readOnly || !onDownload) {
             return (
               <span
                 key={item.action_id || item.seat_id}
-                className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-bold text-rose-700"
+                className={`rounded-md border px-3 py-1.5 text-sm font-bold ${
+                  cancelled ? 'border-rose-200 bg-rose-50 text-rose-700' : readOnlyClass
+                }`}
                 title={item.reason || ''}
               >
                 {itemLabel}

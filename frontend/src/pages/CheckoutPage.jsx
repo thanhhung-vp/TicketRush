@@ -43,7 +43,7 @@ export default function CheckoutPage() {
 
   const [method, setMethod]   = useState('mock');
   const [step, setStep]       = useState('select');
-  const [orderId, setOrderId] = useState(null);
+  const [orderId, setOrderId] = useState(state?.order_id || null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
   const [merch, setMerch]     = useState([]);

@@ -1,6 +1,7 @@
 import { Queue, Worker } from 'bullmq';
 import redis from '../config/redis.js';
 import pool from '../config/db.js';
+import { cancelPendingOrdersForReleasedSeats } from '../utils/pendingHoldOrders.js';
 
 const QUEUE_NAME = 'seat-release';
 
@@ -16,16 +17,39 @@ export function startSeatReleaseWorker(io) {
       // Only release seats whose locked_until has actually passed.
       // If /seats/renew was called, locked_until was pushed forward and this
       // job fires too early — the WHERE clause rejects it and seats stay locked.
-      const { rows } = await pool.query(
-        `UPDATE seats
-         SET status = 'available', locked_by = NULL, locked_at = NULL, locked_until = NULL
-         WHERE locked_by = $1
-           AND status   = 'locked'
-           AND locked_until <= NOW()
-           AND id IN (${ph})
-         RETURNING id, event_id`,
-        [user_id, ...seat_ids]
-      );
+      const client = await pool.connect();
+      let rows = [];
+      try {
+        await client.query('BEGIN');
+        const result = await client.query(
+          `WITH candidates AS (
+             SELECT id, event_id, locked_by
+             FROM seats
+             WHERE locked_by = $1
+               AND status = 'locked'
+               AND locked_until <= NOW()
+               AND id IN (${ph})
+             FOR UPDATE
+           ),
+           released AS (
+             UPDATE seats s
+             SET status = 'available', locked_by = NULL, locked_at = NULL, locked_until = NULL
+             FROM candidates c
+             WHERE s.id = c.id
+             RETURNING s.id, c.event_id, c.locked_by
+           )
+           SELECT * FROM released`,
+          [user_id, ...seat_ids]
+        );
+        rows = result.rows;
+        await cancelPendingOrdersForReleasedSeats(client, rows);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
 
       if (rows.length > 0 && io) {
         const byEvent = rows.reduce((acc, s) => {
@@ -50,12 +74,36 @@ export function startSeatReleaseWorker(io) {
 
 // Fallback sweep — catches anything the queue misses (e.g. after a crash)
 export async function sweepExpiredSeats(io) {
-  const { rows } = await pool.query(
-    `UPDATE seats
-     SET status = 'available', locked_by = NULL, locked_at = NULL, locked_until = NULL
-     WHERE status = 'locked' AND locked_until <= NOW()
-     RETURNING id, event_id`
-  );
+  const client = await pool.connect();
+  let rows = [];
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `WITH candidates AS (
+         SELECT id, event_id, locked_by
+         FROM seats
+         WHERE status = 'locked'
+           AND locked_until <= NOW()
+         FOR UPDATE
+       ),
+       released AS (
+         UPDATE seats s
+         SET status = 'available', locked_by = NULL, locked_at = NULL, locked_until = NULL
+         FROM candidates c
+         WHERE s.id = c.id
+         RETURNING s.id, c.event_id, c.locked_by
+       )
+       SELECT * FROM released`
+    );
+    rows = result.rows;
+    await cancelPendingOrdersForReleasedSeats(client, rows);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 
   if (rows.length > 0 && io) {
     const byEvent = rows.reduce((acc, s) => {

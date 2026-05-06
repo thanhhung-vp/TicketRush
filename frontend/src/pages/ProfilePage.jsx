@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -16,6 +16,54 @@ const PROVINCES = [
   'Thừa Thiên Huế','Tiền Giang','TP. Hồ Chí Minh','Trà Vinh',
   'Tuyên Quang','Vĩnh Long','Vĩnh Phúc','Yên Bái',
 ];
+
+const AVATAR_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const AVATAR_SOURCE_MAX_BYTES = 12 * 1024 * 1024;
+const AVATAR_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+const AVATAR_COMPRESS_IF_LARGER_THAN = 1600;
+const AVATAR_TARGET_MAX_DIMENSION = 1024;
+const AVATAR_COMPRESS_IF_BYTES_OVER = 2.5 * 1024 * 1024;
+
+function getImageDimensions(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: image.naturalWidth, height: image.naturalHeight, image });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Invalid image'));
+    };
+    image.src = url;
+  });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+}
+
+async function compressAvatarIfNeeded(file) {
+  const { width, height, image } = await getImageDimensions(file);
+  const longestSide = Math.max(width, height);
+  const shouldCompress = longestSide > AVATAR_COMPRESS_IF_LARGER_THAN || file.size > AVATAR_COMPRESS_IF_BYTES_OVER;
+  if (!shouldCompress) return file;
+
+  const scale = Math.min(1, AVATAR_TARGET_MAX_DIMENSION / longestSide);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const context = canvas.getContext('2d');
+  if (!context) return file;
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const blob = await canvasToBlob(canvas, 'image/jpeg', 0.86);
+  if (!blob) return file;
+
+  const baseName = file.name.replace(/\.[^.]+$/, '') || 'avatar';
+  return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+}
 
 function birthYearToDate(year) {
   if (!year) return '';
@@ -72,6 +120,7 @@ function SectionTitle({ children }) {
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
   const { t } = useTranslation();
+  const fileInputRef = useRef(null);
 
   const [form, setForm] = useState({
     full_name:  user?.full_name || '',
@@ -86,6 +135,8 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg]       = useState('');
   const [error, setError]   = useState('');
+  const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || '');
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [pw, setPw]       = useState({ old: '', new: '', confirm: '' });
   const [pwSaving, setPwSaving] = useState(false);
@@ -93,6 +144,10 @@ export default function ProfilePage() {
   const [pwError, setPwError] = useState('');
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  useEffect(() => {
+    setAvatarPreview(user?.avatar_url || '');
+  }, [user?.avatar_url]);
 
   const save = async (e) => {
     e.preventDefault();
@@ -147,6 +202,47 @@ export default function ProfilePage() {
     }
   };
 
+  const uploadAvatar = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setMsg('');
+    setError('');
+
+    if (!AVATAR_ALLOWED_TYPES.has(file.type)) {
+      setError(t('profile.avatarInvalidType'));
+      return;
+    }
+    if (file.size > AVATAR_SOURCE_MAX_BYTES) {
+      setError(t('profile.avatarTooLarge'));
+      return;
+    }
+
+    setAvatarUploading(true);
+    try {
+      const avatarFile = await compressAvatarIfNeeded(file);
+      if (avatarFile.size > AVATAR_UPLOAD_MAX_BYTES) {
+        setError(t('profile.avatarTooLarge'));
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('image', avatarFile);
+      const { data } = await api.post('/upload/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const nextUser = data.user || { avatar_url: data.avatar_url };
+      updateUser(nextUser);
+      setAvatarPreview(nextUser.avatar_url || data.avatar_url || '');
+      setMsg(t('profile.avatarUploadSuccess'));
+    } catch (err) {
+      setError(err.response?.data?.error || t('profile.avatarUploadError'));
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   if (!user) return null;
 
   return (
@@ -160,18 +256,36 @@ export default function ProfilePage() {
         {error && <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">{error}</div>}
 
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-14 h-14 rounded-xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center shrink-0">
-            <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={uploadAvatar}
+            className="hidden"
+          />
+          <div className="h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-gray-100 shadow-sm flex items-center justify-center shrink-0">
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <svg className="w-7 h-7 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+              </svg>
+            )}
           </div>
-          <button type="button"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 text-sm text-gray-600 hover:bg-gray-200 transition font-medium">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {t('profile.changeAvatar')}
-          </button>
+          <div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarUploading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 text-sm text-gray-600 hover:bg-gray-200 transition font-medium disabled:cursor-wait disabled:opacity-60"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {avatarUploading ? t('profile.avatarUploading') : t('profile.changeAvatar')}
+            </button>
+            <p className="mt-1.5 text-xs text-gray-400">{t('profile.avatarHint')}</p>
+          </div>
         </div>
 
         <div className="space-y-4">

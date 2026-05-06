@@ -135,8 +135,33 @@ router.get('/', authenticate, async (req, res) => {
          SELECT DISTINCT o.id
          FROM orders o
          LEFT JOIN tickets owned_t ON owned_t.order_id = o.id AND owned_t.user_id = $1
-         WHERE (o.user_id = $1 OR owned_t.id IS NOT NULL)
-           AND o.status IN ('pending', 'paid', 'cancelled')
+         WHERE (
+           (o.status IN ('paid', 'cancelled') AND (o.user_id = $1 OR owned_t.id IS NOT NULL))
+           OR (
+             o.user_id = $1
+             AND o.status = 'pending'
+             AND EXISTS (
+               SELECT 1
+               FROM order_items pending_oi
+               JOIN seats pending_s ON pending_s.id = pending_oi.seat_id
+               WHERE pending_oi.order_id = o.id
+                 AND pending_s.status = 'locked'
+                 AND pending_s.locked_by = $1
+                 AND (pending_s.locked_until IS NULL OR pending_s.locked_until > NOW())
+             )
+             AND NOT EXISTS (
+               SELECT 1
+               FROM order_items pending_oi
+               JOIN seats pending_s ON pending_s.id = pending_oi.seat_id
+               WHERE pending_oi.order_id = o.id
+                 AND (
+                   pending_s.status <> 'locked'
+                   OR pending_s.locked_by IS DISTINCT FROM $1
+                   OR (pending_s.locked_until IS NOT NULL AND pending_s.locked_until <= NOW())
+                 )
+             )
+           )
+         )
        ),
        visible_items AS (
          SELECT o.id AS order_id,

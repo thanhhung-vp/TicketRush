@@ -5,6 +5,10 @@ import { authenticate } from '../middleware/auth.js';
 import { seatReleaseQueue } from '../workers/seatRelease.js';
 import { admittedKey, highLoadKey } from '../utils/queueKeys.js';
 import { ensureSingleEvent, validateSeatIds } from '../utils/seatHoldRules.js';
+import {
+  cancelPendingOrdersForSeatIds,
+  createOrReusePendingOrderForSeats,
+} from '../utils/pendingHoldOrders.js';
 
 const router = Router();
 
@@ -80,6 +84,7 @@ router.post('/hold', authenticate, async (req, res) => {
   const client = await pool.connect();
   let lockedUntil = null;
   let eventId = null;
+  let pendingOrder = null;
   try {
     await client.query('BEGIN');
 
@@ -94,7 +99,11 @@ router.post('/hold', authenticate, async (req, res) => {
     );
 
     const { rows: seats } = await client.query(
-      `SELECT id, event_id, status FROM seats WHERE id IN (${ph}) FOR UPDATE NOWAIT`,
+      `SELECT s.id, s.event_id, s.status, z.price
+       FROM seats s
+       JOIN zones z ON z.id = s.zone_id
+       WHERE s.id IN (${ph})
+       FOR UPDATE OF s NOWAIT`,
       seat_ids
     );
 
@@ -148,6 +157,12 @@ router.post('/hold', authenticate, async (req, res) => {
       [req.user.id, now, lockedUntil, ...seat_ids]
     );
 
+    pendingOrder = await createOrReusePendingOrderForSeats(client, {
+      userId: req.user.id,
+      eventId,
+      seats,
+    });
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -168,7 +183,7 @@ router.post('/hold', authenticate, async (req, res) => {
     console.warn('Seat release job scheduling skipped:', err.message);
   });
 
-  res.json({ ok: true, locked_until: lockedUntil, seat_ids, event_id: eventId });
+  res.json({ ok: true, locked_until: lockedUntil, seat_ids, event_id: eventId, order: pendingOrder });
 });
 
 /**
@@ -235,14 +250,20 @@ router.post('/release', authenticate, async (req, res) => {
   const { seat_ids } = req.body;
   if (!Array.isArray(seat_ids) || seat_ids.length === 0)
     return res.status(400).json({ error: 'seat_ids required' });
+
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const ph = seat_ids.map((_, i) => `$${i + 2}`).join(',');
-    await pool.query(
+    await client.query(
       `UPDATE seats
        SET status = 'available', locked_by = NULL, locked_at = NULL, locked_until = NULL
        WHERE locked_by = $1 AND id IN (${ph}) AND status = 'locked'`,
       [req.user.id, ...seat_ids]
     );
+    await cancelPendingOrdersForSeatIds(client, { userId: req.user.id, seatIds: seat_ids });
+    await client.query('COMMIT');
+
     // Cancel the scheduled release job too
     const jobId = `hold:${req.user.id}`;
     const job = await seatReleaseQueue.getJob(jobId);
@@ -251,8 +272,11 @@ router.post('/release', authenticate, async (req, res) => {
     await broadcastSeatUpdate(req.app, seat_ids);
     res.json({ ok: true });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
   }
 });
 
