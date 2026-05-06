@@ -25,11 +25,11 @@ export default function LanguageSwitcher({ className = '' }) {
       <button
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
-        className="flex items-center gap-1.5 h-9 px-3 rounded-full border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-card text-sm font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/80 transition shadow-sm"
+        className="flex items-center gap-1.5 h-9 px-3 rounded-full border border-separator bg-surface text-subhead font-semibold text-label-primary hover:bg-fill-quaternary transition-colors duration-fast ease-standard shadow-1"
       >
         <span>{current.label}</span>
         <svg
-          className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+          className={`w-3.5 h-3.5 text-label-tertiary transition-transform duration-fast ${open ? 'rotate-180' : ''}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -37,16 +37,16 @@ export default function LanguageSwitcher({ className = '' }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-50 w-52 rounded-xl border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-surface py-1.5 shadow-xl shadow-gray-900/10 dark:shadow-black/30 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 z-50 w-52 rounded-xl border border-separator bg-surface py-1.5 shadow-popover overflow-hidden">
           {LANGS.map(lang => (
             <button
               key={lang.code}
               onClick={() => { i18n.changeLanguage(lang.code); setOpen(false); }}
-              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-left text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-dark-card transition"
+              className="flex items-center gap-3 w-full px-4 py-2.5 text-subhead text-left text-label-primary hover:bg-fill-quaternary transition-colors duration-fast"
             >
               <span className="flex-1">{lang.full}</span>
               {current.code === lang.code && (
-                <svg className="w-4 h-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <svg className="w-4 h-4 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               )}
