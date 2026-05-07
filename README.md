@@ -33,7 +33,7 @@ cp .env.example .env   # fill in your secrets
 npm install
 npm run migrate        # run all SQL migrations in order
 npm run seed           # seed 5 sample events + admin + users
-npm run dev            # → http://localhost:4000
+c           # → http://localhost:4000
 ```
 
 **Default accounts after seed:**
