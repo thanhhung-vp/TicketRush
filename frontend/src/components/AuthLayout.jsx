@@ -88,13 +88,15 @@ export function AuthDivider({ text }) {
 export function GoogleAuthButton() {
   const { t } = useTranslation();
   const handleClick = () => {
-    alert(t('auth.googleNotAvailable'));
+    window.location.assign('/api/auth/google');
   };
   return (
     <div className="flex justify-center">
       <button
         type="button"
         onClick={handleClick}
+        aria-label={t('auth.continueWithGoogle')}
+        title={t('auth.continueWithGoogle')}
         className="w-12 h-12 rounded-full border border-gray-200 shadow-sm bg-white hover:bg-gray-50 hover:shadow-md active:scale-95 transition-all flex items-center justify-center cursor-pointer"
       >
         <svg viewBox="0 0 24 24" className="w-5 h-5">

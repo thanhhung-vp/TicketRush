@@ -70,7 +70,14 @@
     "backToLogin": "Trở về Đăng nhập",
     "agreeWith": "Đồng ý với",
     "termsLink": "Điều kiện và điều khoản",
-    "googleNotAvailable": "Tính năng đăng nhập bằng Google đang được phát triển. Vui lòng sử dụng email và mật khẩu để đăng nhập/đăng ký."
+    "googleNotAvailable": "Tính năng đăng nhập bằng Google đang được phát triển. Vui lòng sử dụng email và mật khẩu để đăng nhập/đăng ký.",
+    "continueWithGoogle": "Tiếp tục với Google",
+    "googleCallbackTitle": "Đang đăng nhập bằng Google",
+    "googleCallbackDesc": "Vui lòng chờ trong giây lát...",
+    "googleNotConfigured": "Đăng nhập Google chưa được cấu hình. Hãy điền GOOGLE_CLIENT_ID và GOOGLE_CLIENT_SECRET trong backend/.env.",
+    "googleCancelled": "Bạn đã hủy đăng nhập bằng Google.",
+    "googleInvalidState": "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn. Vui lòng thử lại.",
+    "googleFailed": "Không thể đăng nhập bằng Google. Vui lòng thử lại."
   },
   "forgotPassword": {
     "title": "Đổi mật khẩu",

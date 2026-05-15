@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../lib/api.js';
 
 const AuthContext = createContext(null);
@@ -43,6 +43,13 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  const completeGoogleLogin = useCallback(async (code) => {
+    const { data } = await api.post('/auth/google/complete', { code });
+    saveTokens(data);
+    setUser(data.user);
+    return data.user;
+  }, []);
+
   const logout = async () => {
     const refreshToken = localStorage.getItem('refreshToken');
     try {
@@ -55,7 +62,7 @@ export function AuthProvider({ children }) {
   const updateUser = (updates) => setUser(prev => ({ ...prev, ...updates }));
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, completeGoogleLogin, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

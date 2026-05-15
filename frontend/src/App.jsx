@@ -6,6 +6,7 @@ import Footer from './components/Footer.jsx';
 
 import LoginPage          from './pages/LoginPage.jsx';
 import RegisterPage       from './pages/RegisterPage.jsx';
+import GoogleAuthCallbackPage from './pages/GoogleAuthCallbackPage.jsx';
 import HomePage           from './pages/HomePage.jsx';
 import NewsDetailPage     from './pages/NewsDetailPage.jsx';
 import EventDetailPage    from './pages/EventDetailPage.jsx';
@@ -42,6 +43,7 @@ function AppRoutes() {
           <Route path="/events/:id"        element={<EventDetailPage />} />
           <Route path="/login"             element={<LoginPage />} />
           <Route path="/register"          element={<RegisterPage />} />
+          <Route path="/auth/google/callback" element={<GoogleAuthCallbackPage />} />
           <Route path="/forgot-password"   element={<ForgotPasswordPage />} />
           <Route path="/queue/:eventId"    element={<PrivateRoute><WaitingRoomPage /></PrivateRoute>} />
           <Route path="/checkout"          element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />

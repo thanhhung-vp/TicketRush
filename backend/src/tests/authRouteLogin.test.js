@@ -102,4 +102,13 @@ describe('Auth route login flow', () => {
       role: user.role,
     });
   });
+
+  it('reports when Google login is not configured', async () => {
+    const response = await request(createAuthApp())
+      .get('/auth/google')
+      .set('Accept', 'application/json');
+
+    expect(response.status).toBe(503);
+    expect(response.body).toMatchObject({ error: 'Google login is not configured' });
+  });
 });

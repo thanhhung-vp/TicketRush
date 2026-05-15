@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
@@ -7,15 +7,28 @@ import {
   EnvelopeIcon, LockIcon, EyeIcon, EyeOffIcon,
 } from '../components/AuthLayout.jsx';
 
+function getGoogleErrorMessage(code, t) {
+  const messages = {
+    not_configured: t('auth.googleNotConfigured'),
+    cancelled: t('auth.googleCancelled'),
+    invalid_state: t('auth.googleInvalidState'),
+    failed: t('auth.googleFailed'),
+  };
+  return messages[code] || t('auth.googleFailed');
+}
+
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const googleError = searchParams.get('google_error');
+  const visibleError = error || (googleError ? getGoogleErrorMessage(googleError, t) : '');
 
   const handle = async (e) => {
     e.preventDefault();
@@ -33,9 +46,9 @@ export default function LoginPage() {
   return (
     <AuthBg>
       <AuthCard title={t('auth.loginTitle')}>
-        {error && (
+        {visibleError && (
           <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
-            {error}
+            {visibleError}
           </div>
         )}
 

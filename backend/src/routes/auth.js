@@ -12,6 +12,19 @@ import { generateOtp, hashOtp, verifyOtpHash } from '../services/otp.js';
 import { emailSchema } from '../utils/emailValidation.js';
 
 const router = Router();
+const GOOGLE_STATE_COOKIE = 'ticketrush_google_oauth_state';
+const GOOGLE_STATE_COOKIE_PATH = '/api/auth';
+const GOOGLE_AUTH_CODE_PREFIX = 'google-auth:';
+const GOOGLE_AUTH_CODE_TTL_SECONDS = 60;
+const GOOGLE_OAUTH_SCOPE = 'openid email profile';
+
+const googleProfileSchema = z.object({
+  sub: z.string().min(1),
+  email: emailSchema,
+  email_verified: z.union([z.boolean(), z.string()]).optional(),
+  name: z.string().trim().optional(),
+  picture: z.string().url().optional(),
+});
 
 function generateTokens(user) {
   const accessToken = jwt.sign(
@@ -31,6 +44,121 @@ async function storeRefreshToken(userId, rawToken, db = pool) {
     [userId, hash, expiresAt]
   );
   return hash;
+}
+
+function isGoogleLoginConfigured() {
+  return Boolean(config.google.clientId && config.google.clientSecret && config.google.redirectUri);
+}
+
+function acceptsJson(req) {
+  return req.accepts(['json', 'html']) === 'json';
+}
+
+function getCookieValue(req, name) {
+  const cookieHeader = req.headers.cookie || '';
+  return cookieHeader
+    .split(';')
+    .map(cookie => cookie.trim())
+    .find(cookie => cookie.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+}
+
+function buildClientUrl(path, params = {}) {
+  const url = new URL(path, config.clientUrl);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) url.searchParams.set(key, value);
+  });
+  return url.toString();
+}
+
+function redirectGoogleError(res, code) {
+  return res.redirect(buildClientUrl('/login', { google_error: code }));
+}
+
+function setGoogleStateCookie(res, state) {
+  res.cookie(GOOGLE_STATE_COOKIE, state, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.nodeEnv === 'production',
+    maxAge: 10 * 60 * 1000,
+    path: GOOGLE_STATE_COOKIE_PATH,
+  });
+}
+
+function clearGoogleStateCookie(res) {
+  res.clearCookie(GOOGLE_STATE_COOKIE, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.nodeEnv === 'production',
+    path: GOOGLE_STATE_COOKIE_PATH,
+  });
+}
+
+async function exchangeGoogleCode(code) {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: config.google.clientId,
+      client_secret: config.google.clientSecret,
+      redirect_uri: config.google.redirectUri,
+      grant_type: 'authorization_code',
+    }),
+  });
+
+  if (!response.ok) throw new Error('Google token exchange failed');
+  const payload = await response.json();
+  if (!payload.access_token) throw new Error('Google access token missing');
+  return payload.access_token;
+}
+
+async function fetchGoogleProfile(accessToken) {
+  const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) throw new Error('Google profile request failed');
+  const parsed = googleProfileSchema.safeParse(await response.json());
+  if (!parsed.success) throw new Error('Google profile payload invalid');
+
+  const profile = parsed.data;
+  if (profile.email_verified === false || profile.email_verified === 'false') {
+    throw new Error('Google email is not verified');
+  }
+
+  return profile;
+}
+
+async function findOrCreateGoogleUser(profile) {
+  const email = profile.email;
+  const fullName = profile.name || email.split('@')[0];
+
+  const existing = await pool.query(
+    'SELECT id, email, full_name, role, avatar_url FROM users WHERE email = $1',
+    [email]
+  );
+  if (existing.rows[0]) {
+    const { rows } = await pool.query(
+      `UPDATE users
+       SET avatar_url = COALESCE(avatar_url, $2)
+       WHERE id = $1
+       RETURNING id, email, full_name, role, avatar_url`,
+      [existing.rows[0].id, profile.picture || null]
+    );
+    return rows[0];
+  }
+
+  const generatedPassword = crypto.randomBytes(32).toString('hex');
+  const passwordHash = await bcrypt.hash(generatedPassword, 12);
+  const { rows } = await pool.query(
+    `INSERT INTO users (email, password, full_name, avatar_url)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, email, full_name, role, avatar_url`,
+    [email, passwordHash, fullName, profile.picture || null]
+  );
+
+  return rows[0];
 }
 
 // POST /auth/register
@@ -97,6 +225,94 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /auth/google - start Google OAuth login
+router.get('/google', (req, res) => {
+  if (!isGoogleLoginConfigured()) {
+    if (acceptsJson(req)) {
+      return res.status(503).json({ error: 'Google login is not configured' });
+    }
+    return redirectGoogleError(res, 'not_configured');
+  }
+
+  const state = crypto.randomBytes(24).toString('hex');
+  setGoogleStateCookie(res, state);
+
+  const googleUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  googleUrl.searchParams.set('client_id', config.google.clientId);
+  googleUrl.searchParams.set('redirect_uri', config.google.redirectUri);
+  googleUrl.searchParams.set('response_type', 'code');
+  googleUrl.searchParams.set('scope', GOOGLE_OAUTH_SCOPE);
+  googleUrl.searchParams.set('state', state);
+  googleUrl.searchParams.set('prompt', 'select_account');
+
+  return res.redirect(googleUrl.toString());
+});
+
+async function handleGoogleCallback(req, res) {
+  if (!isGoogleLoginConfigured()) return redirectGoogleError(res, 'not_configured');
+
+  const { code, state, error } = req.query;
+  if (error) return redirectGoogleError(res, 'cancelled');
+  if (
+    typeof code !== 'string' ||
+    typeof state !== 'string' ||
+    getCookieValue(req, GOOGLE_STATE_COOKIE) !== state
+  ) {
+    clearGoogleStateCookie(res);
+    return redirectGoogleError(res, 'invalid_state');
+  }
+
+  clearGoogleStateCookie(res);
+
+  try {
+    const googleAccessToken = await exchangeGoogleCode(code);
+    const profile = await fetchGoogleProfile(googleAccessToken);
+    const user = await findOrCreateGoogleUser(profile);
+    const { accessToken, refreshToken } = generateTokens(user);
+    await storeRefreshToken(user.id, refreshToken);
+
+    const authCode = crypto.randomBytes(32).toString('hex');
+    await redis.setex(
+      `${GOOGLE_AUTH_CODE_PREFIX}${authCode}`,
+      GOOGLE_AUTH_CODE_TTL_SECONDS,
+      JSON.stringify({ accessToken, refreshToken, user })
+    );
+
+    return res.redirect(buildClientUrl('/auth/google/callback', { code: authCode }));
+  } catch (err) {
+    console.error(err);
+    return redirectGoogleError(res, 'failed');
+  }
+}
+
+// GET /auth/google/callback - Google redirects here after account consent
+router.get('/google/callback', handleGoogleCallback);
+router.get('/callback/google', handleGoogleCallback);
+
+// POST /auth/google/complete - exchange one-time local code for app tokens
+const googleCompleteSchema = z.object({
+  code: z.string().regex(/^[a-f0-9]{64}$/i),
+});
+
+router.post('/google/complete', async (req, res) => {
+  const parsed = googleCompleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+  }
+
+  const key = `${GOOGLE_AUTH_CODE_PREFIX}${parsed.data.code}`;
+  try {
+    const payload = await redis.get(key);
+    if (!payload) return res.status(401).json({ error: 'Google login session expired' });
+
+    await redis.del(key);
+    return res.json(JSON.parse(payload));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 

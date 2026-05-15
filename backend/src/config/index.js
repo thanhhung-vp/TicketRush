@@ -1,4 +1,6 @@
 const DEVELOPMENT_JWT_SECRET = 'ticketrush-local-development-secret';
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:4000';
 
 function resolveJwtSecret(env = process.env) {
   const secret = env.JWT_SECRET?.trim();
@@ -12,8 +14,8 @@ function resolveJwtSecret(env = process.env) {
 export const config = {
   port: Number(process.env.PORT) || 4000,
   nodeEnv: process.env.NODE_ENV || 'development',
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
-  serverUrl: process.env.SERVER_URL || 'http://localhost:4000',
+  clientUrl: CLIENT_URL,
+  serverUrl: SERVER_URL,
   db: {
     host: process.env.DB_HOST || 'localhost',
     port: Number(process.env.DB_PORT) || 5432,
@@ -37,6 +39,11 @@ export const config = {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
+  },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri: process.env.GOOGLE_REDIRECT_URI || `${SERVER_URL}/api/auth/google/callback`,
   },
   payment: {
     vnpay: {

@@ -4,7 +4,10 @@ node_modules/
 # Environment
 .env
 .env.local
-.env.*.local
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
 
 # Build output
 dist/
@@ -25,3 +28,4 @@ Thumbs.db
 # Docker volumes
 pgdata/
 redisdata/
+

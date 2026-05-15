@@ -70,7 +70,14 @@
     "backToLogin": "Back to Log in",
     "agreeWith": "I agree to the",
     "termsLink": "Terms and Conditions",
-    "googleNotAvailable": "Google sign-in is coming soon. Please use email and password to log in or sign up."
+    "googleNotAvailable": "Google sign-in is coming soon. Please use email and password to log in or sign up.",
+    "continueWithGoogle": "Continue with Google",
+    "googleCallbackTitle": "Signing in with Google",
+    "googleCallbackDesc": "Please wait a moment...",
+    "googleNotConfigured": "Google sign-in is not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to backend/.env.",
+    "googleCancelled": "You cancelled Google sign-in.",
+    "googleInvalidState": "This Google sign-in session is invalid or expired. Please try again.",
+    "googleFailed": "Could not sign in with Google. Please try again."
   },
   "forgotPassword": {
     "title": "Reset Password",
