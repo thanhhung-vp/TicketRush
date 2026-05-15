@@ -5,8 +5,35 @@ import { adminService } from '../../services/admin.service.js';
 import { Button, Input, Select, Alert } from '../../components/ui/index.js';
 import { PageSpinner } from '../../components/ui/index.js';
 import { PageContainer } from '../../components/layout/PageContainer.jsx';
+import SeatDesigner from '../../components/SeatDesigner.jsx';
 import { CATEGORIES } from '../../utils/constants.js';
-import { formatVND } from '../../utils/format.js';
+
+const CANVAS_W = 860;
+const CANVAS_H = 540;
+
+function buildLayoutFromZones(zones = []) {
+  if (!zones.length) return null;
+
+  return {
+    canvas: { width: CANVAS_W, height: CANVAS_H },
+    stages: [],
+    zones: zones.map((zone, index) => ({
+      id: String(zone.id),
+      dbId: zone.id,
+      name: zone.name,
+      color: zone.color || '#3B82F6',
+      price: Number(zone.price || 0),
+      rows: Number(zone.rows || 5),
+      cols: Number(zone.cols || 8),
+      shape: 'rect',
+      rotation: 0,
+      x: 60 + (index % 2) * 400,
+      y: 140 + Math.floor(index / 2) * 190,
+      width: 300,
+      height: 160,
+    })),
+  };
+}
 
 export default function AdminEventPage() {
   const { id }   = useParams();
@@ -25,8 +52,10 @@ export default function AdminEventPage() {
   });
   const [zones,     setZones]     = useState([]);
   const [newZone,   setNewZone]   = useState({ name: '', rows: '', cols: '', price: '', color: '#3B82F6' });
+  const [layoutJson, setLayoutJson] = useState(null);
   const [loading,   setLoading]   = useState(!isNew);
   const [saving,    setSaving]    = useState(false);
+  const [savingLayout, setSavingLayout] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deleting,  setDeleting]  = useState(false);
   const [error,     setError]     = useState('');
@@ -45,6 +74,7 @@ export default function AdminEventPage() {
             poster_url: rest.poster_url || '',
           });
           setZones(z || []);
+          setLayoutJson(rest.layout_json || null);
         })
         .catch(() => setError('Không thể tải thông tin sự kiện.'))
         .finally(() => setLoading(false));
@@ -118,6 +148,32 @@ export default function AdminEventPage() {
     }
   };
 
+  const saveLayout = async (layoutZones, stages, canvas) => {
+    setSavingLayout(true);
+    setError('');
+    setSuccess('');
+    try {
+      const data = await eventService.saveLayout(id, {
+        zones: layoutZones,
+        stages,
+        canvas,
+      });
+      const layout = data.layout || data;
+      setLayoutJson(layout);
+      setZones((layout.zones || []).map(zone => ({
+        ...zone,
+        id: zone.dbId ?? zone.id,
+        rows: Number(zone.rows || 0),
+        cols: Number(zone.cols || 0),
+      })));
+      setSuccess('Da luu so do su kien.');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Khong the luu so do su kien.');
+    } finally {
+      setSavingLayout(false);
+    }
+  };
+
   const deleteEvent = async () => {
     if (!window.confirm('Xóa sự kiện này? Hành động không thể hoàn tác.')) return;
     setDeleting(true);
@@ -131,6 +187,8 @@ export default function AdminEventPage() {
   };
 
   if (loading) return <PageSpinner />;
+
+  const designerLayout = layoutJson || buildLayoutFromZones(zones);
 
   return (
     <PageContainer maxWidth="max-w-3xl">
@@ -149,7 +207,7 @@ export default function AdminEventPage() {
         </div>
         {!isNew && form.status === 'draft' && (
           <Button
-            variant="danger"
+            variant="destructive"
             onClick={deleteEvent}
             disabled={deleting}
             className="text-sm"
@@ -266,8 +324,33 @@ export default function AdminEventPage() {
         </Button>
       </form>
 
-      {/* Zone management (only after event is created) */}
       {!isNew && (
+        <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 space-y-5">
+          <div className="flex flex-col gap-2 border-b border-gray-800 pb-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-200">So do san khau va khu vuc khan gia</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Tao khu khan gia, chon dang san khau, xoay va resize tung phan tu tren mat bang.
+              </p>
+            </div>
+            {zones.length > 0 && (
+              <div className="text-sm text-gray-500 sm:text-right">
+                <p>{zones.length} khu</p>
+                <p>{zones.reduce((sum, zone) => sum + Number(zone.rows || 0) * Number(zone.cols || 0), 0)} ghe</p>
+              </div>
+            )}
+          </div>
+          <SeatDesigner
+            key={layoutJson ? `layout-${id}` : `zones-${zones.length}`}
+            initialLayout={designerLayout}
+            onSave={saveLayout}
+            saving={savingLayout}
+          />
+        </div>
+      )}
+
+      {/* Zone management (only after event is created) */}
+      {false && !isNew && (
         <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 space-y-5">
           <h2 className="font-semibold border-b border-gray-800 pb-3 text-gray-200">
             Khu vực ghế ngồi

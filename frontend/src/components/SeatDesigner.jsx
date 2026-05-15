@@ -1,5 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Stage, Layer, Rect, Circle, Text, Transformer, Shape, Group, Line } from 'react-konva';
+import {
+  AUDIENCE_ZONE_SHAPES,
+  STAGE_LAYOUT_TYPES,
+  clampRotation,
+  normalizeAudienceShape,
+  normalizeStageLayout,
+} from '../utils/venueLayout.js';
 
 const CANVAS_W = 860;
 const CANVAS_H = 540;
@@ -19,6 +26,8 @@ function makeZone(idx = 0) {
     x: 60 + (idx % 2) * 420,
     y: 140 + Math.floor(idx / 2) * 210,
     width: 300, height: 180,
+    shape: 'rect',
+    rotation: 0,
   };
 }
 
@@ -28,7 +37,8 @@ function makeStageEl(count = 0) {
     x: CANVAS_W / 2 - 110 + count * 12,
     y: 24 + count * 10,
     width: 220, height: 52,
-    shape: 'trapezoid',
+    shape: 'proscenium',
+    rotation: 0,
     label: 'SÂN KHẤU',
   };
 }
@@ -60,12 +70,13 @@ function GridLayer() {
 
 // ── Stage shape renderer ──────────────────────────────────────────────────────
 function StageShapeEl({ shape, width, height, isSelected }) {
+  const normalizedShape = normalizeStageLayout(shape);
   const stroke = isSelected ? 'rgba(200,170,255,0.95)' : 'rgba(200,180,255,0.4)';
   const sBlur  = isSelected ? 22 : 10;
   const sW     = isSelected ? 2 : 1.5;
   const grad   = { fillLinearGradientStartPoint: { x: 0, y: 0 }, fillLinearGradientEndPoint: { x: 0, y: height }, fillLinearGradientColorStops: [0, '#3d2d6a', 1, '#1a1a35'] };
 
-  if (shape === 'trapezoid') {
+  if (normalizedShape === 'proscenium') {
     const off = width * 0.16;
     return (
       <Shape
@@ -81,7 +92,7 @@ function StageShapeEl({ shape, width, height, isSelected }) {
       />
     );
   }
-  if (shape === 'rect') {
+  if (normalizedShape === 'traverse') {
     return (
       <Rect width={width} height={height} {...grad}
         stroke={stroke} strokeWidth={sW} cornerRadius={4}
@@ -89,7 +100,7 @@ function StageShapeEl({ shape, width, height, isSelected }) {
       />
     );
   }
-  if (shape === 'ellipse') {
+  if (normalizedShape === 'arena') {
     const rx = width / 2, ry = height / 2;
     return (
       <Shape
@@ -104,14 +115,36 @@ function StageShapeEl({ shape, width, height, isSelected }) {
       />
     );
   }
-  if (shape === 'semicircle') {
-    const rx = width / 2;
+  if (normalizedShape === 'thrust') {
+    const inset = width * 0.28;
     return (
       <Shape
         sceneFunc={(ctx, s) => {
           ctx.beginPath();
-          ctx.arc(rx, height, rx, Math.PI, 0, false);
+          ctx.moveTo(0, 0);
+          ctx.lineTo(width, 0);
+          ctx.lineTo(width, height * 0.58);
+          ctx.lineTo(width - inset, height * 0.58);
+          ctx.lineTo(width - inset, height);
+          ctx.lineTo(inset, height);
+          ctx.lineTo(inset, height * 0.58);
+          ctx.lineTo(0, height * 0.58);
           ctx.closePath(); ctx.fillStrokeShape(s);
+        }}
+        {...grad}
+        stroke={stroke} strokeWidth={sW}
+        shadowColor="rgba(180,150,255,0.6)" shadowBlur={sBlur} shadowOpacity={0.7}
+      />
+    );
+  }
+  if (normalizedShape === 'catwalk') {
+    return (
+      <Shape
+        sceneFunc={(ctx, s) => {
+          ctx.beginPath();
+          ctx.rect(width * 0.16, 0, width * 0.68, height * 0.42);
+          ctx.rect(width * 0.42, height * 0.38, width * 0.16, height * 0.62);
+          ctx.fillStrokeShape(s);
         }}
         {...grad}
         stroke={stroke} strokeWidth={sW}
@@ -130,23 +163,30 @@ function StageGroup({ stage, isSelected, onSelect, onUpdate }) {
     const node = groupRef.current;
     if (!node) return;
     const sx = node.scaleX(), sy = node.scaleY();
+    const width = Math.max(80, stage.width * sx);
+    const height = Math.max(30, stage.height * sy);
+    const x = node.x() - width / 2;
+    const y = node.y() - height / 2;
+    const rotation = clampRotation(node.rotation());
     node.scaleX(1); node.scaleY(1);
-    onUpdate({ ...stage, x: node.x(), y: node.y(), width: Math.max(80, stage.width * sx), height: Math.max(30, stage.height * sy) });
+    onUpdate({ ...stage, x, y, width, height, rotation });
   }, [stage, onUpdate]);
 
-  const labelY = stage.shape === 'semicircle' ? stage.height * 0.35 : stage.height / 2 - 7;
+  const labelY = normalizeStageLayout(stage.shape) === 'thrust' ? stage.height * 0.24 : stage.height / 2 - 7;
 
   return (
     <Group
       id={`stage-${stage.id}`}
       ref={groupRef}
-      x={stage.x} y={stage.y}
+      x={stage.x + stage.width / 2} y={stage.y + stage.height / 2}
+      offsetX={stage.width / 2} offsetY={stage.height / 2}
+      rotation={clampRotation(stage.rotation)}
       draggable
       onClick={onSelect} onTap={onSelect}
-      onDragEnd={e => onUpdate({ ...stage, x: e.target.x(), y: e.target.y() })}
+      onDragEnd={e => onUpdate({ ...stage, x: e.target.x() - stage.width / 2, y: e.target.y() - stage.height / 2 })}
       onTransformEnd={handleTransformEnd}
     >
-      {stage.shape === 'trapezoid' && [-40,-20,0,20,40].map((off, i) => (
+      {normalizeStageLayout(stage.shape) === 'proscenium' && [-40,-20,0,20,40].map((off, i) => (
         <Line key={i}
           points={[stage.width / 2 + off * 0.3, -30, stage.width / 2 + off * 3, -80]}
           stroke="rgba(255,255,255,0.04)" strokeWidth={6} listening={false}
@@ -168,6 +208,65 @@ function StageGroup({ stage, isSelected, onSelect, onUpdate }) {
 }
 
 // ── Zone group ────────────────────────────────────────────────────────────────
+function ZoneShapeEl({ zone, isSelected }) {
+  const shape = normalizeAudienceShape(zone.shape);
+  const common = {
+    fill: zone.color + '1a',
+    stroke: zone.color,
+    strokeWidth: isSelected ? 2.5 : 1.5,
+    shadowColor: isSelected ? zone.color : 'transparent',
+    shadowBlur: isSelected ? 14 : 0,
+    shadowOpacity: 0.45,
+  };
+
+  if (shape === 'rect') {
+    return <Rect width={zone.width} height={zone.height} cornerRadius={8} {...common} />;
+  }
+  if (shape === 'circle') {
+    return (
+      <Shape sceneFunc={(ctx, s) => {
+        ctx.beginPath();
+        ctx.ellipse(zone.width / 2, zone.height / 2, zone.width / 2, zone.height / 2, 0, 0, Math.PI * 2);
+        ctx.closePath(); ctx.fillStrokeShape(s);
+      }} {...common} />
+    );
+  }
+  if (shape === 'semicircle') {
+    return (
+      <Shape sceneFunc={(ctx, s) => {
+        ctx.beginPath();
+        ctx.arc(zone.width / 2, zone.height, zone.width / 2, Math.PI, 0, false);
+        ctx.lineTo(zone.width, zone.height); ctx.lineTo(0, zone.height);
+        ctx.closePath(); ctx.fillStrokeShape(s);
+      }} {...common} />
+    );
+  }
+  if (shape === 'fan') {
+    return (
+      <Shape sceneFunc={(ctx, s) => {
+        ctx.beginPath();
+        ctx.moveTo(zone.width * 0.08, zone.height);
+        ctx.quadraticCurveTo(zone.width / 2, -zone.height * 0.18, zone.width * 0.92, zone.height);
+        ctx.quadraticCurveTo(zone.width / 2, zone.height * 0.72, zone.width * 0.08, zone.height);
+        ctx.closePath(); ctx.fillStrokeShape(s);
+      }} {...common} />
+    );
+  }
+  if (shape === 'u_shape') {
+    return (
+      <Shape sceneFunc={(ctx, s) => {
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(zone.width, 0); ctx.lineTo(zone.width, zone.height);
+        ctx.lineTo(zone.width * 0.68, zone.height); ctx.lineTo(zone.width * 0.68, zone.height * 0.38);
+        ctx.lineTo(zone.width * 0.32, zone.height * 0.38); ctx.lineTo(zone.width * 0.32, zone.height);
+        ctx.lineTo(0, zone.height); ctx.closePath(); ctx.fillStrokeShape(s);
+      }} {...common} />
+    );
+  }
+
+  return <Rect width={zone.width} height={zone.height} cornerRadius={8} {...common} />;
+}
+
 function ZoneGroup({ zone, isSelected, onSelect, onUpdate }) {
   const groupRef = useRef();
   const dots = seatDots(zone);
@@ -176,27 +275,28 @@ function ZoneGroup({ zone, isSelected, onSelect, onUpdate }) {
     const node = groupRef.current;
     if (!node) return;
     const sx = node.scaleX(), sy = node.scaleY();
+    const width = Math.max(120, zone.width * sx);
+    const height = Math.max(80, zone.height * sy);
+    const x = node.x() - width / 2;
+    const y = node.y() - height / 2;
+    const rotation = clampRotation(node.rotation());
     node.scaleX(1); node.scaleY(1);
-    onUpdate({ ...zone, x: node.x(), y: node.y(), width: Math.max(120, zone.width * sx), height: Math.max(80, zone.height * sy) });
+    onUpdate({ ...zone, x, y, width, height, rotation });
   }, [zone, onUpdate]);
 
   return (
     <Group
       id={`zone-${zone.id}`}
       ref={groupRef}
-      x={zone.x} y={zone.y}
+      x={zone.x + zone.width / 2} y={zone.y + zone.height / 2}
+      offsetX={zone.width / 2} offsetY={zone.height / 2}
+      rotation={clampRotation(zone.rotation)}
       draggable
       onClick={onSelect} onTap={onSelect}
-      onDragEnd={e => onUpdate({ ...zone, x: e.target.x(), y: e.target.y() })}
+      onDragEnd={e => onUpdate({ ...zone, x: e.target.x() - zone.width / 2, y: e.target.y() - zone.height / 2 })}
       onTransformEnd={handleTransformEnd}
     >
-      <Rect
-        width={zone.width} height={zone.height}
-        fill={zone.color + '1a'} stroke={zone.color}
-        strokeWidth={isSelected ? 2.5 : 1.5} cornerRadius={8}
-        shadowColor={isSelected ? zone.color : 'transparent'}
-        shadowBlur={isSelected ? 14 : 0} shadowOpacity={0.45}
-      />
+      <ZoneShapeEl zone={zone} isSelected={isSelected} />
       <Text text={zone.name} x={10} y={7} width={zone.width - 20}
         fontSize={11} fontStyle="bold" fill={zone.color} ellipsis listening={false} />
       <Text
@@ -227,6 +327,16 @@ const STAGE_SHAPES = [
 ];
 
 // ── Main component ────────────────────────────────────────────────────────────
+const ZONE_SHAPE_OPTIONS = AUDIENCE_ZONE_SHAPES.map((shape, index) => ({
+  ...shape,
+  icon: ['▭', '◜', '◠', '○', '∪'][index],
+}));
+
+const STAGE_SHAPE_OPTIONS = STAGE_LAYOUT_TYPES.map((shape, index) => ({
+  ...shape,
+  icon: ['▰', '┬', '◎', '▬', '┯'][index],
+}));
+
 export default function SeatDesigner({ initialLayout, onSave, saving }) {
   const [zones, setZones] = useState(() => {
     if (!initialLayout?.zones?.length) return [];
@@ -237,6 +347,8 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
       rows: Number(z.rows) || 5, cols: Number(z.cols) || 8,
       x: Number(z.x) || 60, y: Number(z.y) || 140,
       width: Number(z.width) || 300, height: Number(z.height) || 180,
+      shape: normalizeAudienceShape(z.shape),
+      rotation: clampRotation(z.rotation),
     }));
   });
 
@@ -248,7 +360,8 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
       y: Number(s.y) || 24,
       width: Number(s.width) || 220,
       height: Number(s.height) || 52,
-      shape: s.shape || 'trapezoid',
+      shape: normalizeStageLayout(s.shape),
+      rotation: clampRotation(s.rotation),
       label: s.label || 'SÂN KHẤU',
     }));
   });
@@ -361,7 +474,7 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
                 ))}
                 <Transformer
                   ref={trRef}
-                  rotateEnabled={false}
+                  rotateEnabled
                   borderStroke="rgba(255,255,255,0.35)" borderStrokeWidth={1}
                   anchorFill="#ffffff" anchorStroke="#888" anchorStrokeWidth={1}
                   anchorSize={9} anchorCornerRadius={2}
@@ -393,6 +506,21 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
 
               <PropRow label="Tên khu">
                 <input type="text" value={selZone.name} onChange={e => setZoneProp('name', e.target.value)} className={inputCls} />
+              </PropRow>
+
+              <PropRow label="Dang khu vuc">
+                <div className="grid grid-cols-2 gap-2">
+                  {ZONE_SHAPE_OPTIONS.map(sh => (
+                    <button key={sh.value} onClick={() => setZoneProp('shape', sh.value)}
+                      className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-xs font-medium transition
+                        ${normalizeAudienceShape(selZone.shape) === sh.value
+                          ? 'bg-blue-50 border-blue-400 text-blue-700'
+                          : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                      <span className="text-base leading-none">{sh.icon}</span>
+                      {sh.label}
+                    </button>
+                  ))}
+                </div>
               </PropRow>
 
               <PropRow label="Màu sắc">
@@ -427,6 +555,16 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
                 </PropRow>
               </div>
 
+              <PropRow label="Goc xoay">
+                <div className="flex items-center gap-2">
+                  <input type="range" min="0" max="359" value={clampRotation(selZone.rotation)}
+                    onChange={e => setZoneProp('rotation', clampRotation(e.target.value))} className="flex-1" />
+                  <input type="number" min="0" max="359" value={clampRotation(selZone.rotation)}
+                    onChange={e => setZoneProp('rotation', clampRotation(e.target.value))}
+                    className="w-16 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-800" />
+                </div>
+              </PropRow>
+
               <div className="rounded-xl p-3 text-center"
                 style={{ backgroundColor: selZone.color + '15', border: `1px solid ${selZone.color}30` }}>
                 <p className="text-2xl font-bold" style={{ color: selZone.color }}>{selZone.rows * selZone.cols}</p>
@@ -453,16 +591,26 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
 
               <PropRow label="Hình dạng">
                 <div className="grid grid-cols-2 gap-2">
-                  {STAGE_SHAPES.map(sh => (
+                  {STAGE_SHAPE_OPTIONS.map(sh => (
                     <button key={sh.value} onClick={() => setStageProp('shape', sh.value)}
                       className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-xs font-medium transition
-                        ${selStage.shape === sh.value
+                        ${normalizeStageLayout(selStage.shape) === sh.value
                           ? 'bg-purple-50 border-purple-400 text-purple-700'
                           : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'}`}>
                       <span className="text-base leading-none">{sh.icon}</span>
                       {sh.label}
                     </button>
                   ))}
+                </div>
+              </PropRow>
+
+              <PropRow label="Goc xoay">
+                <div className="flex items-center gap-2">
+                  <input type="range" min="0" max="359" value={clampRotation(selStage.rotation)}
+                    onChange={e => setStageProp('rotation', clampRotation(e.target.value))} className="flex-1" />
+                  <input type="number" min="0" max="359" value={clampRotation(selStage.rotation)}
+                    onChange={e => setStageProp('rotation', clampRotation(e.target.value))}
+                    className="w-16 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 text-gray-800" />
                 </div>
               </PropRow>
 

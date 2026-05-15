@@ -12,6 +12,30 @@ function getCategoryLabel(value) {
   return CATEGORIES.find(c => c.value === value)?.label ?? value;
 }
 
+function buildFallbackLayout(zones = []) {
+  if (!zones.length) return null;
+
+  return {
+    canvas: { width: 860, height: 540 },
+    stages: [],
+    zones: zones.map((zone, index) => ({
+      id: String(zone.id),
+      dbId: zone.id,
+      name: zone.name,
+      color: zone.color || '#3B82F6',
+      price: Number(zone.price || 0),
+      rows: Number(zone.rows || 5),
+      cols: Number(zone.cols || 8),
+      shape: 'rect',
+      rotation: 0,
+      x: 60 + (index % 2) * 400,
+      y: 120 + Math.floor(index / 2) * 190,
+      width: 300,
+      height: 160,
+    })),
+  };
+}
+
 export default function EventDetailPage() {
   const { id }           = useParams();
   const { user }         = useAuth();
@@ -40,6 +64,7 @@ export default function EventDetailPage() {
   }
 
   const badgeColor = CATEGORY_BADGE_COLORS[event.category] ?? CATEGORY_BADGE_COLORS.other;
+  const seatLayout = event.layout_json || buildFallbackLayout(event.zones);
 
   return (
     <PageContainer>
@@ -137,7 +162,7 @@ export default function EventDetailPage() {
             </div>
           )}
 
-          <SeatMap eventId={id} />
+          <SeatMap eventId={id} layout={seatLayout} />
         </div>
       </div>
     </PageContainer>

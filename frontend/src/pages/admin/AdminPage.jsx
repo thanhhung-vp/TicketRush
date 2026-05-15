@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell,
@@ -9,6 +10,7 @@ import { StatsCard } from '../../components/features/admin/StatsCard.jsx';
 import { PageSpinner, Alert } from '../../components/ui/index.js';
 import { PageContainer } from '../../components/layout/PageContainer.jsx';
 import { formatVND, formatDateShort } from '../../utils/format.js';
+import { getEventOccupancyPercent, getOccupancyPage, OCCUPANCY_PAGE_SIZE } from '../../utils/adminDashboard.js';
 
 const GENDER_COLORS = {
   male:   '#3b82f6',
@@ -103,6 +105,28 @@ export default function AdminPage() {
 /* ---- Sub-tabs ---- */
 
 function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByDay }) {
+  const [searchDraft, setSearchDraft] = useState('');
+  const [occupancyQuery, setOccupancyQuery] = useState('');
+  const [occupancyPage, setOccupancyPage] = useState(1);
+
+  const occupancy = getOccupancyPage(events, {
+    page: occupancyPage,
+    pageSize: OCCUPANCY_PAGE_SIZE,
+    query: occupancyQuery,
+  });
+
+  const submitSearch = (event) => {
+    event.preventDefault();
+    setOccupancyQuery(searchDraft);
+    setOccupancyPage(1);
+  };
+
+  const clearSearch = () => {
+    setSearchDraft('');
+    setOccupancyQuery('');
+    setOccupancyPage(1);
+  };
+
   return (
     <div className="space-y-6">
       {/* Summary stats */}
@@ -145,15 +169,51 @@ function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByD
 
       {/* Per-event occupancy */}
       <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Suc chua su kien</p>
+            {events.length > 0 && (
+              <p className="mt-1 text-xs text-gray-500">
+                Hien thi {occupancy.totalItems} / {events.length} su kien
+              </p>
+            )}
+          </div>
+          <form onSubmit={submitSearch} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <input
+              type="search"
+              value={searchDraft}
+              onChange={event => setSearchDraft(event.target.value)}
+              placeholder="Tim su kien..."
+              className="min-w-0 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none sm:w-64"
+            />
+            <button
+              type="submit"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              Tim
+            </button>
+            {occupancyQuery && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="rounded-lg border border-gray-700 px-3 py-2 text-sm font-medium text-gray-400 transition hover:border-gray-600 hover:text-gray-200"
+              >
+                Xoa
+              </button>
+            )}
+          </form>
+        </div>
         <h2 className="font-semibold mb-4 text-sm text-gray-300">Tỷ lệ lấp đầy theo sự kiện</h2>
         {events.length === 0 ? (
           <p className="text-gray-500 text-sm">Chưa có dữ liệu sự kiện.</p>
+        ) : occupancy.items.length === 0 ? (
+          <p className="text-gray-500 text-sm">Khong tim thay su kien phu hop.</p>
         ) : (
+          <>
           <div className="space-y-3">
-            {events.map(e => {
-              const pct = e.total_seats > 0
-                ? Math.round((e.sold_seats / e.total_seats) * 100)
-                : 0;
+            {occupancy.items.map(e => {
+              const pct = getEventOccupancyPercent(e);
               return (
                 <div key={e.id}>
                   <div className="flex justify-between text-sm mb-1">
@@ -172,6 +232,34 @@ function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByD
               );
             })}
           </div>
+          {occupancy.totalPages > 1 && (
+            <div className="mt-5 flex flex-col gap-2 border-t border-gray-800 pt-4 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                Trang {occupancy.currentPage} / {occupancy.totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOccupancyPage(page => page - 1)}
+                  disabled={occupancy.currentPage <= 1}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-700 px-3 py-1.5 font-medium transition hover:border-gray-600 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                  Trước
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOccupancyPage(page => page + 1)}
+                  disabled={occupancy.currentPage >= occupancy.totalPages}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-700 px-3 py-1.5 font-medium transition hover:border-gray-600 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Sau
+                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
     </div>

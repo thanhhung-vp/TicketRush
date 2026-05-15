@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const CATEGORIES = [
-  'music', 'fan_meeting', 'merchandise', 'arts', 'sports',
+  'music', 'fan_meeting', 'arts', 'sports',
   'conference', 'education', 'nightlife', 'livestream', 'travel', 'other',
 ];
 

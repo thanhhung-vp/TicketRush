@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getEventOccupancyPercent, getOccupancyPage, OCCUPANCY_PAGE_SIZE } from '../utils/adminDashboard.js';
 
 function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', notation: 'compact' }).format(n);
@@ -124,6 +126,27 @@ function StatCard({ label, value, sub, gradient }) {
 }
 
 function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByDay, formatDate, t }) {
+  const [searchDraft, setSearchDraft] = useState('');
+  const [occupancyQuery, setOccupancyQuery] = useState('');
+  const [occupancyPage, setOccupancyPage] = useState(1);
+  const occupancy = getOccupancyPage(events, {
+    page: occupancyPage,
+    pageSize: OCCUPANCY_PAGE_SIZE,
+    query: occupancyQuery,
+  });
+
+  const submitSearch = (event) => {
+    event.preventDefault();
+    setOccupancyQuery(searchDraft);
+    setOccupancyPage(1);
+  };
+
+  const clearSearch = () => {
+    setSearchDraft('');
+    setOccupancyQuery('');
+    setOccupancyPage(1);
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -151,10 +174,39 @@ function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByD
       </div>
 
       <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-        <h2 className="font-semibold mb-4 text-gray-700">{t('admin.occupancyByEvent')}</h2>
-        <div className="space-y-3">
-          {events.map(e => {
-            const pct = e.total_seats > 0 ? Math.round((e.sold_seats / e.total_seats) * 100) : 0;
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-700">{t('admin.occupancyByEvent')}</h2>
+            <p className="mt-1 text-xs text-gray-400">Hien thi {occupancy.totalItems} / {events.length} su kien</p>
+          </div>
+          <form onSubmit={submitSearch} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <input
+              type="search"
+              value={searchDraft}
+              onChange={event => setSearchDraft(event.target.value)}
+              placeholder="Tim su kien..."
+              className="min-w-0 rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-64"
+            />
+            <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
+              <Search className="h-4 w-4" aria-hidden="true" />
+              Tim
+            </button>
+            {occupancyQuery && (
+              <button type="button" onClick={clearSearch} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                Xoa
+              </button>
+            )}
+          </form>
+        </div>
+        {events.length === 0 ? (
+          <p className="text-sm text-gray-400">Chua co du lieu su kien.</p>
+        ) : occupancy.items.length === 0 ? (
+          <p className="text-sm text-gray-400">Khong tim thay su kien phu hop.</p>
+        ) : (
+          <>
+          <div className="space-y-3">
+          {occupancy.items.map(e => {
+            const pct = getEventOccupancyPercent(e);
             const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-blue-500' : pct >= 20 ? 'bg-amber-500' : 'bg-gray-400';
             return (
               <div key={e.id}>
@@ -168,7 +220,34 @@ function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByD
               </div>
             );
           })}
-        </div>
+          </div>
+          {occupancy.totalPages > 1 && (
+            <div className="mt-5 flex flex-col gap-2 border-t border-gray-100 pt-4 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+              <span>Trang {occupancy.currentPage} / {occupancy.totalPages}</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOccupancyPage(page => page - 1)}
+                  disabled={occupancy.currentPage <= 1}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                  Truoc
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOccupancyPage(page => page + 1)}
+                  disabled={occupancy.currentPage >= occupancy.totalPages}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 font-semibold transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Sau
+                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          )}
+          </>
+        )}
       </div>
     </div>
   );

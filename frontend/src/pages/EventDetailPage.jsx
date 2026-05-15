@@ -4,11 +4,11 @@ import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import SeatMap from '../components/SeatMap.jsx';
+import { clampRotation, normalizeAudienceShape, normalizeStageLayout } from '../utils/venueLayout.js';
 
 const CATEGORY_GRADIENTS = {
   music:       'from-purple-700 via-pink-600 to-rose-500',
   fan_meeting: 'from-rose-600 via-pink-500 to-fuchsia-500',
-  merchandise: 'from-amber-600 via-orange-500 to-yellow-400',
   arts:        'from-fuchsia-700 via-purple-600 to-indigo-500',
   sports:      'from-emerald-700 via-green-600 to-teal-500',
   conference:  'from-blue-700 via-indigo-600 to-cyan-500',
@@ -37,10 +37,130 @@ function formatVND(n) {
   return new Intl.NumberFormat('vi-VN').format(n) + ' VND';
 }
 
+function buildFallbackLayout(zones = []) {
+  if (!zones.length) return null;
+
+  return {
+    canvas: { width: 860, height: 540 },
+    stages: [],
+    zones: zones.map((zone, index) => ({
+      id: String(zone.id),
+      dbId: zone.id,
+      name: zone.name,
+      color: zone.color || '#3B82F6',
+      price: Number(zone.price || 0),
+      rows: Number(zone.rows || 5),
+      cols: Number(zone.cols || 8),
+      shape: 'rect',
+      rotation: 0,
+      x: 60 + (index % 2) * 400,
+      y: 120 + Math.floor(index / 2) * 190,
+      width: 300,
+      height: 160,
+    })),
+  };
+}
+
 function rrect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   if (ctx.roundRect) { ctx.roundRect(x, y, w, h, r); }
   else { ctx.rect(x, y, w, h); }
+}
+
+function withRotatedItem(ctx, item, sx, sy, draw) {
+  const x = Number(item.x || 0) * sx;
+  const y = Number(item.y || 0) * sy;
+  const w = Number(item.width || 0) * sx;
+  const h = Number(item.height || 0) * sy;
+  const rotation = clampRotation(item.rotation);
+
+  ctx.save();
+  if (rotation) {
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.translate(-(x + w / 2), -(y + h / 2));
+  }
+  draw({ x, y, w, h });
+  ctx.restore();
+}
+
+function drawStagePreview(ctx, stage, sx, sy, t) {
+  withRotatedItem(ctx, stage, sx, sy, ({ x, y, w, h }) => {
+    const shape = normalizeStageLayout(stage.shape);
+    const grad = ctx.createLinearGradient(x, y, x, y + h);
+    grad.addColorStop(0, '#3d2d6a'); grad.addColorStop(1, '#1a1a35');
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = 'rgba(200,180,255,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+
+    if (shape === 'proscenium') {
+      const off = w * 0.16;
+      ctx.moveTo(x + off, y); ctx.lineTo(x + w - off, y); ctx.lineTo(x + w, y + h); ctx.lineTo(x, y + h);
+      ctx.closePath();
+    } else if (shape === 'arena') {
+      ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    } else if (shape === 'thrust') {
+      const inset = w * 0.28;
+      ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h * 0.58);
+      ctx.lineTo(x + w - inset, y + h * 0.58); ctx.lineTo(x + w - inset, y + h);
+      ctx.lineTo(x + inset, y + h); ctx.lineTo(x + inset, y + h * 0.58);
+      ctx.lineTo(x, y + h * 0.58); ctx.closePath();
+    } else if (shape === 'catwalk') {
+      ctx.moveTo(x + w * 0.16, y); ctx.lineTo(x + w * 0.84, y); ctx.lineTo(x + w * 0.84, y + h * 0.42);
+      ctx.lineTo(x + w * 0.58, y + h * 0.42); ctx.lineTo(x + w * 0.58, y + h);
+      ctx.lineTo(x + w * 0.42, y + h); ctx.lineTo(x + w * 0.42, y + h * 0.42);
+      ctx.lineTo(x + w * 0.16, y + h * 0.42); ctx.closePath();
+    } else {
+      rrect(ctx, x, y, w, h, 4);
+    }
+
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = `bold ${Math.round(11 * Math.min(sx, sy))}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(stage.label || t('event.noSeatmap').toUpperCase(), x + w / 2, y + h / 2 + 4);
+  });
+}
+
+function drawZonePreview(ctx, zone, sx, sy, t) {
+  withRotatedItem(ctx, zone, sx, sy, ({ x, y, w, h }) => {
+    const shape = normalizeAudienceShape(zone.shape);
+    const c = zone.color || '#3B82F6';
+    ctx.fillStyle = c + '22';
+    ctx.strokeStyle = c;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+
+    if (shape === 'circle') {
+      ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    } else if (shape === 'semicircle') {
+      ctx.ellipse(x + w / 2, y + h, w / 2, h, 0, Math.PI, 0, true);
+      ctx.lineTo(x, y + h);
+      ctx.closePath();
+    } else if (shape === 'fan') {
+      ctx.moveTo(x + w * 0.08, y + h);
+      ctx.quadraticCurveTo(x + w / 2, y - h * 0.18, x + w * 0.92, y + h);
+      ctx.quadraticCurveTo(x + w / 2, y + h * 0.72, x + w * 0.08, y + h);
+      ctx.closePath();
+    } else if (shape === 'u_shape') {
+      ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x + w * 0.68, y + h); ctx.lineTo(x + w * 0.68, y + h * 0.38);
+      ctx.lineTo(x + w * 0.32, y + h * 0.38); ctx.lineTo(x + w * 0.32, y + h);
+      ctx.lineTo(x, y + h); ctx.closePath();
+    } else {
+      rrect(ctx, x, y, w, h, 6);
+    }
+
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = c;
+    ctx.font = `bold ${Math.round(11 * Math.min(sx, sy))}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(zone.name, x + w / 2, y + h / 2 - 4);
+    ctx.fillStyle = c + '99';
+    ctx.font = `${Math.round(9 * Math.min(sx, sy))}px sans-serif`;
+    ctx.fillText(`${(zone.rows || 5) * (zone.cols || 8)} ${t('event.seatsAvailable')}`, x + w / 2, y + h / 2 + 12);
+  });
 }
 
 function SeatmapPreview({ event, zoom, t }) {
@@ -55,7 +175,7 @@ function SeatmapPreview({ event, zoom, t }) {
     ctx.fillStyle = '#0d0d14';
     ctx.fillRect(0, 0, W, H);
 
-    const layout = event.layout_json;
+    const layout = event.layout_json || buildFallbackLayout(event.zones);
 
     if (layout?.zones?.length) {
       const srcW = layout.canvas?.width || 860;
@@ -69,44 +189,10 @@ function SeatmapPreview({ event, zoom, t }) {
       for (let y = 0; y <= srcH; y += 40) { ctx.beginPath(); ctx.moveTo(0,y*sy); ctx.lineTo(W,y*sy); ctx.stroke(); }
 
       // Stages
-      for (const s of layout.stages || []) {
-        const x = s.x*sx, y = s.y*sy, w = s.width*sx, h = s.height*sy;
-        const grad = ctx.createLinearGradient(x, y, x, y+h);
-        grad.addColorStop(0, '#3d2d6a'); grad.addColorStop(1, '#1a1a35');
-        ctx.fillStyle = grad;
-        ctx.strokeStyle = 'rgba(200,180,255,0.5)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        if (s.shape === 'trapezoid') {
-          const off = w * 0.16;
-          ctx.moveTo(x+off,y); ctx.lineTo(x+w-off,y); ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h);
-          ctx.closePath();
-        } else if (s.shape === 'ellipse') {
-          ctx.ellipse(x+w/2, y+h/2, w/2, h/2, 0, 0, Math.PI*2);
-        } else if (s.shape === 'semicircle') {
-          ctx.arc(x+w/2, y+h, w/2, Math.PI, 0, false); ctx.closePath();
-        } else { rrect(ctx, x, y, w, h, 4); }
-        ctx.fill(); ctx.stroke();
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.font = `bold ${Math.round(11*Math.min(sx,sy))}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.fillText(s.label || t('event.noSeatmap').toUpperCase(), x+w/2, y+h/2+4);
-      }
+      for (const s of layout.stages || []) drawStagePreview(ctx, s, sx, sy, t);
 
       // Zones
-      for (const z of layout.zones) {
-        const x = z.x*sx, y = z.y*sy, w = z.width*sx, h = z.height*sy;
-        const c = z.color || '#3B82F6';
-        ctx.fillStyle = c + '22'; ctx.strokeStyle = c; ctx.lineWidth = 1.5;
-        rrect(ctx, x, y, w, h, 6); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = c;
-        ctx.font = `bold ${Math.round(11*Math.min(sx,sy))}px sans-serif`;
-        ctx.textAlign = 'left';
-        ctx.fillText(z.name, x+8*sx, y+18*sy);
-        ctx.fillStyle = c + '99';
-        ctx.font = `${Math.round(9*Math.min(sx,sy))}px sans-serif`;
-        ctx.fillText(`${(z.rows||5)*(z.cols||8)} ${t('event.seatsAvailable')}`, x+8*sx, y+30*sy);
-      }
+      for (const z of layout.zones) drawZonePreview(ctx, z, sx, sy, t);
     } else if (event.zones?.length) {
       const cols = 2, pad = 20, blockW = (W - pad*(cols+1))/cols, blockH = 72;
       event.zones.forEach((z, i) => {
@@ -204,6 +290,7 @@ export default function EventDetailPage() {
   const isScheduled = event.status === 'scheduled';
   const isSoldOut   = !isClosed && !isScheduled && event.zones?.length > 0 && event.zones.every(z => Number(z.available_seats) === 0);
   const eventStatus = isClosed ? 'ended' : isScheduled ? 'scheduled' : isSoldOut ? 'soldout' : 'onsale';
+  const seatLayout = event.layout_json || buildFallbackLayout(event.zones);
 
   const TABS = [
     { key: 'seats', label: t('event.tabs.seats') },
@@ -463,7 +550,7 @@ export default function EventDetailPage() {
             {/* Seat map — only for open events */}
             {!isClosed && (
               <div className="bg-gray-950 rounded-2xl p-5 text-white">
-                <SeatMap eventId={id} />
+                <SeatMap eventId={id} layout={seatLayout} />
               </div>
             )}
           </div>

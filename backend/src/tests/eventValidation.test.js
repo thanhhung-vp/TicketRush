@@ -35,4 +35,10 @@ describe('event validation', () => {
     expect(result.success).toBe(true);
     expect(result.data.description).toBeNull();
   });
+
+  it('rejects merchandise as an event category', () => {
+    const result = eventSchema.safeParse({ ...validEvent, category: 'merchandise' });
+
+    expect(result.success).toBe(false);
+  });
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Bar,
@@ -13,16 +13,41 @@ import {
   YAxis,
 } from 'recharts';
 import api from '../lib/api.js';
-import MerchManager from '../components/MerchManager.jsx';
 import SeatDesigner from '../components/SeatDesigner.jsx';
 
 const CATEGORY_VALUES = [
-  'music', 'fan_meeting', 'merchandise', 'arts', 'sports',
+  'music', 'fan_meeting', 'arts', 'sports',
   'conference', 'education', 'nightlife', 'livestream', 'travel', 'other',
 ];
 
 const GENDER_COLORS = { male: '#3b82f6', female: '#ec4899', other: '#a78bfa', unknown: '#94a3b8' };
 const AGE_COLOR = '#6366f1';
+const CANVAS_W = 860;
+const CANVAS_H = 540;
+
+function buildLayoutFromZones(zones = []) {
+  if (!zones.length) return null;
+
+  return {
+    canvas: { width: CANVAS_W, height: CANVAS_H },
+    stages: [],
+    zones: zones.map((zone, index) => ({
+      id: String(zone.id),
+      dbId: zone.id,
+      name: zone.name,
+      color: zone.color || '#3B82F6',
+      price: Number(zone.price || 0),
+      rows: Number(zone.rows || 5),
+      cols: Number(zone.cols || 8),
+      shape: 'rect',
+      rotation: 0,
+      x: 60 + (index % 2) * 400,
+      y: 140 + Math.floor(index / 2) * 190,
+      width: 300,
+      height: 160,
+    })),
+  };
+}
 
 export default function AdminEventPage() {
   const { id }      = useParams();
@@ -191,13 +216,13 @@ export default function AdminEventPage() {
   };
 
   if (loading) return <div className="text-center py-20 text-gray-400">{t('common.loading')}</div>;
+  const designerLayout = layoutJson || buildLayoutFromZones(zones);
 
   const TABS = [
-    { key: 'info',   label: t('adminEvent.tabInfo') },
+      { key: 'info',   label: t('adminEvent.tabInfo') },
     ...(isNew ? [] : [
       { key: 'design',   label: t('adminEvent.tabDesign') },
       { key: 'audience', label: t('adminEvent.tabAudience') },
-      { key: 'merch',    label: t('adminEvent.tabMerch') },
     ]),
   ];
 
@@ -375,7 +400,8 @@ export default function AdminEventPage() {
             )}
           </div>
           <SeatDesigner
-            initialLayout={layoutJson}
+            key={layoutJson ? `layout-${id}` : `zones-${zones.length}`}
+            initialLayout={designerLayout}
             onSave={saveLayout}
             saving={savingLayout}
           />
@@ -385,22 +411,6 @@ export default function AdminEventPage() {
       {/* ── Tab: Audience ── */}
       {activeTab === 'audience' && !isNew && (
         <AudiencePanel audience={audience} t={t} getGenderLabel={getGenderLabel} />
-      )}
-
-      {/* ── Tab: Merch ── */}
-      {activeTab === 'merch' && !isNew && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-800">{t('adminEvent.merchTitle')}</h2>
-            <Link
-              to={`/admin/events/${id}/checkin`}
-              className="text-sm bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 px-3 py-1.5 rounded-lg transition font-medium"
-            >
-              {t('adminEvent.checkinLink')}
-            </Link>
-          </div>
-          <MerchManager eventId={id} />
-        </div>
       )}
     </div>
   );

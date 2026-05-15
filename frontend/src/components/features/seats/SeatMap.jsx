@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../store/auth.context.jsx';
 import { seatService } from '../../../services/seat.service.js';
+import { eventService } from '../../../services/event.service.js';
 import { useEventSocket } from '../../../hooks/useEventSocket.js';
 import { useCountdown } from '../../../hooks/useCountdown.js';
 import { formatVND, formatCountdown } from '../../../utils/format.js';
 import { MAX_SEATS } from '../../../utils/constants.js';
+import { clampRotation, normalizeAudienceShape, normalizeStageLayout } from '../../../utils/venueLayout.js';
 
 const STATUS_STYLE = {
   available: 'bg-gray-700 hover:ring-2 hover:ring-blue-400 cursor-pointer',
@@ -14,7 +16,186 @@ const STATUS_STYLE = {
   selected:  'bg-blue-500 ring-2 ring-blue-300 cursor-pointer',
 };
 
-export default function SeatMap({ eventId, initialSeats = [] }) {
+function hexToRgba(hex = '#3B82F6', alpha = 1) {
+  const clean = /^#[0-9A-Fa-f]{6}$/.test(hex) ? hex : '#3B82F6';
+  const r = parseInt(clean.slice(1, 3), 16);
+  const g = parseInt(clean.slice(3, 5), 16);
+  const b = parseInt(clean.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getZonePath(zone) {
+  const w = Number(zone.width || 0);
+  const h = Number(zone.height || 0);
+  const shape = normalizeAudienceShape(zone.shape);
+
+  if (shape === 'fan') {
+    return `M ${w * 0.08} ${h} Q ${w / 2} ${-h * 0.18} ${w * 0.92} ${h} Q ${w / 2} ${h * 0.72} ${w * 0.08} ${h} Z`;
+  }
+  if (shape === 'semicircle') {
+    return `M 0 ${h} A ${w / 2} ${h} 0 0 1 ${w} ${h} L 0 ${h} Z`;
+  }
+  if (shape === 'u_shape') {
+    return `M 0 0 H ${w} V ${h} H ${w * 0.68} V ${h * 0.38} H ${w * 0.32} V ${h} H 0 Z`;
+  }
+  return `M 0 0 H ${w} V ${h} H 0 Z`;
+}
+
+function getStagePath(stage) {
+  const w = Number(stage.width || 0);
+  const h = Number(stage.height || 0);
+  const shape = normalizeStageLayout(stage.shape);
+
+  if (shape === 'proscenium') {
+    const off = w * 0.16;
+    return `M ${off} 0 H ${w - off} L ${w} ${h} H 0 Z`;
+  }
+  if (shape === 'thrust') {
+    const inset = w * 0.28;
+    return `M 0 0 H ${w} V ${h * 0.58} H ${w - inset} V ${h} H ${inset} V ${h * 0.58} H 0 Z`;
+  }
+  if (shape === 'catwalk') {
+    return `M ${w * 0.16} 0 H ${w * 0.84} V ${h * 0.42} H ${w * 0.58} V ${h} H ${w * 0.42} V ${h * 0.42} H ${w * 0.16} Z`;
+  }
+  return `M 0 0 H ${w} V ${h} H 0 Z`;
+}
+
+function rotateTransform(item) {
+  const rotation = clampRotation(item.rotation);
+  if (!rotation) return undefined;
+  const cx = Number(item.x || 0) + Number(item.width || 0) / 2;
+  const cy = Number(item.y || 0) + Number(item.height || 0) / 2;
+  return `rotate(${rotation} ${cx} ${cy})`;
+}
+
+function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
+  if (!layout?.zones?.length) return null;
+
+  const canvas = layout.canvas || { width: 860, height: 540 };
+  const zonesById = new Map(zoneGroups.map(zone => [String(zone.zone_id), zone]));
+
+  return (
+    <div className="rounded-2xl border border-gray-800 bg-gray-950/80 p-4">
+      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-white">So do tong quan</h3>
+          <p className="text-xs text-gray-500">Bam vao mot khu de chuyen nhanh den danh sach ghe.</p>
+        </div>
+        <p className="text-xs text-gray-500">{layout.zones.length} khu ve</p>
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#0d0d14]">
+        <svg
+          viewBox={`0 0 ${canvas.width || 860} ${canvas.height || 540}`}
+          className="block min-w-[640px] w-full"
+          role="img"
+          aria-label="So do tong quan su kien"
+        >
+          <defs>
+            <linearGradient id="stageFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#4c1d95" />
+              <stop offset="100%" stopColor="#1e1b4b" />
+            </linearGradient>
+          </defs>
+          {(layout.stages || []).map(stage => {
+            const shape = normalizeStageLayout(stage.shape);
+            const common = {
+              fill: 'url(#stageFill)',
+              stroke: 'rgba(216, 180, 254, 0.72)',
+              strokeWidth: 2,
+            };
+
+            return (
+              <g key={stage.id} transform={rotateTransform(stage)}>
+                {shape === 'arena' ? (
+                  <ellipse
+                    cx={Number(stage.x || 0) + Number(stage.width || 0) / 2}
+                    cy={Number(stage.y || 0) + Number(stage.height || 0) / 2}
+                    rx={Number(stage.width || 0) / 2}
+                    ry={Number(stage.height || 0) / 2}
+                    {...common}
+                  />
+                ) : (
+                  <path d={getStagePath(stage)} transform={`translate(${stage.x || 0} ${stage.y || 0})`} {...common} />
+                )}
+                <text
+                  x={Number(stage.x || 0) + Number(stage.width || 0) / 2}
+                  y={Number(stage.y || 0) + Number(stage.height || 0) / 2 + 4}
+                  textAnchor="middle"
+                  className="fill-white/70 text-[11px] font-bold uppercase tracking-[0.25em]"
+                >
+                  {stage.label || 'STAGE'}
+                </text>
+              </g>
+            );
+          })}
+          {(layout.zones || []).map(zone => {
+            const zoneId = String(zone.dbId || zone.id);
+            const group = zonesById.get(zoneId);
+            const total = group?.seats?.length || Number(zone.rows || 0) * Number(zone.cols || 0);
+            const available = group?.seats?.filter(seat => seat.status === 'available').length ?? 0;
+            const color = zone.color || '#3B82F6';
+            const shape = normalizeAudienceShape(zone.shape);
+            const zoneLabel = `${zone.name || 'Khu'} - ${available}/${total} ghe trong`;
+            const transform = rotateTransform(zone);
+
+            return (
+              <g
+                key={zoneId}
+                transform={transform}
+                role="button"
+                tabIndex={0}
+                aria-label={zoneLabel}
+                onClick={() => onZoneFocus(zoneId)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') onZoneFocus(zoneId);
+                }}
+                className="cursor-pointer outline-none"
+              >
+                {shape === 'circle' ? (
+                  <ellipse
+                    cx={Number(zone.x || 0) + Number(zone.width || 0) / 2}
+                    cy={Number(zone.y || 0) + Number(zone.height || 0) / 2}
+                    rx={Number(zone.width || 0) / 2}
+                    ry={Number(zone.height || 0) / 2}
+                    fill={hexToRgba(color, 0.18)}
+                    stroke={color}
+                    strokeWidth="2"
+                  />
+                ) : (
+                  <path
+                    d={getZonePath(zone)}
+                    transform={`translate(${zone.x || 0} ${zone.y || 0})`}
+                    fill={hexToRgba(color, 0.18)}
+                    stroke={color}
+                    strokeWidth="2"
+                  />
+                )}
+                <text
+                  x={Number(zone.x || 0) + Number(zone.width || 0) / 2}
+                  y={Number(zone.y || 0) + Number(zone.height || 0) / 2 - 4}
+                  textAnchor="middle"
+                  className="pointer-events-none fill-white text-[13px] font-bold"
+                >
+                  {zone.name}
+                </text>
+                <text
+                  x={Number(zone.x || 0) + Number(zone.width || 0) / 2}
+                  y={Number(zone.y || 0) + Number(zone.height || 0) / 2 + 14}
+                  textAnchor="middle"
+                  className="pointer-events-none fill-white/60 text-[11px]"
+                >
+                  {available}/{total} ghe trong
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -24,6 +205,26 @@ export default function SeatMap({ eventId, initialSeats = [] }) {
   const [lockedUntil, setLockedUntil] = useState(null);
   const [heldSeats, setHeldSeats] = useState([]);
   const [error, setError]         = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setError('');
+    eventService.getSeats(eventId)
+      .then(data => {
+        if (!active) return;
+        setSeats(Array.isArray(data) ? data : []);
+      })
+      .catch(err => {
+        if (!active) return;
+        const data = err.response?.data;
+        if (data?.code === 'QUEUE_REQUIRED' && user) {
+          navigate(`/queue/${data.event_id || eventId}`, { replace: true });
+          return;
+        }
+        setError(data?.error || 'Khong the tai so do ghe.');
+      });
+    return () => { active = false; };
+  }, [eventId, navigate, user]);
 
   // Real-time seat updates via Socket.io
   useEventSocket(eventId, (updatedSeats) => {
@@ -97,11 +298,15 @@ export default function SeatMap({ eventId, initialSeats = [] }) {
     if (!zones[s.zone_id]) zones[s.zone_id] = { ...s, seats: [] };
     zones[s.zone_id].seats.push(s);
   });
+  const zoneGroups = Object.values(zones);
 
   const selectedSeats  = seats.filter(s => selected.has(s.id));
   const heldSeatObjs   = seats.filter(s => heldSeats.includes(s.id));
   const total          = [...selectedSeats, ...heldSeatObjs].reduce((acc, s) => acc + Number(s.price), 0);
   const fmtCountdown   = countdown != null ? formatCountdown(countdown) : null;
+  const focusZone = (zoneId) => {
+    document.getElementById(`zone-grid-${zoneId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <div className="space-y-6">
@@ -119,8 +324,10 @@ export default function SeatMap({ eventId, initialSeats = [] }) {
         ))}
       </div>
 
+      <VenueOverview layout={layout} zoneGroups={zoneGroups} onZoneFocus={focusZone} />
+
       {/* Seat zones */}
-      {Object.values(zones).map(zone => (
+      {zoneGroups.map(zone => (
         <ZoneGrid
           key={zone.zone_id}
           zone={zone}
@@ -167,7 +374,7 @@ function ZoneGrid({ zone, selected, heldSeats, onToggle }) {
   });
 
   return (
-    <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+    <div id={`zone-grid-${zone.zone_id}`} className="scroll-mt-24 bg-gray-900 rounded-xl p-5 border border-gray-800">
       <div className="flex items-center gap-2 mb-4">
         <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: zone.color }} />
         <span className="font-semibold">{zone.zone_name}</span>

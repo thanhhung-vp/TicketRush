@@ -19,7 +19,6 @@ const CATEGORY_KEYS = [
   { value: '',            key: null },
   { value: 'music',       key: 'music' },
   { value: 'fan_meeting', key: 'fan_meeting' },
-  { value: 'merchandise', key: 'merchandise' },
   { value: 'arts',        key: 'arts' },
   { value: 'sports',      key: 'sports' },
   { value: 'conference',  key: 'conference' },
@@ -32,7 +31,6 @@ const CATEGORY_KEYS = [
 const CATEGORY_COLORS = {
   music:       'bg-pink-50 dark:bg-pink-950/60 text-pink-600 dark:text-pink-400 border-pink-200 dark:border-pink-800',
   fan_meeting: 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800',
-  merchandise: 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800',
   arts:        'bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800',
   sports:      'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800',
   conference:  'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800',
