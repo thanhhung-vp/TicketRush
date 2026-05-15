@@ -1,9 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Newspaper } from 'lucide-react';
 import api from '../lib/api.js';
+import {
+  clampPage,
+  getCompactPaginationItems,
+  getPageItems,
+  getTotalPages,
+  splitEventsBySchedule,
+} from '../utils/homeSections.js';
 
-const PAGE_SIZE = 12;
+const EVENT_PAGE_SIZE = 8;
+const NEWS_LIMIT = 4;
 
 // Only values — labels resolved via t() inside component
 const CATEGORY_KEYS = [
@@ -60,8 +69,8 @@ export default function HomePage() {
   const [bannerLoading, setBannerLoading] = useState(true);
   const [newsLoading, setNewsLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const [pastPage, setPastPage] = useState(1);
   const tabsRef = useRef(null);
 
   // Translated labels — re-computed on language change
@@ -129,7 +138,7 @@ export default function HomePage() {
     async function fetchNews() {
       setNewsLoading(true);
       try {
-        const { data } = await api.get('/news', { params: { limit: 4 }, signal: controller.signal });
+        const { data } = await api.get('/news', { params: { limit: NEWS_LIMIT }, signal: controller.signal });
         if (!controller.signal.aborted) setNews(Array.isArray(data) ? data : []);
       } catch {
         if (!controller.signal.aborted) setNews([]);
@@ -147,9 +156,10 @@ export default function HomePage() {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
-      setHasMore(false);
+      setUpcomingPage(1);
+      setPastPage(1);
       try {
-        const params = { limit: PAGE_SIZE, offset: 0 };
+        const params = {};
         if (search)   params.search    = search;
         if (category) params.category  = category;
         if (sort)     params.sort      = sort;
@@ -158,7 +168,6 @@ export default function HomePage() {
         const { data } = await api.get('/events', { params, signal: controller.signal });
         const list = Array.isArray(data) ? data : [];
         setEvents(list);
-        setHasMore(list.length === PAGE_SIZE);
       } catch {
         if (!controller.signal.aborted) setEvents([]);
       } finally {
@@ -172,24 +181,6 @@ export default function HomePage() {
     };
   }, [search, category, sort, dateFrom, dateTo]);
 
-  const loadMore = async () => {
-    if (loadingMore || !hasMore) return;
-    setLoadingMore(true);
-    try {
-      const params = { limit: PAGE_SIZE, offset: events.length };
-      if (search)   params.search    = search;
-      if (category) params.category  = category;
-      if (sort)     params.sort      = sort;
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo)   params.date_to   = dateTo;
-      const { data } = await api.get('/events', { params });
-      const newList = Array.isArray(data) ? data : [];
-      setEvents(prev => [...prev, ...newList]);
-      setHasMore(newList.length === PAGE_SIZE);
-    } catch {}
-    finally { setLoadingMore(false); }
-  };
-
   const scrollTabs = (dir) => {
     if (tabsRef.current) tabsRef.current.scrollBy({ left: dir * 200, behavior: 'smooth' });
   };
@@ -197,6 +188,22 @@ export default function HomePage() {
   const activeFilterCount = [category, dateFrom, dateTo, sort !== 'date' ? sort : ''].filter(Boolean).length;
   const isInitialLoading = loading && events.length === 0;
   const isRefreshing = loading && events.length > 0;
+  const { upcoming: upcomingEvents, past: pastEvents } = useMemo(
+    () => splitEventsBySchedule(events),
+    [events]
+  );
+  const upcomingPageCount = getTotalPages(upcomingEvents, EVENT_PAGE_SIZE);
+  const pastPageCount = getTotalPages(pastEvents, EVENT_PAGE_SIZE);
+  const visibleUpcomingEvents = getPageItems(upcomingEvents, upcomingPage, EVENT_PAGE_SIZE);
+  const visiblePastEvents = getPageItems(pastEvents, pastPage, EVENT_PAGE_SIZE);
+
+  useEffect(() => {
+    setUpcomingPage(prev => clampPage(prev, upcomingPageCount));
+  }, [upcomingPageCount]);
+
+  useEffect(() => {
+    setPastPage(prev => clampPage(prev, pastPageCount));
+  }, [pastPageCount]);
 
   const clearFilters = () => setSearchParams({});
 
@@ -343,17 +350,31 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Events grid */}
+        {/* Event sections */}
         {isInitialLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="aspect-[16/10] bg-gray-200 dark:bg-gray-700 rounded-lg mb-3" />
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-2" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mb-2" />
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-              </div>
-            ))}
+          <div className="space-y-8">
+            <EventSection
+              title={t('home.upcomingEvents')}
+              hint={t('home.upcomingEventsHint')}
+              events={[]}
+              loading
+              refreshing={false}
+              emptyLabel={t('home.noUpcomingEvents')}
+              page={1}
+              totalPages={1}
+              onPageChange={setUpcomingPage}
+            />
+            <EventSection
+              title={t('home.pastEvents')}
+              hint={t('home.pastEventsHint')}
+              events={[]}
+              loading
+              refreshing={false}
+              emptyLabel={t('home.noPastEvents')}
+              page={1}
+              totalPages={1}
+              onPageChange={setPastPage}
+            />
           </div>
         ) : events.length === 0 ? (
           <div className="text-center py-20 text-gray-500 dark:text-gray-400">
@@ -369,46 +390,148 @@ export default function HomePage() {
             )}
           </div>
         ) : (
-          <div className="relative" aria-busy={isRefreshing}>
-            <div className={`grid grid-cols-1 gap-6 transition-opacity duration-200 sm:grid-cols-2 lg:grid-cols-4 ${isRefreshing ? 'opacity-60' : 'opacity-100'}`}>
-              {[
-                ...events.filter(e => e.status !== 'ended' && new Date(e.event_date) >= new Date()),
-                ...events.filter(e => e.status === 'ended' || new Date(e.event_date) < new Date()),
-              ].map(event => <EventCard key={event.id} event={event} />)}
-            </div>
-            {isRefreshing && (
-              <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-2">
-                <span className="rounded-full border border-gray-200 dark:border-dark-border bg-white/90 dark:bg-dark-card/90 px-3 py-1 text-xs font-semibold text-gray-600 dark:text-gray-300 shadow-sm backdrop-blur">
-                  {t('common.loading')}
-                </span>
-              </div>
-            )}
-            <div className="flex justify-center mt-10">
-              {hasMore ? (
-                <button
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="px-8 py-2.5 rounded-full border border-gray-300 dark:border-dark-border text-sm font-medium text-gray-600 dark:text-gray-300 hover:border-primary hover:text-primary dark:hover:text-primary transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loadingMore ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-                      </svg>
-                      {t('common.loading')}
-                    </span>
-                  ) : t('home.loadMore')}
-                </button>
-              ) : (
-                <p className="text-xs text-gray-400 dark:text-gray-600">{t('home.noMore')}</p>
-              )}
-            </div>
+          <div className="space-y-8">
+            <EventSection
+              title={t('home.upcomingEvents')}
+              hint={t('home.upcomingEventsHint')}
+              events={visibleUpcomingEvents}
+              loading={false}
+              refreshing={isRefreshing}
+              emptyLabel={t('home.noUpcomingEvents')}
+              page={clampPage(upcomingPage, upcomingPageCount)}
+              totalPages={upcomingPageCount}
+              onPageChange={setUpcomingPage}
+            />
+
+            <EventSection
+              title={t('home.pastEvents')}
+              hint={t('home.pastEventsHint')}
+              events={visiblePastEvents}
+              loading={false}
+              refreshing={isRefreshing}
+              emptyLabel={t('home.noPastEvents')}
+              page={clampPage(pastPage, pastPageCount)}
+              totalPages={pastPageCount}
+              onPageChange={setPastPage}
+            />
           </div>
         )}
 
         <NewsSection news={news} loading={newsLoading} />
     </div>
+  );
+}
+
+function EventSection({ title, hint, events, loading, refreshing, emptyLabel, page, totalPages, onPageChange }) {
+  const { t } = useTranslation();
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-border dark:bg-dark-surface">
+      <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h2>
+          {hint && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{hint}</p>}
+        </div>
+        {!loading && events.length > 0 && (
+          <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">
+            {t('home.pageLabel', { page, total: totalPages })}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <EventGridSkeleton />
+      ) : events.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm font-medium text-gray-500 dark:border-dark-border dark:bg-dark-card dark:text-gray-400">
+          {emptyLabel}
+        </div>
+      ) : (
+        <div className="relative" aria-busy={refreshing}>
+          <div className={`grid grid-cols-1 gap-6 transition-opacity duration-200 sm:grid-cols-2 lg:grid-cols-4 ${refreshing ? 'opacity-60' : 'opacity-100'}`}>
+            {events.map(event => <EventCard key={event.id} event={event} />)}
+          </div>
+          {refreshing && (
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-2">
+              <span className="rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-xs font-semibold text-gray-600 shadow-sm backdrop-blur dark:border-dark-border dark:bg-dark-card/90 dark:text-gray-300">
+                {t('common.loading')}
+              </span>
+            </div>
+          )}
+          <NumberPagination page={page} totalPages={totalPages} onPageChange={onPageChange} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EventGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {[...Array(8)].map((_, i) => (
+        <div key={i} className="animate-pulse">
+          <div className="mb-3 aspect-[16/10] rounded-lg bg-gray-200 dark:bg-gray-700" />
+          <div className="mb-2 h-4 w-1/3 rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="mb-2 h-3 w-2/3 rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NumberPagination({ page, totalPages, onPageChange }) {
+  if (totalPages <= 1) return null;
+
+  const pages = getCompactPaginationItems(totalPages, page);
+
+  return (
+    <nav className="mt-6 flex max-w-full flex-wrap items-center justify-center gap-1.5 sm:gap-2" aria-label="Pagination">
+      <button
+        type="button"
+        onClick={() => onPageChange(page - 1)}
+        disabled={page <= 1}
+        className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-500 transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-dark-border dark:bg-dark-card dark:text-gray-300"
+        aria-label="Previous page"
+      >
+        {'<'}
+      </button>
+
+      {pages.map((item, index) => (
+        item === 'ellipsis' ? (
+          <span
+            key={`ellipsis-${index}`}
+            className="flex h-9 min-w-6 items-center justify-center text-sm font-bold text-gray-400 dark:text-gray-500"
+            aria-hidden="true"
+          >
+            ...
+          </span>
+        ) : (
+          <button
+            key={item}
+            type="button"
+            onClick={() => onPageChange(item)}
+            aria-current={item === page ? 'page' : undefined}
+            className={`flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-sm font-bold transition ${
+              item === page
+                ? 'border-primary bg-primary text-white shadow-sm'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-primary hover:text-primary dark:border-dark-border dark:bg-dark-card dark:text-gray-300'
+            }`}
+          >
+            {item}
+          </button>
+        )
+      ))}
+
+      <button
+        type="button"
+        onClick={() => onPageChange(page + 1)}
+        disabled={page >= totalPages}
+        className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-500 transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-dark-border dark:bg-dark-card dark:text-gray-300"
+        aria-label="Next page"
+      >
+        {'>'}
+      </button>
+    </nav>
   );
 }
 
@@ -442,24 +565,31 @@ function NewsSection({ news, loading }) {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {news.map(item => (
-            <article key={item.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-dark-border dark:bg-dark-card">
+            <Link
+              key={item.id}
+              to={`/news/${item.id}`}
+              className="group block overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md dark:border-dark-border dark:bg-dark-card"
+            >
               {item.image_url ? (
-                <img src={item.image_url} alt="" className="h-32 w-full object-cover" />
+                <img src={item.image_url} alt={item.title} className="h-32 w-full object-cover transition duration-300 group-hover:scale-105" />
               ) : (
-                <div className="flex h-32 items-center justify-center bg-gradient-to-br from-cyan-50 via-white to-rose-50 text-3xl dark:from-cyan-950/30 dark:via-dark-card dark:to-rose-950/30">
-                  📰
+                <div className="flex h-32 items-center justify-center bg-gradient-to-br from-slate-100 via-white to-cyan-50 text-[0px] dark:from-dark-card dark:via-dark-surface dark:to-cyan-950/30">
+                  <Newspaper className="h-9 w-9 text-gray-400 dark:text-gray-500" />
                 </div>
               )}
               <div className="p-4">
                 <p className="mb-2 text-xs font-semibold text-gray-400">
                   {item.published_at ? new Date(item.published_at).toLocaleDateString(locale) : t('home.newsPublished')}
                 </p>
-                <h3 className="line-clamp-2 text-sm font-bold text-gray-900 dark:text-white">{item.title}</h3>
+                <h3 className="line-clamp-2 text-sm font-bold text-gray-900 transition group-hover:text-primary dark:text-white">{item.title}</h3>
                 <p className="mt-2 line-clamp-3 text-sm text-gray-500 dark:text-gray-400">
                   {item.summary || item.content}
                 </p>
+                <span className="mt-4 inline-flex text-xs font-bold text-primary">
+                  {t('home.readNews')}
+                </span>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       )}

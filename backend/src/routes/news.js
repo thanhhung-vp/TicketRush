@@ -23,4 +23,24 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /news/:id - public published post detail
+router.get('/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, title, summary, content, image_url, status, published_at, created_at
+       FROM news_posts
+       WHERE id = $1 AND status = 'published'
+       LIMIT 1`,
+      [req.params.id]
+    );
+
+    if (!rows[0]) return res.status(404).json({ error: 'News post not found' });
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 export default router;

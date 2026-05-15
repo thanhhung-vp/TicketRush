@@ -7,6 +7,7 @@ import Footer from './components/Footer.jsx';
 import LoginPage          from './pages/LoginPage.jsx';
 import RegisterPage       from './pages/RegisterPage.jsx';
 import HomePage           from './pages/HomePage.jsx';
+import NewsDetailPage     from './pages/NewsDetailPage.jsx';
 import EventDetailPage    from './pages/EventDetailPage.jsx';
 import CheckoutPage       from './pages/CheckoutPage.jsx';
 import TicketsPage        from './pages/TicketsPage.jsx';
@@ -37,6 +38,7 @@ function AppRoutes() {
       <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <Routes>
           <Route path="/"                  element={<HomePage />} />
+          <Route path="/news/:id"          element={<NewsDetailPage />} />
           <Route path="/events/:id"        element={<EventDetailPage />} />
           <Route path="/login"             element={<LoginPage />} />
           <Route path="/register"          element={<RegisterPage />} />

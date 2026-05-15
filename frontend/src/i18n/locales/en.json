@@ -99,6 +99,12 @@
     "heroSubtitle": "Discover thousands of music, sports and entertainment events",
     "searchEvents": "Search events",
     "upcomingEvents": "Upcoming Events",
+    "upcomingEventsHint": "Open and scheduled events you can book next",
+    "pastEvents": "Past Events",
+    "pastEventsHint": "Events that have already taken place",
+    "noUpcomingEvents": "No upcoming events match the current filters.",
+    "noPastEvents": "No past events match the current filters.",
+    "pageLabel": "Page {{page}}/{{total}}",
     "popularEvents": "Popular Events",
     "noEvents": "No events available",
     "filterByCategory": "Filter by category",
@@ -114,7 +120,13 @@
     "latestNews": "News",
     "latestNewsHint": "Latest updates from TicketRush",
     "newsEmpty": "No news has been posted yet.",
-    "newsPublished": "Just posted"
+    "newsPublished": "Just posted",
+    "readNews": "Read news"
+  },
+  "newsDetail": {
+    "backToNews": "Back to home",
+    "emptyTitle": "News not available",
+    "notFound": "This news post is unavailable or has not been published."
   },
   "search": {
     "placeholder": "Search events, artists, venues...",

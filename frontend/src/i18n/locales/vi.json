@@ -99,6 +99,12 @@
     "heroSubtitle": "Khám phá hàng nghìn sự kiện âm nhạc, thể thao và giải trí",
     "searchEvents": "Tìm sự kiện",
     "upcomingEvents": "Sự kiện sắp diễn ra",
+    "upcomingEventsHint": "Các sự kiện đang mở bán hoặc sắp mở bán",
+    "pastEvents": "Sự kiện đã diễn ra",
+    "pastEventsHint": "Những sự kiện đã kết thúc được tách riêng để dễ theo dõi",
+    "noUpcomingEvents": "Không có sự kiện sắp diễn ra phù hợp với bộ lọc.",
+    "noPastEvents": "Không có sự kiện đã diễn ra phù hợp với bộ lọc.",
+    "pageLabel": "Trang {{page}}/{{total}}",
     "popularEvents": "Sự kiện nổi bật",
     "noEvents": "Chưa có sự kiện nào",
     "filterByCategory": "Lọc theo danh mục",
@@ -114,7 +120,13 @@
     "latestNews": "Tin tức",
     "latestNewsHint": "Cập nhật mới từ TicketRush",
     "newsEmpty": "Chưa có tin tức nào.",
-    "newsPublished": "Mới đăng"
+    "newsPublished": "Mới đăng",
+    "readNews": "Xem tin"
+  },
+  "newsDetail": {
+    "backToNews": "Quay lại trang chủ",
+    "emptyTitle": "Tin tức không khả dụng",
+    "notFound": "Tin này không tồn tại hoặc chưa được xuất bản."
   },
   "search": {
     "placeholder": "Tìm sự kiện, nghệ sĩ, địa điểm...",

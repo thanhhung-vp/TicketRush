@@ -29,11 +29,11 @@ docker compose up postgres redis -d
 
 ```bash
 cd backend
-cp .env.example .env   # fill in your secrets
-npm install
-npm run migrate        # run all SQL migrations in order
-npm run seed           # seed 5 sample events + admin + users
-c           # → http://localhost:4000
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+npm ci
+npm run migrate
+npm run seed
+npm run dev       # → http://localhost:4000
 ```
 
 **Default accounts after seed:**

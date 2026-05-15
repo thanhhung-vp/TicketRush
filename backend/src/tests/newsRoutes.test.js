@@ -57,6 +57,38 @@ describe('news routes', () => {
     expect(mockPool.query.mock.calls[0][1]).toEqual([3]);
   });
 
+  it('shows a published news post by id', async () => {
+    mockPool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: 'news-1',
+          title: 'Concert update',
+          summary: 'New gate opens soon',
+          content: 'Full article',
+          image_url: null,
+          status: 'published',
+          published_at: '2026-05-06T10:00:00.000Z',
+        },
+      ],
+    });
+
+    const response = await request(createApp()).get('/news/news-1');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ id: 'news-1', title: 'Concert update', status: 'published' });
+    expect(mockPool.query.mock.calls[0][0]).toMatch(/WHERE id = \$1 AND status = 'published'/i);
+    expect(mockPool.query.mock.calls[0][1]).toEqual(['news-1']);
+  });
+
+  it('returns 404 for unpublished or missing news posts', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+    const response = await request(createApp()).get('/news/draft-news');
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe('News post not found');
+  });
+
   it('lets admins create a published news post', async () => {
     mockPool.query.mockResolvedValueOnce({
       rows: [
