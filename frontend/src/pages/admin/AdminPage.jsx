@@ -19,17 +19,23 @@ const GENDER_COLORS = {
   null:   '#6b7280',
 };
 
+const chartTooltipStyle = {
+  background: 'var(--bg-surface-elevated)',
+  border: '1px solid var(--border-separator)',
+  color: 'var(--text-label-primary)',
+};
+
 function formatChartDay(d) {
   return new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
 export default function AdminPage() {
-  const [tab, setTab]           = useState('dashboard');
+  const [tab, setTab] = useState('dashboard');
   const [dashboard, setDashboard] = useState(null);
-  const [audience, setAudience]   = useState(null);
-  const [events, setEvents]       = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState('');
+  const [audience, setAudience] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -48,19 +54,19 @@ export default function AdminPage() {
 
   if (loading) return <PageSpinner />;
 
-  const dashEvents     = dashboard?.events || [];
-  const revenueByDay   = dashboard?.revenue_by_day || [];
-  const totalRevenue   = dashEvents.reduce((s, e) => s + Number(e.total_revenue), 0);
-  const totalOrders    = dashEvents.reduce((s, e) => s + Number(e.orders_paid), 0);
-  const totalSold      = dashEvents.reduce((s, e) => s + Number(e.sold_seats), 0);
+  const dashEvents = dashboard?.events || [];
+  const revenueByDay = dashboard?.revenue_by_day || [];
+  const totalRevenue = dashEvents.reduce((s, e) => s + Number(e.total_revenue), 0);
+  const totalOrders = dashEvents.reduce((s, e) => s + Number(e.orders_paid), 0);
+  const totalSold = dashEvents.reduce((s, e) => s + Number(e.sold_seats), 0);
 
   return (
     <PageContainer>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
         <Link
           to="/admin/events/new"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hover"
         >
           + Tạo sự kiện
         </Link>
@@ -68,18 +74,19 @@ export default function AdminPage() {
 
       {error && <Alert type="error" className="mb-6">{error}</Alert>}
 
-      {/* Tab bar */}
-      <div className="flex gap-1 bg-gray-900 p-1 rounded-xl mb-6 w-fit border border-gray-800">
+      <div className="mb-6 flex w-fit gap-1 rounded-xl border border-separator bg-surface-elevated p-1 shadow-1">
         {[
           ['dashboard', 'Tổng quan'],
-          ['events',    'Sự kiện'],
-          ['audience',  'Khán giả'],
+          ['events', 'Sự kiện'],
+          ['audience', 'Khán giả'],
         ].map(([k, label]) => (
           <button
             key={k}
             onClick={() => setTab(k)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              tab === k ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+              tab === k
+                ? 'bg-accent text-white'
+                : 'text-label-secondary hover:bg-fill-quaternary hover:text-label-primary'
             }`}
           >
             {label}
@@ -96,13 +103,11 @@ export default function AdminPage() {
           revenueByDay={revenueByDay}
         />
       )}
-      {tab === 'events'    && <EventsTab    events={events} />}
-      {tab === 'audience'  && <AudienceTab  audience={audience} />}
+      {tab === 'events' && <EventsTab events={events} />}
+      {tab === 'audience' && <AudienceTab audience={audience} />}
     </PageContainer>
   );
 }
-
-/* ---- Sub-tabs ---- */
 
 function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByDay }) {
   const [searchDraft, setSearchDraft] = useState('');
@@ -129,52 +134,31 @@ function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByD
 
   return (
     <div className="space-y-6">
-      {/* Summary stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatsCard label="Tổng doanh thu"       value={formatVND(totalRevenue)} />
-        <StatsCard label="Đơn hàng thành công"  value={totalOrders.toLocaleString()} />
-        <StatsCard label="Vé đã bán"            value={totalSold.toLocaleString()} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatsCard label="Tổng doanh thu" value={formatVND(totalRevenue)} />
+        <StatsCard label="Đơn hàng thành công" value={totalOrders.toLocaleString()} />
+        <StatsCard label="Vé đã bán" value={totalSold.toLocaleString()} />
       </div>
 
-      {/* Revenue line chart */}
-      <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-        <h2 className="font-semibold mb-4 text-sm text-gray-300">Doanh thu 30 ngày gần nhất</h2>
+      <div className="rounded-xl border border-separator bg-surface p-5 shadow-1">
+        <h2 className="mb-4 text-sm font-semibold text-label-primary">Doanh thu 30 ngày gần nhất</h2>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={revenueByDay.map(r => ({ ...r, revenue: Number(r.revenue) }))}>
-            <XAxis
-              dataKey="day"
-              tickFormatter={formatChartDay}
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-            />
-            <YAxis
-              tickFormatter={v => formatVND(v, true)}
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              width={72}
-            />
-            <Tooltip
-              formatter={v => formatVND(v)}
-              labelFormatter={formatChartDay}
-              contentStyle={{ background: '#111827', border: '1px solid #374151' }}
-            />
-            <Line
-              type="monotone"
-              dataKey="revenue"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={false}
-            />
+            <XAxis dataKey="day" tickFormatter={formatChartDay} tick={{ fontSize: 11, fill: '#6b7280' }} />
+            <YAxis tickFormatter={v => formatVND(v, true)} tick={{ fontSize: 11, fill: '#6b7280' }} width={72} />
+            <Tooltip formatter={v => formatVND(v)} labelFormatter={formatChartDay} contentStyle={chartTooltipStyle} />
+            <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Per-event occupancy */}
-      <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+      <div className="rounded-xl border border-separator bg-surface p-5 shadow-1">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Suc chua su kien</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-label-secondary">Sức chứa sự kiện</p>
             {events.length > 0 && (
-              <p className="mt-1 text-xs text-gray-500">
-                Hien thi {occupancy.totalItems} / {events.length} su kien
+              <p className="mt-1 text-xs text-label-secondary">
+                Hiển thị {occupancy.totalItems} / {events.length} sự kiện
               </p>
             )}
           </div>
@@ -183,82 +167,77 @@ function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByD
               type="search"
               value={searchDraft}
               onChange={event => setSearchDraft(event.target.value)}
-              placeholder="Tim su kien..."
-              className="min-w-0 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 focus:border-blue-500 focus:outline-none sm:w-64"
+              placeholder="Tìm sự kiện..."
+              className="min-w-0 rounded-lg border border-transparent bg-fill-tertiary px-3 py-2 text-sm text-label-primary placeholder:text-label-tertiary transition focus:border-info focus:outline-none focus:shadow-focus sm:w-64"
             />
             <button
               type="submit"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white transition hover:bg-accent-hover"
             >
               <Search className="h-4 w-4" aria-hidden="true" />
-              Tim
+              Tìm
             </button>
             {occupancyQuery && (
               <button
                 type="button"
                 onClick={clearSearch}
-                className="rounded-lg border border-gray-700 px-3 py-2 text-sm font-medium text-gray-400 transition hover:border-gray-600 hover:text-gray-200"
+                className="rounded-lg border border-separator px-3 py-2 text-sm font-medium text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary"
               >
-                Xoa
+                Xóa
               </button>
             )}
           </form>
         </div>
-        <h2 className="font-semibold mb-4 text-sm text-gray-300">Tỷ lệ lấp đầy theo sự kiện</h2>
+        <h2 className="mb-4 text-sm font-semibold text-label-primary">Tỷ lệ lấp đầy theo sự kiện</h2>
         {events.length === 0 ? (
-          <p className="text-gray-500 text-sm">Chưa có dữ liệu sự kiện.</p>
+          <p className="text-sm text-label-secondary">Chưa có dữ liệu sự kiện.</p>
         ) : occupancy.items.length === 0 ? (
-          <p className="text-gray-500 text-sm">Khong tim thay su kien phu hop.</p>
+          <p className="text-sm text-label-secondary">Không tìm thấy sự kiện phù hợp.</p>
         ) : (
           <>
-          <div className="space-y-3">
-            {occupancy.items.map(e => {
-              const pct = getEventOccupancyPercent(e);
-              return (
-                <div key={e.id}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="truncate max-w-xs text-gray-300">{e.title}</span>
-                    <span className="text-gray-500 ml-2 flex-shrink-0">
-                      {pct}% ({e.sold_seats}/{e.total_seats})
-                    </span>
+            <div className="space-y-3">
+              {occupancy.items.map(e => {
+                const pct = getEventOccupancyPercent(e);
+                return (
+                  <div key={e.id}>
+                    <div className="mb-1 flex justify-between text-sm">
+                      <span className="max-w-xs truncate text-label-primary">{e.title}</span>
+                      <span className="ml-2 flex-shrink-0 text-label-secondary">
+                        {pct}% ({e.sold_seats}/{e.total_seats})
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-fill-tertiary">
+                      <div className="h-full rounded-full bg-info transition-all" style={{ width: `${pct}%` }} />
+                    </div>
                   </div>
-                  <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-600 rounded-full transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {occupancy.totalPages > 1 && (
-            <div className="mt-5 flex flex-col gap-2 border-t border-gray-800 pt-4 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between">
-              <span>
-                Trang {occupancy.currentPage} / {occupancy.totalPages}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOccupancyPage(page => page - 1)}
-                  disabled={occupancy.currentPage <= 1}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-700 px-3 py-1.5 font-medium transition hover:border-gray-600 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                  Trước
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOccupancyPage(page => page + 1)}
-                  disabled={occupancy.currentPage >= occupancy.totalPages}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-700 px-3 py-1.5 font-medium transition hover:border-gray-600 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Sau
-                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              </div>
+                );
+              })}
             </div>
-          )}
+            {occupancy.totalPages > 1 && (
+              <div className="mt-5 flex flex-col gap-2 border-t border-separator pt-4 text-xs text-label-secondary sm:flex-row sm:items-center sm:justify-between">
+                <span>Trang {occupancy.currentPage} / {occupancy.totalPages}</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOccupancyPage(page => page - 1)}
+                    disabled={occupancy.currentPage <= 1}
+                    className="inline-flex items-center gap-1 rounded-lg border border-separator px-3 py-1.5 font-medium transition hover:bg-fill-quaternary hover:text-label-primary disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOccupancyPage(page => page + 1)}
+                    disabled={occupancy.currentPage >= occupancy.totalPages}
+                    className="inline-flex items-center gap-1 rounded-lg border border-separator px-3 py-1.5 font-medium transition hover:bg-fill-quaternary hover:text-label-primary disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Sau
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -268,13 +247,13 @@ function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByD
 
 function StatusBadge({ status }) {
   const MAP = {
-    draft:   'bg-gray-800 text-gray-400 border-gray-700',
-    on_sale: 'bg-green-900/50 text-green-400 border-green-800',
-    ended:   'bg-red-900/50 text-red-400 border-red-800',
+    draft: 'bg-fill-tertiary text-label-secondary border-separator',
+    on_sale: 'bg-success-tint text-success border-success/30',
+    ended: 'bg-danger-tint text-danger border-danger/30',
   };
   const LABEL = { draft: 'Nháp', on_sale: 'Đang bán', ended: 'Kết thúc' };
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${MAP[status] || MAP.draft}`}>
+    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${MAP[status] || MAP.draft}`}>
       {LABEL[status] || status}
     </span>
   );
@@ -283,9 +262,9 @@ function StatusBadge({ status }) {
 function EventsTab({ events }) {
   if (events.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-500">
+      <div className="py-16 text-center text-label-secondary">
         <p>Chưa có sự kiện nào.</p>
-        <Link to="/admin/events/new" className="mt-2 inline-block text-blue-400 hover:underline text-sm">
+        <Link to="/admin/events/new" className="mt-2 inline-block text-sm text-accent hover:underline">
           Tạo sự kiện đầu tiên
         </Link>
       </div>
@@ -293,41 +272,34 @@ function EventsTab({ events }) {
   }
 
   return (
-    <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-separator bg-surface shadow-1">
       <table className="w-full text-sm">
-        <thead className="border-b border-gray-800 text-gray-500">
+        <thead className="border-b border-separator text-label-secondary">
           <tr>
             {['Sự kiện', 'Trạng thái', 'Đã bán / Tổng', 'Doanh thu', ''].map(h => (
-              <th key={h} className="text-left px-4 py-3 font-medium">{h}</th>
+              <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {events.map(e => (
-            <tr key={e.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition">
+            <tr key={e.id} className="border-b border-separator transition hover:bg-fill-quaternary">
               <td className="px-4 py-3">
-                <p className="font-medium text-gray-200">{e.title}</p>
-                <p className="text-xs text-gray-500">
-                  {e.event_date ? formatDateShort(e.event_date) : '—'}
+                <p className="font-medium text-label-primary">{e.title}</p>
+                <p className="text-xs text-label-secondary">
+                  {e.event_date ? formatDateShort(e.event_date) : '-'}
                 </p>
               </td>
-              <td className="px-4 py-3">
-                <StatusBadge status={e.status} />
-              </td>
-              <td className="px-4 py-3 text-gray-400">
+              <td className="px-4 py-3"><StatusBadge status={e.status} /></td>
+              <td className="px-4 py-3 text-label-secondary">
                 {e.sold_seats} / {e.total_seats}
                 {e.locked_seats > 0 && (
-                  <span className="text-gray-600 ml-1">({e.locked_seats} đang giữ)</span>
+                  <span className="ml-1 text-label-tertiary">({e.locked_seats} đang giữ)</span>
                 )}
               </td>
-              <td className="px-4 py-3 text-blue-400 font-medium">
-                {formatVND(e.total_revenue)}
-              </td>
+              <td className="px-4 py-3 font-medium text-info">{formatVND(e.total_revenue)}</td>
               <td className="px-4 py-3">
-                <Link
-                  to={`/admin/events/${e.id}`}
-                  className="text-blue-400 hover:text-blue-300 hover:underline text-xs transition"
-                >
+                <Link to={`/admin/events/${e.id}`} className="text-xs text-accent transition hover:underline">
                   Chi tiết
                 </Link>
               </td>
@@ -341,23 +313,22 @@ function EventsTab({ events }) {
 
 function AudienceTab({ audience }) {
   const genderData = (audience?.by_gender || []).map(g => ({
-    name:  g.gender === 'male' ? 'Nam' : g.gender === 'female' ? 'Nữ' : 'Khác',
+    name: g.gender === 'male' ? 'Nam' : g.gender === 'female' ? 'Nữ' : 'Khác',
     value: Number(g.count),
     color: GENDER_COLORS[g.gender] ?? GENDER_COLORS.null,
   }));
 
   const ageData = (audience?.by_age || []).map(a => ({
-    age:   a.age_group,
+    age: a.age_group,
     count: Number(a.count),
   }));
 
   return (
-    <div className="grid sm:grid-cols-2 gap-6">
-      {/* Gender pie */}
-      <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-        <h2 className="font-semibold mb-4 text-sm text-gray-300">Phân bố giới tính</h2>
+    <div className="grid gap-6 sm:grid-cols-2">
+      <div className="rounded-xl border border-separator bg-surface p-5 shadow-1">
+        <h2 className="mb-4 text-sm font-semibold text-label-primary">Phân bố giới tính</h2>
         {genderData.length === 0 ? (
-          <p className="text-gray-500 text-sm">Chưa có dữ liệu.</p>
+          <p className="text-sm text-label-secondary">Chưa có dữ liệu.</p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
@@ -374,23 +345,22 @@ function AudienceTab({ audience }) {
                   <Cell key={i} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151' }} />
+              <Tooltip contentStyle={chartTooltipStyle} />
             </PieChart>
           </ResponsiveContainer>
         )}
       </div>
 
-      {/* Age bar */}
-      <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-        <h2 className="font-semibold mb-4 text-sm text-gray-300">Phân bố độ tuổi</h2>
+      <div className="rounded-xl border border-separator bg-surface p-5 shadow-1">
+        <h2 className="mb-4 text-sm font-semibold text-label-primary">Phân bố độ tuổi</h2>
         {ageData.length === 0 ? (
-          <p className="text-gray-500 text-sm">Chưa có dữ liệu.</p>
+          <p className="text-sm text-label-secondary">Chưa có dữ liệu.</p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={ageData}>
-              <XAxis dataKey="age"   tick={{ fontSize: 11, fill: '#6b7280' }} />
-              <YAxis               tick={{ fontSize: 11, fill: '#6b7280' }} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151' }} />
+              <XAxis dataKey="age" tick={{ fontSize: 11, fill: '#6b7280' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} />
+              <Tooltip contentStyle={chartTooltipStyle} />
               <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

@@ -8,6 +8,129 @@ import {
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getEventOccupancyPercent, getOccupancyPage, OCCUPANCY_PAGE_SIZE } from '../utils/adminDashboard.js';
+import { clampPage, getCompactPaginationItems, getPageItems, getTotalPages } from '../utils/homeSections.js';
+
+const ADMIN_PAGE_SIZE = 8;
+const SUPPORT_PAGE_SIZE = 8;
+
+const ADMIN_COPY = {
+  'vi-VN': {
+    adminTitle: 'Quản trị',
+    showingEvents: 'Hiển thị',
+    ofEvents: 'sự kiện',
+    searchEvents: 'Tìm sự kiện...',
+    search: 'Tìm',
+    clear: 'Xóa',
+    noEvents: 'Chưa có dữ liệu sự kiện.',
+    noMatchingEvents: 'Không tìm thấy sự kiện phù hợp.',
+    previousPage: 'Trang trước',
+    nextPage: 'Trang sau',
+    virtualQueue: 'Phòng chờ',
+    queueOn: 'Đang bật',
+    queueOff: 'Đang tắt',
+    processing: 'Đang xử lý...',
+    turnOff: 'Tắt',
+    turnOn: 'Bật',
+    autoBatch: 'Tự động cấp lượt',
+    actionFailed: 'Không thể thực hiện thao tác.',
+    deleteEventConfirm: title => `Xóa sự kiện "${title}"? Hành động không thể hoàn tác.`,
+    deleteEventSuccess: title => `Đã xóa sự kiện "${title}".`,
+    queueEnabled: title => `Đã bật phòng chờ cho "${title}".`,
+    queueDisabled: title => `Đã tắt phòng chờ cho "${title}".`,
+    deleteEvent: 'Xóa sự kiện',
+    cannotDeleteEvent: 'Không thể xóa vì sự kiện đã có lịch sử đơn/vé',
+    deleting: 'Đang xóa...',
+    delete: 'Xóa',
+    supportTab: 'Hỗ trợ',
+    supportBadge: count => `${count} yêu cầu cần xử lý`,
+    supportLoadError: 'Không thể tải yêu cầu hỗ trợ.',
+    supportActionError: 'Không thể cập nhật yêu cầu.',
+    supportEmpty: 'Chưa có yêu cầu phù hợp.',
+    supportPending: 'Cần xử lý',
+    supportRefunds: 'Hoàn vé',
+    supportRequests: 'Hỗ trợ khách hàng',
+    supportResolved: 'Đã xử lý',
+    supportAll: 'Tất cả',
+    requestType: 'Phân loại',
+    requester: 'Người gửi',
+    requestContent: 'Nội dung',
+    createdAt: 'Thời gian',
+    status: 'Trạng thái',
+    actions: 'Thao tác',
+    refundRequest: 'Yêu cầu hoàn vé',
+    supportRequest: 'Yêu cầu hỗ trợ',
+    note: 'Ghi chú',
+    approve: 'Duyệt hoàn vé',
+    reject: 'Từ chối',
+    markProgress: 'Đang xử lý',
+    markResolved: 'Hoàn tất',
+    pending: 'Chờ xử lý',
+    approved: 'Đã duyệt',
+    rejected: 'Đã từ chối',
+    open: 'Mới',
+    in_progress: 'Đang xử lý',
+    resolved: 'Đã xử lý',
+    closed: 'Đã đóng',
+  },
+  'en-US': {
+    adminTitle: 'Admin',
+    showingEvents: 'Showing',
+    ofEvents: 'events',
+    searchEvents: 'Search events...',
+    search: 'Search',
+    clear: 'Clear',
+    noEvents: 'No event data yet.',
+    noMatchingEvents: 'No matching events found.',
+    previousPage: 'Previous page',
+    nextPage: 'Next page',
+    virtualQueue: 'Virtual Queue',
+    queueOn: 'Enabled',
+    queueOff: 'Disabled',
+    processing: 'Processing...',
+    turnOff: 'Turn off',
+    turnOn: 'Turn on',
+    autoBatch: 'Auto release batches',
+    actionFailed: 'Unable to complete this action.',
+    deleteEventConfirm: title => `Delete event "${title}"? This action cannot be undone.`,
+    deleteEventSuccess: title => `Deleted event "${title}".`,
+    queueEnabled: title => `Virtual queue enabled for "${title}".`,
+    queueDisabled: title => `Virtual queue disabled for "${title}".`,
+    deleteEvent: 'Delete event',
+    cannotDeleteEvent: 'Cannot delete because this event has order/ticket history',
+    deleting: 'Deleting...',
+    delete: 'Delete',
+    supportTab: 'Support',
+    supportBadge: count => `${count} requests need attention`,
+    supportLoadError: 'Cannot load support requests.',
+    supportActionError: 'Cannot update request.',
+    supportEmpty: 'No matching requests.',
+    supportPending: 'Needs action',
+    supportRefunds: 'Refunds',
+    supportRequests: 'Customer support',
+    supportResolved: 'Resolved',
+    supportAll: 'All',
+    requestType: 'Type',
+    requester: 'Requester',
+    requestContent: 'Content',
+    createdAt: 'Created',
+    status: 'Status',
+    actions: 'Actions',
+    refundRequest: 'Refund request',
+    supportRequest: 'Support request',
+    note: 'Note',
+    approve: 'Approve refund',
+    reject: 'Reject',
+    markProgress: 'In progress',
+    markResolved: 'Resolve',
+    pending: 'Pending',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    open: 'New',
+    in_progress: 'In progress',
+    resolved: 'Resolved',
+    closed: 'Closed',
+  },
+};
 
 function formatVND(n) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', notation: 'compact' }).format(n);
@@ -21,10 +144,12 @@ export default function AdminPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'vi' ? 'vi-VN' : 'en-US';
+  const copy = ADMIN_COPY[locale] || ADMIN_COPY['en-US'];
   const [tab, setTab] = useState('dashboard');
   const [dashboard, setDashboard] = useState(null);
   const [events, setEvents] = useState([]);
   const [newsPosts, setNewsPosts] = useState([]);
+  const [supportBadgeCount, setSupportBadgeCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const formatDate = (d) => new Date(d).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
@@ -36,14 +161,17 @@ export default function AdminPage() {
   const loadAdminData = async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true);
     try {
-      const [d, e, n] = await Promise.all([
+      const [d, e, n, pendingRefunds, pendingSupport] = await Promise.all([
         api.get('/admin/dashboard'),
         api.get('/admin/events'),
         api.get('/admin/news'),
+        api.get('/admin/refunds', { params: { status: 'pending' } }),
+        api.get('/admin/support-requests', { params: { status: 'open' } }),
       ]);
       setDashboard(d.data);
       setEvents(e.data);
       setNewsPosts(Array.isArray(n.data) ? n.data : []);
+      setSupportBadgeCount((Array.isArray(pendingRefunds.data) ? pendingRefunds.data.length : 0) + (Array.isArray(pendingSupport.data) ? pendingSupport.data.length : 0));
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -64,25 +192,34 @@ export default function AdminPage() {
     ['dashboard', t('admin.tabOverview')],
     ['events',    t('admin.tabEvents')],
     ['customers', t('admin.tabCustomers')],
-    ['refunds',   t('admin.tabRefunds')],
+    ['support',   copy.supportTab],
     ['news',      t('admin.tabNews')],
   ];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">{copy.adminTitle}</h1>
         <Link to="/admin/events/new"
           className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition shadow-lg shadow-blue-500/25">
           {t('admin.createEventBtn')}
         </Link>
       </div>
 
-      <div className="flex gap-1 bg-white p-1 rounded-xl mb-6 w-fit border border-gray-200 shadow-sm">
+      <div className="flex flex-wrap gap-1 bg-white p-1 rounded-xl mb-6 w-fit border border-gray-200 shadow-sm dark:border-white/10 dark:bg-slate-950/70">
         {TABS.map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === k ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`}>
+            className={`relative px-4 py-2 rounded-lg text-sm font-medium transition ${tab === k ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'}`}>
             {label}
+            {k === 'support' && supportBadgeCount > 0 && (
+              <span
+                className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-extrabold leading-none text-white shadow-sm"
+                title={copy.supportBadge(supportBadgeCount)}
+                aria-label={copy.supportBadge(supportBadgeCount)}
+              >
+                {supportBadgeCount > 99 ? '99+' : supportBadgeCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -96,6 +233,7 @@ export default function AdminPage() {
           revenueByDay={dashboard?.revenue_by_day || []}
           formatDate={formatDate}
           t={t}
+          copy={copy}
         />
       )}
       {tab === 'events' && (
@@ -105,11 +243,12 @@ export default function AdminPage() {
           formatDateTime={formatDateTime}
           t={t}
           locale={locale}
+          copy={copy}
           onChanged={() => loadAdminData({ showLoading: false })}
         />
       )}
       {tab === 'customers' && <CustomerManagementTab events={events} formatDateTime={formatDateTime} formatVNDLong={formatVNDLong} t={t} />}
-      {tab === 'refunds' && <RefundsTab formatDateTime={formatDateTime} formatVNDLong={formatVNDLong} t={t} />}
+      {tab === 'support' && <SupportTab formatDateTime={formatDateTime} formatVNDLong={formatVNDLong} t={t} copy={copy} onChanged={() => loadAdminData({ showLoading: false })} />}
       {tab === 'news' && <NewsTab posts={newsPosts} formatDateTime={formatDateTime} t={t} onChanged={() => loadAdminData({ showLoading: false })} />}
     </div>
   );
@@ -125,7 +264,56 @@ function StatCard({ label, value, sub, gradient }) {
   );
 }
 
-function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByDay, formatDate, t }) {
+function PaginationControls({ currentPage, totalPages, onPageChange, copy }) {
+  if (totalPages <= 1) return null;
+
+  const items = getCompactPaginationItems(totalPages, currentPage);
+  const goToPage = page => onPageChange(clampPage(page, totalPages));
+
+  return (
+    <nav className="mt-5 flex items-center justify-center gap-2 border-t border-gray-100 pt-4 dark:border-white/10" aria-label="Pagination">
+      <button
+        type="button"
+        onClick={() => goToPage(currentPage - 1)}
+        disabled={currentPage <= 1}
+        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-white/10"
+        aria-label={copy.previousPage}
+      >
+        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+      </button>
+      {items.map((item, index) => (
+        item === 'ellipsis' ? (
+          <span key={`ellipsis-${index}`} className="inline-flex h-10 min-w-10 items-center justify-center rounded-2xl px-3 text-sm font-bold text-gray-400 dark:text-slate-500">...</span>
+        ) : (
+          <button
+            key={item}
+            type="button"
+            onClick={() => goToPage(item)}
+            className={`inline-flex h-10 min-w-10 items-center justify-center rounded-2xl px-3 text-sm font-extrabold transition ${
+              item === currentPage
+                ? 'bg-pink-600 text-white shadow-lg shadow-pink-600/20'
+                : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-white/10'
+            }`}
+            aria-current={item === currentPage ? 'page' : undefined}
+          >
+            {item}
+          </button>
+        )
+      ))}
+      <button
+        type="button"
+        onClick={() => goToPage(currentPage + 1)}
+        disabled={currentPage >= totalPages}
+        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-white/10"
+        aria-label={copy.nextPage}
+      >
+        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+      </button>
+    </nav>
+  );
+}
+
+function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByDay, formatDate, t, copy }) {
   const [searchDraft, setSearchDraft] = useState('');
   const [occupancyQuery, setOccupancyQuery] = useState('');
   const [occupancyPage, setOccupancyPage] = useState(1);
@@ -177,31 +365,31 @@ function DashboardTab({ totalRevenue, totalOrders, totalSold, events, revenueByD
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="font-semibold text-gray-700">{t('admin.occupancyByEvent')}</h2>
-            <p className="mt-1 text-xs text-gray-400">Hien thi {occupancy.totalItems} / {events.length} su kien</p>
+            <p className="mt-1 text-xs text-gray-400">Hiển thị {occupancy.totalItems} / {events.length} sự kiện</p>
           </div>
           <form onSubmit={submitSearch} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <input
               type="search"
               value={searchDraft}
               onChange={event => setSearchDraft(event.target.value)}
-              placeholder="Tim su kien..."
+              placeholder="Tìm sự kiện..."
               className="min-w-0 rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-64"
             />
             <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
               <Search className="h-4 w-4" aria-hidden="true" />
-              Tim
+              Tìm
             </button>
             {occupancyQuery && (
               <button type="button" onClick={clearSearch} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
-                Xoa
+                Xóa
               </button>
             )}
           </form>
         </div>
         {events.length === 0 ? (
-          <p className="text-sm text-gray-400">Chua co du lieu su kien.</p>
+          <p className="text-sm text-gray-400">Chưa có dữ liệu sự kiện.</p>
         ) : occupancy.items.length === 0 ? (
-          <p className="text-sm text-gray-400">Khong tim thay su kien phu hop.</p>
+          <p className="text-sm text-gray-400">Không tìm thấy sự kiện phù hợp.</p>
         ) : (
           <>
           <div className="space-y-3">
@@ -275,11 +463,40 @@ function canDeleteEventFromStats(event) {
   return soldSeats === 0 && lockedSeats === 0 && orderCount === 0 && adminActionCount === 0;
 }
 
-function EventsTab({ events, t, locale, onChanged }) {
+function EventsTab({ events, t, locale, copy, onChanged }) {
   const [batchSizes, setBatchSizes] = useState({});
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredEvents = normalizedQuery
+    ? events.filter(event => [
+      event.title,
+      event.status,
+      event.venue,
+      event.event_date ? new Date(event.event_date).toLocaleDateString(locale) : '',
+    ].some(value => String(value || '').toLowerCase().includes(normalizedQuery)))
+    : events;
+  const totalPages = getTotalPages(filteredEvents, ADMIN_PAGE_SIZE);
+  const currentPage = clampPage(page, totalPages);
+  const visibleEvents = getPageItems(filteredEvents, currentPage, ADMIN_PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, events.length]);
+
+  const submitSearch = (event) => {
+    event.preventDefault();
+    setQuery(searchDraft);
+  };
+
+  const clearSearch = () => {
+    setSearchDraft('');
+    setQuery('');
+  };
 
   const getBatchSize = (event) => Number(batchSizes[event.id] ?? event.queue_batch_size ?? 50);
 
@@ -319,6 +536,30 @@ function EventsTab({ events, t, locale, onChanged }) {
       {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>}
       {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
 
+      <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-950/80 lg:flex-row lg:items-center lg:justify-between">
+        <p className="text-sm font-semibold text-gray-600 dark:text-slate-300">
+          {copy.showingEvents} {filteredEvents.length} / {events.length} {copy.ofEvents}
+        </p>
+        <form onSubmit={submitSearch} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <input
+            type="search"
+            value={searchDraft}
+            onChange={event => setSearchDraft(event.target.value)}
+            placeholder={copy.searchEvents}
+            className="min-w-0 rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500 sm:w-72 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
+          />
+          <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
+            <Search className="h-4 w-4" aria-hidden="true" />
+            {copy.search}
+          </button>
+          {query && (
+            <button type="button" onClick={clearSearch} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-white/10">
+              {copy.clear}
+            </button>
+          )}
+        </form>
+      </div>
+
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
@@ -330,7 +571,7 @@ function EventsTab({ events, t, locale, onChanged }) {
               </tr>
             </thead>
             <tbody>
-              {events.map(e => {
+              {visibleEvents.map(e => {
                 const canDelete = canDeleteEventFromStats(e);
                 const seatsEmpty = Number(e.sold_seats || 0) === 0 && Number(e.locked_seats || 0) === 0;
                 const actionDisabled = busy !== '';
@@ -413,6 +654,13 @@ function EventsTab({ events, t, locale, onChanged }) {
           </table>
         </div>
       </div>
+      {filteredEvents.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm dark:border-white/10 dark:bg-slate-950/80 dark:text-slate-400">
+          {copy.noMatchingEvents}
+        </div>
+      ) : (
+        <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} copy={copy} />
+      )}
     </div>
   );
 }
@@ -955,37 +1203,49 @@ function CustomerOrderCard({ order, busy, onCancelTicket, formatDateTime, format
   );
 }
 
-function RefundsTab({ formatDateTime, formatVNDLong, t }) {
+function SupportTab({ formatDateTime, formatVNDLong, t, copy, onChanged }) {
   const [refunds, setRefunds] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
+  const [page, setPage] = useState(1);
 
-  const fetchRefunds = async () => {
+  const fetchSupportItems = async () => {
     setLoading(true);
+    setError('');
     try {
-      const { data } = await api.get('/admin/refunds', { params: { status: statusFilter !== 'all' ? statusFilter : undefined } });
-      setRefunds(data);
+      const [refundResponse, supportResponse] = await Promise.all([
+        api.get('/admin/refunds', { params: { status: undefined } }),
+        api.get('/admin/support-requests', { params: { status: undefined } }),
+      ]);
+      setRefunds(Array.isArray(refundResponse.data) ? refundResponse.data : []);
+      setRequests(Array.isArray(supportResponse.data) ? supportResponse.data : []);
     } catch (err) {
-      setError('Cannot load refund requests.');
+      setError(copy.supportLoadError);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRefunds();
+    fetchSupportItems();
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
   }, [statusFilter]);
 
-  const handleAction = async (id, action) => {
+  const handleRefundAction = async (id, action) => {
     if (action === 'approve' && !window.confirm(t('admin.approveConfirm'))) return;
     if (action === 'reject' && !window.confirm(t('admin.rejectConfirm'))) return;
 
     setBusy(id);
     try {
       await api.post(`/admin/refunds/${id}/${action}`);
-      await fetchRefunds();
+      await fetchSupportItems();
+      await onChanged();
     } catch (err) {
       alert(err.response?.data?.error || 'Action failed');
     } finally {
@@ -993,13 +1253,78 @@ function RefundsTab({ formatDateTime, formatVNDLong, t }) {
     }
   };
 
+  const handleSupportStatus = async (id, status) => {
+    setBusy(id);
+    try {
+      await api.patch(`/admin/support-requests/${id}`, { status });
+      await fetchSupportItems();
+      await onChanged();
+    } catch (err) {
+      alert(err.response?.data?.error || copy.supportActionError);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const allItems = [
+    ...refunds.map(item => ({
+      id: `refund-${item.id}`,
+      sourceId: item.id,
+      kind: 'refund',
+      status: item.status,
+      createdAt: item.created_at,
+      requesterName: item.user_name,
+      requesterEmail: item.user_email,
+      title: item.event_title,
+      detail: `${item.zone_name || ''} ${item.seat_label || ''}`.trim(),
+      note: item.reason,
+      amount: item.price,
+    })),
+    ...requests.map(item => ({
+      id: `support-${item.id}`,
+      sourceId: item.id,
+      kind: 'support',
+      status: item.status,
+      createdAt: item.created_at,
+      requesterName: item.name,
+      requesterEmail: item.email,
+      title: t(`feedback.types.${item.type}`, { defaultValue: item.type }),
+      detail: item.message,
+      note: '',
+      amount: null,
+    })),
+  ].sort((a, b) => {
+    const rank = value => (['pending', 'open', 'in_progress'].includes(value) ? 0 : 1);
+    return rank(a.status) - rank(b.status) || new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  const filteredItems = allItems.filter(item => {
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'pending') return ['pending', 'open', 'in_progress'].includes(item.status);
+    if (statusFilter === 'refunds') return item.kind === 'refund';
+    if (statusFilter === 'support') return item.kind === 'support';
+    if (statusFilter === 'resolved') return ['approved', 'rejected', 'resolved', 'closed'].includes(item.status);
+    return true;
+  });
+  const totalPages = getTotalPages(filteredItems, SUPPORT_PAGE_SIZE);
+  const currentPage = clampPage(page, totalPages);
+  const visibleItems = getPageItems(filteredItems, currentPage, SUPPORT_PAGE_SIZE);
+
+  const filters = [
+    ['pending', copy.supportPending],
+    ['refunds', copy.supportRefunds],
+    ['support', copy.supportRequests],
+    ['resolved', copy.supportResolved],
+    ['all', copy.supportAll],
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 mb-4">
-        {['pending', 'approved', 'rejected', 'all'].map(s => (
-          <button key={s} onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-            {s === 'all' ? t('common.all') : s}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {filters.map(([key, label]) => (
+          <button key={key} onClick={() => setStatusFilter(key)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${statusFilter === key ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-white/10'}`}>
+            {label}
           </button>
         ))}
       </div>
@@ -1008,56 +1333,74 @@ function RefundsTab({ formatDateTime, formatVNDLong, t }) {
         <div className="text-center py-10 text-gray-400">{t('common.loading')}</div>
       ) : error ? (
         <div className="text-red-500">{error}</div>
-      ) : refunds.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
-          {t('common.noResults')}
+      ) : filteredItems.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500 dark:border-white/10 dark:bg-slate-950/80 dark:text-slate-400">
+          {copy.supportEmpty}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+        <>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm dark:border-white/10 dark:bg-slate-950/80">
+          <table className="w-full min-w-[920px] text-sm text-left">
+            <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
               <tr>
-                <th className="px-4 py-3">User</th>
-                <th className="px-4 py-3">Event / Seat</th>
-                <th className="px-4 py-3">Price</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3">{copy.requestType}</th>
+                <th className="px-4 py-3">{copy.requester}</th>
+                <th className="px-4 py-3">{copy.requestContent}</th>
+                <th className="px-4 py-3">{copy.createdAt}</th>
+                <th className="px-4 py-3">{copy.status}</th>
+                <th className="px-4 py-3 text-right">{copy.actions}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {refunds.map(r => (
-                <tr key={r.id} className="hover:bg-gray-50/50">
+            <tbody className="divide-y divide-gray-100 dark:divide-white/10">
+              {visibleItems.map(item => (
+                <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-white/5">
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-gray-800">{r.user_name}</p>
-                    <p className="text-xs text-gray-500">{r.user_email}</p>
+                    <p className="font-semibold text-gray-800 dark:text-slate-100">{item.kind === 'refund' ? copy.refundRequest : copy.supportRequest}</p>
+                    {item.amount !== null && <p className="text-xs font-semibold text-blue-600">{formatVNDLong(item.amount)}</p>}
                   </td>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-gray-800">{r.event_title}</p>
-                    <p className="text-xs text-gray-500">{r.zone_name} {r.seat_label}</p>
-                    {r.reason && <p className="text-xs text-amber-600 mt-1" title={r.reason}>Note: {r.reason}</p>}
+                    <p className="font-semibold text-gray-800 dark:text-slate-100">{item.requesterName || '-'}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">{item.requesterEmail}</p>
                   </td>
-                  <td className="px-4 py-3 font-semibold text-blue-600">{formatVNDLong(r.price)}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{formatDateTime(r.created_at)}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-800 dark:text-slate-100">{item.title}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-gray-500 dark:text-slate-400">{item.detail}</p>
+                    {item.note && <p className="text-xs text-amber-600 mt-1" title={item.note}>{copy.note}: {item.note}</p>}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500 text-xs dark:text-slate-400">{formatDateTime(item.createdAt)}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      r.status === 'approved' ? 'bg-emerald-50 text-emerald-600' :
-                      r.status === 'rejected' ? 'bg-red-50 text-red-600' :
+                      ['approved', 'resolved', 'closed'].includes(item.status) ? 'bg-emerald-50 text-emerald-600' :
+                      item.status === 'rejected' ? 'bg-red-50 text-red-600' :
                       'bg-amber-50 text-amber-600'
                     }`}>
-                      {r.status}
+                      {copy[item.status] || item.status}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {r.status === 'pending' && (
+                    {item.kind === 'refund' && item.status === 'pending' && (
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => handleAction(r.id, 'approve')} disabled={busy === r.id}
+                        <button onClick={() => handleRefundAction(item.sourceId, 'approve')} disabled={busy === item.sourceId}
                           className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded border border-emerald-200 disabled:opacity-50 transition font-medium">
-                          {busy === r.id ? '...' : t('admin.approveRefund')}
+                          {busy === item.sourceId ? '...' : copy.approve}
                         </button>
-                        <button onClick={() => handleAction(r.id, 'reject')} disabled={busy === r.id}
+                        <button onClick={() => handleRefundAction(item.sourceId, 'reject')} disabled={busy === item.sourceId}
                           className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded border border-red-200 disabled:opacity-50 transition font-medium">
-                          {busy === r.id ? '...' : t('admin.rejectRefund')}
+                          {busy === item.sourceId ? '...' : copy.reject}
+                        </button>
+                      </div>
+                    )}
+                    {item.kind === 'support' && ['open', 'in_progress'].includes(item.status) && (
+                      <div className="flex justify-end gap-2">
+                        {item.status === 'open' && (
+                          <button onClick={() => handleSupportStatus(item.sourceId, 'in_progress')} disabled={busy === item.sourceId}
+                            className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded border border-blue-200 disabled:opacity-50 transition font-medium">
+                            {busy === item.sourceId ? '...' : copy.markProgress}
+                          </button>
+                        )}
+                        <button onClick={() => handleSupportStatus(item.sourceId, 'resolved')} disabled={busy === item.sourceId}
+                          className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded border border-emerald-200 disabled:opacity-50 transition font-medium">
+                          {busy === item.sourceId ? '...' : copy.markResolved}
                         </button>
                       </div>
                     )}
@@ -1067,6 +1410,8 @@ function RefundsTab({ formatDateTime, formatVNDLong, t }) {
             </tbody>
           </table>
         </div>
+        <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setPage} copy={copy} />
+        </>
       )}
     </div>
   );

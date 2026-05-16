@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import api from '../lib/api.js';
 
 const TYPE_KEYS = ['account', 'technical', 'order', 'payment', 'other'];
 
@@ -7,10 +8,21 @@ export default function FeedbackPage() {
   const { t } = useTranslation();
   const [form, setForm] = useState({ name: '', email: '', type: '', message: '' });
   const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handle = (e) => {
+  const handle = async (e) => {
     e.preventDefault();
-    setSent(true);
+    setLoading(true);
+    setError('');
+    try {
+      await api.post('/support-requests', form);
+      setSent(true);
+    } catch (err) {
+      setError(err.response?.data?.error || t('feedback.submitError', { defaultValue: 'Không thể gửi yêu cầu. Vui lòng thử lại.' }));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -43,6 +55,11 @@ export default function FeedbackPage() {
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-8 py-8">
         <form onSubmit={handle} className="space-y-5">
+          {error && (
+            <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+              {error}
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-700 mb-1.5 font-medium">{t('feedback.nameLabel')}</label>
@@ -84,9 +101,10 @@ export default function FeedbackPage() {
           </div>
 
           <button type="submit"
-            className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm transition hover:opacity-90"
+            disabled={loading}
+            className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             style={{ background: 'linear-gradient(90deg, #f9a8d4, #ec4899)' }}>
-            {t('feedback.submitBtn')}
+            {loading ? t('common.loading') : t('feedback.submitBtn')}
           </button>
         </form>
       </div>

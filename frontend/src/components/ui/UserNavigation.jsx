@@ -131,17 +131,17 @@ export default function UserNavigation() {
                 className="inline-flex items-center gap-1 text-xs font-semibold text-accent disabled:text-label-tertiary"
               >
                 <CheckCheck size={14} />
-                Da doc tat ca
+                Đã đọc tất cả
               </button>
             </div>
 
             {notifLoading ? (
               <div className="px-4 py-8 text-center text-footnote text-label-tertiary">
-                Dang tai...
+                Đang tải...
               </div>
             ) : notifications.length === 0 ? (
               <div className="px-4 py-8 text-center text-footnote text-label-tertiary">
-                Khong co thong bao moi
+                Không có thông báo mới
               </div>
             ) : (
               <div className="max-h-96 overflow-y-auto py-1">

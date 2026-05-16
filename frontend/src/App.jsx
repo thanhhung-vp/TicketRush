@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
+import ScrollRestoration from './components/ScrollRestoration.jsx';
+import { useSmoothWheelScroll } from './hooks/useSmoothWheelScroll.js';
 
 import LoginPage          from './pages/LoginPage.jsx';
 import RegisterPage       from './pages/RegisterPage.jsx';
@@ -33,8 +35,11 @@ function PrivateRoute({ children, adminOnly = false }) {
 }
 
 function AppRoutes() {
+  useSmoothWheelScroll();
+
   return (
     <>
+      <ScrollRestoration />
       <Navbar />
       <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <Routes>

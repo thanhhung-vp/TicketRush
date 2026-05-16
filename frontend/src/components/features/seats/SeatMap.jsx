@@ -11,9 +11,9 @@ import { clampRotation, normalizeAudienceShape, normalizeStageLayout } from '../
 
 const STATUS_STYLE = {
   available: 'bg-gray-700 hover:ring-2 hover:ring-blue-400 cursor-pointer',
-  locked:    'bg-yellow-600 opacity-60 cursor-not-allowed',
-  sold:      'bg-gray-600 opacity-40 cursor-not-allowed',
-  selected:  'bg-blue-500 ring-2 ring-blue-300 cursor-pointer',
+  locked: 'bg-yellow-600 opacity-60 cursor-not-allowed',
+  sold: 'bg-gray-600 opacity-40 cursor-not-allowed',
+  selected: 'bg-blue-500 ring-2 ring-blue-300 cursor-pointer',
 };
 
 function hexToRgba(hex = '#3B82F6', alpha = 1) {
@@ -29,15 +29,9 @@ function getZonePath(zone) {
   const h = Number(zone.height || 0);
   const shape = normalizeAudienceShape(zone.shape);
 
-  if (shape === 'fan') {
-    return `M ${w * 0.08} ${h} Q ${w / 2} ${-h * 0.18} ${w * 0.92} ${h} Q ${w / 2} ${h * 0.72} ${w * 0.08} ${h} Z`;
-  }
-  if (shape === 'semicircle') {
-    return `M 0 ${h} A ${w / 2} ${h} 0 0 1 ${w} ${h} L 0 ${h} Z`;
-  }
-  if (shape === 'u_shape') {
-    return `M 0 0 H ${w} V ${h} H ${w * 0.68} V ${h * 0.38} H ${w * 0.32} V ${h} H 0 Z`;
-  }
+  if (shape === 'fan') return `M ${w * 0.08} ${h} Q ${w / 2} ${-h * 0.18} ${w * 0.92} ${h} Q ${w / 2} ${h * 0.72} ${w * 0.08} ${h} Z`;
+  if (shape === 'semicircle') return `M 0 ${h} A ${w / 2} ${h} 0 0 1 ${w} ${h} L 0 ${h} Z`;
+  if (shape === 'u_shape') return `M 0 0 H ${w} V ${h} H ${w * 0.68} V ${h * 0.38} H ${w * 0.32} V ${h} H 0 Z`;
   return `M 0 0 H ${w} V ${h} H 0 Z`;
 }
 
@@ -54,9 +48,7 @@ function getStagePath(stage) {
     const inset = w * 0.28;
     return `M 0 0 H ${w} V ${h * 0.58} H ${w - inset} V ${h} H ${inset} V ${h * 0.58} H 0 Z`;
   }
-  if (shape === 'catwalk') {
-    return `M ${w * 0.16} 0 H ${w * 0.84} V ${h * 0.42} H ${w * 0.58} V ${h} H ${w * 0.42} V ${h * 0.42} H ${w * 0.16} Z`;
-  }
+  if (shape === 'catwalk') return `M ${w * 0.16} 0 H ${w * 0.84} V ${h * 0.42} H ${w * 0.58} V ${h} H ${w * 0.42} V ${h * 0.42} H ${w * 0.16} Z`;
   return `M 0 0 H ${w} V ${h} H 0 Z`;
 }
 
@@ -75,20 +67,20 @@ function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
   const zonesById = new Map(zoneGroups.map(zone => [String(zone.zone_id), zone]));
 
   return (
-    <div className="rounded-2xl border border-gray-800 bg-gray-950/80 p-4">
+    <div className="rounded-2xl border border-separator bg-surface p-4 shadow-1">
       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-sm font-bold text-white">So do tong quan</h3>
-          <p className="text-xs text-gray-500">Bam vao mot khu de chuyen nhanh den danh sach ghe.</p>
+          <h3 className="text-sm font-bold text-label-primary">Sơ đồ tổng quan</h3>
+          <p className="text-xs text-label-secondary">Bấm vào một khu để chuyển nhanh đến danh sách ghế.</p>
         </div>
-        <p className="text-xs text-gray-500">{layout.zones.length} khu ve</p>
+        <p className="text-xs text-label-secondary">{layout.zones.length} khu vé</p>
       </div>
       <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#0d0d14]">
         <svg
           viewBox={`0 0 ${canvas.width || 860} ${canvas.height || 540}`}
           className="block min-w-[640px] w-full"
           role="img"
-          aria-label="So do tong quan su kien"
+          aria-label="Sơ đồ tổng quan sự kiện"
         >
           <defs>
             <linearGradient id="stageFill" x1="0" x2="0" y1="0" y2="1">
@@ -123,7 +115,7 @@ function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
                   textAnchor="middle"
                   className="fill-white/70 text-[11px] font-bold uppercase tracking-[0.25em]"
                 >
-                  {stage.label || 'STAGE'}
+                  {stage.label || 'SÂN KHẤU'}
                 </text>
               </g>
             );
@@ -135,7 +127,7 @@ function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
             const available = group?.seats?.filter(seat => seat.status === 'available').length ?? 0;
             const color = zone.color || '#3B82F6';
             const shape = normalizeAudienceShape(zone.shape);
-            const zoneLabel = `${zone.name || 'Khu'} - ${available}/${total} ghe trong`;
+            const zoneLabel = `${zone.name || 'Khu'} - ${available}/${total} ghế trống`;
             const transform = rotateTransform(zone);
 
             return (
@@ -184,7 +176,7 @@ function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
                   textAnchor="middle"
                   className="pointer-events-none fill-white/60 text-[11px]"
                 >
-                  {available}/{total} ghe trong
+                  {available}/{total} ghế trống
                 </text>
               </g>
             );
@@ -199,12 +191,12 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [seats, setSeats]         = useState(initialSeats);
-  const [selected, setSelected]   = useState(new Set());
-  const [holding, setHolding]     = useState(false);
+  const [seats, setSeats] = useState(initialSeats);
+  const [selected, setSelected] = useState(new Set());
+  const [holding, setHolding] = useState(false);
   const [lockedUntil, setLockedUntil] = useState(null);
   const [heldSeats, setHeldSeats] = useState([]);
-  const [error, setError]         = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -221,12 +213,11 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
           navigate(`/queue/${data.event_id || eventId}`, { replace: true });
           return;
         }
-        setError(data?.error || 'Khong the tai so do ghe.');
+        setError(data?.error || 'Không thể tải sơ đồ ghế.');
       });
     return () => { active = false; };
   }, [eventId, navigate, user]);
 
-  // Real-time seat updates via Socket.io
   useEventSocket(eventId, (updatedSeats) => {
     setSeats(prev => {
       const map = new Map(prev.map(s => [s.id, s]));
@@ -235,7 +226,6 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
       });
       return Array.from(map.values());
     });
-    // Deselect seats that are no longer available
     setSelected(prev => {
       const next = new Set(prev);
       updatedSeats.forEach(u => {
@@ -245,10 +235,8 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
     });
   });
 
-  // Countdown hook — ticks down from lockedUntil
   const countdown = useCountdown(lockedUntil);
 
-  // Auto-clear hold state when countdown reaches zero
   useEffect(() => {
     if (countdown === 0 && heldSeats.length > 0) {
       setHeldSeats([]);
@@ -259,7 +247,7 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
   const toggleSeat = useCallback((seat) => {
     if (!user) return;
     if (seat.status !== 'available') return;
-    if (heldSeats.length > 0) return; // already in hold mode
+    if (heldSeats.length > 0) return;
 
     setSelected(prev => {
       const next = new Set(prev);
@@ -292,7 +280,6 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
     setLockedUntil(null);
   };
 
-  // Group seats by zone
   const zones = {};
   seats.forEach(s => {
     if (!zones[s.zone_id]) zones[s.zone_id] = { ...s, seats: [] };
@@ -300,18 +287,23 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
   });
   const zoneGroups = Object.values(zones);
 
-  const selectedSeats  = seats.filter(s => selected.has(s.id));
-  const heldSeatObjs   = seats.filter(s => heldSeats.includes(s.id));
-  const total          = [...selectedSeats, ...heldSeatObjs].reduce((acc, s) => acc + Number(s.price), 0);
-  const fmtCountdown   = countdown != null ? formatCountdown(countdown) : null;
+  const selectedSeats = seats.filter(s => selected.has(s.id));
+  const heldSeatObjs = seats.filter(s => heldSeats.includes(s.id));
+  const total = [...selectedSeats, ...heldSeatObjs].reduce((acc, s) => acc + Number(s.price), 0);
+  const fmtCountdown = countdown != null ? formatCountdown(countdown) : null;
   const focusZone = (zoneId) => {
-    document.getElementById(`zone-grid-${zoneId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const zoneEl = document.getElementById(`zone-grid-${zoneId}`);
+    if (!zoneEl) return;
+    zoneEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    zoneEl.classList.add('ring-2', 'ring-info', 'ring-offset-2', 'ring-offset-[var(--bg-canvas)]');
+    window.setTimeout(() => {
+      zoneEl.classList.remove('ring-2', 'ring-info', 'ring-offset-2', 'ring-offset-[var(--bg-canvas)]');
+    }, 1200);
   };
 
   return (
     <div className="space-y-6">
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs text-gray-400">
+      <div className="flex flex-wrap gap-4 text-xs text-label-secondary">
         {[
           ['bg-gray-700', 'Còn trống'],
           ['bg-blue-500', 'Đang chọn'],
@@ -326,7 +318,6 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
 
       <VenueOverview layout={layout} zoneGroups={zoneGroups} onZoneFocus={focusZone} />
 
-      {/* Seat zones */}
       {zoneGroups.map(zone => (
         <ZoneGrid
           key={zone.zone_id}
@@ -337,12 +328,10 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
         />
       ))}
 
-      {/* Error */}
       {error && (
-        <p className="text-red-400 text-sm bg-red-950/30 px-3 py-2 rounded-lg">{error}</p>
+        <p className="rounded-lg bg-danger-tint px-3 py-2 text-sm text-danger">{error}</p>
       )}
 
-      {/* Bottom panel */}
       {heldSeats.length > 0 ? (
         <HoldPanel
           heldSeatObjs={heldSeatObjs}
@@ -350,9 +339,7 @@ export default function SeatMap({ eventId, initialSeats = [], layout = null }) {
           countdown={countdown}
           total={total}
           onRelease={releaseHeld}
-          onCheckout={() =>
-            navigate('/checkout', { state: { seat_ids: heldSeats, seat_info: heldSeatObjs } })
-          }
+          onCheckout={() => navigate('/checkout', { state: { seat_ids: heldSeats, seat_info: heldSeatObjs } })}
         />
       ) : selected.size > 0 ? (
         <SelectionPanel
@@ -374,33 +361,33 @@ function ZoneGrid({ zone, selected, heldSeats, onToggle }) {
   });
 
   return (
-    <div id={`zone-grid-${zone.zone_id}`} className="scroll-mt-24 bg-gray-900 rounded-xl p-5 border border-gray-800">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: zone.color }} />
+    <div id={`zone-grid-${zone.zone_id}`} className="scroll-mt-24 rounded-xl border border-separator bg-surface p-5 transition-shadow duration-300">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: zone.color }} />
         <span className="font-semibold">{zone.zone_name}</span>
-        <span className="text-sm text-gray-500">— {formatVND(zone.price)}/ghế</span>
+        <span className="text-sm text-label-secondary">- {formatVND(zone.price)}/ghế</span>
       </div>
       <div className="overflow-x-auto">
         <div className="inline-block">
           {Object.entries(rows)
             .sort(([a], [b]) => Number(a) - Number(b))
             .map(([rowIdx, rowSeats]) => (
-              <div key={rowIdx} className="flex gap-1 mb-1">
-                <span className="w-5 text-xs text-gray-600 flex items-center">
+              <div key={rowIdx} className="mb-1 flex gap-1">
+                <span className="flex w-5 items-center text-xs text-label-tertiary">
                   {String.fromCharCode(65 + Number(rowIdx))}
                 </span>
                 {rowSeats
                   .sort((a, b) => a.col_idx - b.col_idx)
                   .map(seat => {
                     const isSelected = selected.has(seat.id);
-                    const isHeld     = heldSeats.has(seat.id);
+                    const isHeld = heldSeats.has(seat.id);
                     const displayStatus = isSelected ? 'selected' : isHeld ? 'locked' : seat.status;
                     return (
                       <button
                         key={seat.id}
                         title={seat.label}
                         onClick={() => onToggle(seat)}
-                        className={`w-7 h-7 rounded-sm text-[10px] font-medium transition-all ${STATUS_STYLE[displayStatus] || STATUS_STYLE.available}`}
+                        className={`h-7 w-7 rounded-sm text-[10px] font-medium transition-all ${STATUS_STYLE[displayStatus] || STATUS_STYLE.available}`}
                       >
                         {seat.col_idx + 1}
                       </button>
@@ -410,8 +397,8 @@ function ZoneGrid({ zone, selected, heldSeats, onToggle }) {
             ))}
         </div>
       </div>
-      <div className="mt-2 text-center text-xs text-gray-600 border-t border-gray-800 pt-2">
-        — Sân khấu —
+      <div className="mt-2 border-t border-separator pt-2 text-center text-xs text-label-secondary">
+        - Sân khấu -
       </div>
     </div>
   );
@@ -419,24 +406,24 @@ function ZoneGrid({ zone, selected, heldSeats, onToggle }) {
 
 function SelectionPanel({ selectedSeats, total, holding, onHold, onClear }) {
   return (
-    <div className="bg-gray-900 border border-blue-800 rounded-xl p-5 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+    <div className="flex flex-col items-start justify-between gap-4 rounded-xl border border-info bg-info-tint p-5 sm:flex-row sm:items-center">
       <div>
-        <p className="font-semibold mb-1">
+        <p className="mb-1 font-semibold">
           Ghế đã chọn: {selectedSeats.map(s => s.label).join(', ')}
         </p>
-        <p className="text-blue-400 font-bold text-lg">{formatVND(total)}</p>
+        <p className="text-lg font-bold text-info">{formatVND(total)}</p>
       </div>
       <div className="flex gap-3">
         <button
           onClick={onClear}
-          className="text-sm text-gray-400 hover:text-white px-4 py-2 border border-gray-700 rounded-lg transition"
+          className="rounded-lg border border-separator px-4 py-2 text-sm text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary"
         >
           Bỏ chọn
         </button>
         <button
           onClick={onHold}
           disabled={holding}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-lg transition"
+          className="rounded-lg bg-info px-6 py-2 font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
         >
           {holding ? 'Đang giữ...' : 'Giữ ghế →'}
         </button>
@@ -446,31 +433,29 @@ function SelectionPanel({ selectedSeats, total, holding, onHold, onClear }) {
 }
 
 function HoldPanel({ heldSeatObjs, fmtCountdown, countdown, total, onRelease, onCheckout }) {
-  const urgent = countdown != null && countdown < 120; // under 2 minutes
+  const urgent = countdown != null && countdown < 120;
   return (
-    <div className="bg-gray-900 border border-yellow-700 rounded-xl p-5 space-y-3">
+    <div className="space-y-3 rounded-xl border border-warning bg-warning-tint p-5">
       <div className="flex items-center justify-between">
         <p className="font-semibold">
           Ghế đang giữ: {heldSeatObjs.map(s => s.label).join(', ')}
         </p>
-        <span
-          className={`text-lg font-mono font-bold ${urgent ? 'text-red-400 animate-pulse' : 'text-yellow-400'}`}
-        >
-          ⏱ {fmtCountdown}
+        <span className={`text-lg font-mono font-bold ${urgent ? 'text-danger animate-pulse' : 'text-warning'}`}>
+          {fmtCountdown}
         </span>
       </div>
-      <p className="text-yellow-300 text-sm">Hoàn tất thanh toán trước khi hết giờ!</p>
-      <p className="text-blue-400 font-bold text-lg">{formatVND(total)}</p>
+      <p className="text-sm text-label-primary">Hoàn tất thanh toán trước khi hết giờ.</p>
+      <p className="text-lg font-bold text-info">{formatVND(total)}</p>
       <div className="flex gap-3">
         <button
           onClick={onRelease}
-          className="text-sm text-gray-400 hover:text-white px-4 py-2 border border-gray-700 rounded-lg transition"
+          className="rounded-lg border border-separator px-4 py-2 text-sm text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary"
         >
           Hủy giữ chỗ
         </button>
         <button
           onClick={onCheckout}
-          className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg transition"
+          className="rounded-lg bg-success px-6 py-2 font-semibold text-white transition hover:brightness-95"
         >
           Thanh toán →
         </button>

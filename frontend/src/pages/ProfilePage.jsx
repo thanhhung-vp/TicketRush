@@ -83,14 +83,14 @@ function saveLocal(key, val) {
 }
 
 function FieldLabel({ children }) {
-  return <label className="block text-sm text-gray-700 mb-1.5 font-normal">{children}</label>;
+  return <label className="mb-1.5 block text-sm font-normal text-label-secondary">{children}</label>;
 }
 
 function TextInput({ ...props }) {
   return (
     <input
       {...props}
-      className="w-full bg-gray-100 border-0 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-300/50 transition"
+      className="w-full rounded-xl border-0 bg-fill-tertiary px-4 py-3 text-sm text-label-primary placeholder:text-label-tertiary transition focus:outline-none focus:ring-2 focus:ring-pink-300/50"
     />
   );
 }
@@ -100,11 +100,11 @@ function SelectInput({ children, ...props }) {
     <div className="relative">
       <select
         {...props}
-        className="w-full appearance-none bg-gray-100 border-0 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-300/50 transition pr-10"
+        className="w-full appearance-none rounded-xl border-0 bg-fill-tertiary px-4 py-3 pr-10 text-sm text-label-primary transition focus:outline-none focus:ring-2 focus:ring-pink-300/50"
       >
         {children}
       </select>
-      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-label-secondary">
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
@@ -114,7 +114,7 @@ function SelectInput({ children, ...props }) {
 }
 
 function SectionTitle({ children }) {
-  return <h2 className="text-base font-semibold text-gray-800 mb-4">{children}</h2>;
+  return <h2 className="mb-4 text-base font-semibold text-label-primary">{children}</h2>;
 }
 
 export default function ProfilePage() {
@@ -247,9 +247,9 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
-      <h1 className="text-xl font-semibold text-gray-800 text-center mb-8">{t('profile.pageTitle')}</h1>
+      <h1 className="mb-8 text-center text-xl font-semibold text-label-primary">{t('profile.pageTitle')}</h1>
 
-      <form onSubmit={save} className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-6 mb-5">
+      <form onSubmit={save} className="mb-5 rounded-2xl border border-separator bg-surface px-6 py-6 shadow-1">
         <SectionTitle>{t('profile.personalInfo')}</SectionTitle>
 
         {msg   && <div className="mb-4 text-sm text-green-600 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5">{msg}</div>}
@@ -263,7 +263,7 @@ export default function ProfilePage() {
             onChange={uploadAvatar}
             className="hidden"
           />
-          <div className="h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-gray-100 shadow-sm flex items-center justify-center shrink-0">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-separator bg-fill-tertiary shadow-1">
             {avatarPreview ? (
               <img src={avatarPreview} alt="" className="h-full w-full object-cover" />
             ) : (
@@ -277,14 +277,14 @@ export default function ProfilePage() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={avatarUploading}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 text-sm text-gray-600 hover:bg-gray-200 transition font-medium disabled:cursor-wait disabled:opacity-60"
+              className="flex items-center gap-2 rounded-xl bg-fill-tertiary px-4 py-2 text-sm font-medium text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary disabled:cursor-wait disabled:opacity-60"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               {avatarUploading ? t('profile.avatarUploading') : t('profile.changeAvatar')}
             </button>
-            <p className="mt-1.5 text-xs text-gray-400">{t('profile.avatarHint')}</p>
+            <p className="mt-1.5 text-xs text-label-tertiary">{t('profile.avatarHint')}</p>
           </div>
         </div>
 
@@ -368,7 +368,7 @@ export default function ProfilePage() {
 
         <div className="flex justify-end gap-3 mt-6">
           <button type="button" onClick={cancel}
-            className="px-5 py-2.5 rounded-xl bg-gray-100 text-sm text-gray-600 hover:bg-gray-200 transition font-medium">
+            className="rounded-xl bg-fill-tertiary px-5 py-2.5 text-sm font-medium text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary">
             {t('profile.cancelBtn')}
           </button>
           <button type="submit" disabled={saving}
@@ -380,7 +380,7 @@ export default function ProfilePage() {
         </div>
       </form>
 
-      <form onSubmit={changePw} className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-6">
+      <form onSubmit={changePw} className="rounded-2xl border border-separator bg-surface px-6 py-6 shadow-1">
         <SectionTitle>{t('profile.changePasswordSection')}</SectionTitle>
 
         {pwMsg   && <div className="mb-4 text-sm text-green-600 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5">{pwMsg}</div>}

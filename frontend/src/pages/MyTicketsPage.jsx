@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Check, CreditCard, Download, RotateCcw, Send, X } from 'lucide-react';
 import api from '../lib/api.js';
+import { useTheme } from '../context/ThemeContext.jsx';
 import ticketLogo from '../ticketlogo.png';
 import ticketsBackdrop from '../../24504411_15690.jpg';
 import { downloadTicketsImage, filterTicketsForSeat } from '../utils/ticketDownload.js';
@@ -52,10 +53,16 @@ function getBadgeClass(status) {
 }
 
 function TicketsPageFrame({ children }) {
+  const { isDark } = useTheme();
+
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-fixed text-slate-900"
-      style={PAGE_BACKGROUND_STYLE}
+      className={`min-h-screen ${
+        isDark
+          ? 'bg-canvas text-label-primary'
+          : 'bg-cover bg-center bg-fixed text-slate-900'
+      }`}
+      style={isDark ? undefined : PAGE_BACKGROUND_STYLE}
     >
       {children}
     </div>

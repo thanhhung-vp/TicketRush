@@ -20,6 +20,8 @@ const ticketDeleteSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 const newsStatusSchema = z.enum(['draft', 'published']);
+const supportStatusSchema = z.enum(['open', 'in_progress', 'resolved', 'closed']);
+const supportQueryStatusSchema = supportStatusSchema.optional();
 const newsCreateSchema = z.object({
   title: z.string().trim().min(3).max(180),
   summary: z.string().trim().max(280).optional().or(z.literal('')),
@@ -550,6 +552,64 @@ router.delete('/tickets/:id', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   } finally {
     client.release();
+  }
+});
+
+// GET /admin/support-requests - list customer support requests
+router.get('/support-requests', async (req, res) => {
+  const statusFilter = supportQueryStatusSchema.safeParse(req.query.status);
+  if (!statusFilter.success) {
+    return res.status(400).json({ error: 'Invalid support status' });
+  }
+
+  try {
+    const params = [];
+    let query = `
+      SELECT id, name, email, type, message, status, created_at, resolved_at
+      FROM support_requests
+    `;
+
+    if (statusFilter.data) {
+      query += ' WHERE status = $1';
+      params.push(statusFilter.data);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const { rows } = await pool.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PATCH /admin/support-requests/:id - update support request status
+router.patch('/support-requests/:id', async (req, res) => {
+  const requestId = uuidSchema.safeParse(req.params.id);
+  if (!requestId.success) return res.status(400).json({ error: 'Invalid support request id' });
+
+  const body = z.object({ status: supportStatusSchema }).safeParse(req.body || {});
+  if (!body.success) return res.status(400).json({ error: 'Invalid support status' });
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE support_requests
+       SET status = $2,
+           resolved_at = CASE WHEN $2 IN ('resolved', 'closed') THEN NOW() ELSE NULL END
+       WHERE id = $1
+       RETURNING id, name, email, type, message, status, created_at, resolved_at`,
+      [req.params.id, body.data.status]
+    );
+
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Support request not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

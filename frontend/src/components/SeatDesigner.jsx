@@ -508,7 +508,7 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
                 <input type="text" value={selZone.name} onChange={e => setZoneProp('name', e.target.value)} className={inputCls} />
               </PropRow>
 
-              <PropRow label="Dang khu vuc">
+              <PropRow label="Dạng khu vực">
                 <div className="grid grid-cols-2 gap-2">
                   {ZONE_SHAPE_OPTIONS.map(sh => (
                     <button key={sh.value} onClick={() => setZoneProp('shape', sh.value)}

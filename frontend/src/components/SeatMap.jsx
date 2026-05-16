@@ -105,13 +105,13 @@ function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
     <div className="mb-8 rounded-2xl border border-gray-800 bg-gray-950/80 p-4">
       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-sm font-bold text-white">So do tong quan</h3>
-          <p className="text-xs text-gray-500">Bam vao mot khu de chuyen nhanh den danh sach ghe.</p>
+          <h3 className="text-sm font-bold text-white">Sơ đồ tổng quan</h3>
+          <p className="text-xs text-gray-500">Bấm vào một khu để chuyển nhanh đến danh sách ghế.</p>
         </div>
         <p className="text-xs text-gray-500">{layout.zones.length} khu ve</p>
       </div>
       <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#0d0d14]">
-        <svg viewBox={`0 0 ${canvas.width || 860} ${canvas.height || 540}`} className="block min-w-[640px] w-full" role="img" aria-label="So do tong quan su kien">
+        <svg viewBox={`0 0 ${canvas.width || 860} ${canvas.height || 540}`} className="block min-w-[640px] w-full" role="img" aria-label="Sơ đồ tổng quan sự kiện">
           <defs>
             <linearGradient id="stageFillBooking" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="#4c1d95" />
@@ -139,14 +139,14 @@ function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
             const color = zone.color || '#3B82F6';
             const shape = normalizeAudienceShape(zone.shape);
             return (
-              <g key={zoneId} transform={rotateTransform(zone)} role="button" tabIndex={0} aria-label={`${zone.name || 'Khu'} ${available}/${total} ghe trong`} onClick={() => onZoneFocus(zoneId)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') onZoneFocus(zoneId); }} className="cursor-pointer outline-none">
+              <g key={zoneId} transform={rotateTransform(zone)} role="button" tabIndex={0} aria-label={`${zone.name || 'Khu'} ${available}/${total} ghế trống`} onClick={() => onZoneFocus(zoneId)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') onZoneFocus(zoneId); }} className="cursor-pointer outline-none">
                 {shape === 'circle' ? (
                   <ellipse cx={Number(zone.x || 0) + Number(zone.width || 0) / 2} cy={Number(zone.y || 0) + Number(zone.height || 0) / 2} rx={Number(zone.width || 0) / 2} ry={Number(zone.height || 0) / 2} fill={hexToRgba(color, 0.18)} stroke={color} strokeWidth="2" />
                 ) : (
                   <path d={getZonePath(zone)} transform={`translate(${zone.x || 0} ${zone.y || 0})`} fill={hexToRgba(color, 0.18)} stroke={color} strokeWidth="2" />
                 )}
                 <text x={Number(zone.x || 0) + Number(zone.width || 0) / 2} y={Number(zone.y || 0) + Number(zone.height || 0) / 2 - 4} textAnchor="middle" className="pointer-events-none fill-white text-[13px] font-bold">{zone.name}</text>
-                <text x={Number(zone.x || 0) + Number(zone.width || 0) / 2} y={Number(zone.y || 0) + Number(zone.height || 0) / 2 + 14} textAnchor="middle" className="pointer-events-none fill-white text-[11px] opacity-60">{available}/{total} ghe trong</text>
+                <text x={Number(zone.x || 0) + Number(zone.width || 0) / 2} y={Number(zone.y || 0) + Number(zone.height || 0) / 2 + 14} textAnchor="middle" className="pointer-events-none fill-white text-[11px] opacity-60">{available}/{total} ghế trống</text>
               </g>
             );
           })}
@@ -537,7 +537,13 @@ export default function SeatMap({ eventId, layout = null }) {
   const heldSeatObjs   = seats.filter(s => heldSeats.includes(s.id));
   const total = [...selectedSeats, ...heldSeatObjs].reduce((acc, s) => acc + Number(s.price), 0);
   const focusZone = (zoneId) => {
-    document.getElementById(`zone-grid-${zoneId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const zoneEl = document.getElementById(`zone-grid-${zoneId}`);
+    if (!zoneEl) return;
+    zoneEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    zoneEl.classList.add('ring-2', 'ring-blue-400', 'ring-offset-2', 'ring-offset-gray-950');
+    window.setTimeout(() => {
+      zoneEl.classList.remove('ring-2', 'ring-blue-400', 'ring-offset-2', 'ring-offset-gray-950');
+    }, 1200);
   };
 
   return (
