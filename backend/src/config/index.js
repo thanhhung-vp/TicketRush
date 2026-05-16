@@ -29,8 +29,8 @@ export const config = {
   },
   jwt: {
     secret: resolveJwtSecret(),
-    expiresIn: process.env.JWT_EXPIRES_IN || '15m',
-    refreshExpiresInDays: 30,
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    refreshExpiresInDays: Number(process.env.JWT_REFRESH_EXPIRES_IN_DAYS) || 7,
   },
   seat: {
     holdMinutes: Number(process.env.SEAT_HOLD_MINUTES) || 10,

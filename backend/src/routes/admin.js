@@ -6,6 +6,7 @@ import { authenticate, requireAdmin } from '../middleware/auth.js';
 import { getAdminDashboard } from '../services/adminDashboard.js';
 import { attachDynamicQrToTicket } from '../utils/ticketQr.js';
 import { recalculateOrderAfterTicketRemoval } from '../utils/orderTotals.js';
+import { createNotification } from '../services/notifications.js';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
@@ -398,9 +399,10 @@ router.post('/customers/:id/tickets', async (req, res) => {
     }
 
     const { rows: seatRows } = await client.query(
-      `SELECT s.id, s.event_id, s.status, z.price
+      `SELECT s.id, s.event_id, s.status, s.label AS seat_label, z.price, z.name AS zone_name, e.title AS event_title
        FROM seats s
        JOIN zones z ON z.id = s.zone_id
+       JOIN events e ON e.id = s.event_id
        WHERE s.id = $1
        FOR UPDATE`,
       [body.data.seat_id]
@@ -453,6 +455,16 @@ router.post('/customers/:id/tickets', async (req, res) => {
 
     await client.query('COMMIT');
     await broadcastSeatUpdate(req.app, seat.event_id, [seat.id], 'sold');
+    await createNotification({
+      db: pool,
+      io: req.app.get('io'),
+      userId: req.params.id,
+      type: 'ticket_received',
+      title: 'Bạn vừa nhận được vé',
+      body: `${seat.event_title} - ${seat.zone_name || 'Khu'} ${seat.seat_label || ''}`.trim(),
+      actionUrl: '/my-tickets?status=paid',
+      metadata: { event_id: seat.event_id, order_id: order.id, ticket_id: ticket.id, seat_id: seat.id },
+    }).catch(err => console.error('Ticket notification error:', err.message));
     res.status(201).json({ order, ticket });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -478,10 +490,11 @@ router.delete('/tickets/:id', async (req, res) => {
 
     const { rows: ticketRows } = await client.query(
       `SELECT t.id, t.order_id, t.user_id, t.seat_id,
-              s.event_id, z.price
+              s.event_id, s.label AS seat_label, z.name AS zone_name, z.price, e.title AS event_title
        FROM tickets t
        JOIN seats s ON s.id = t.seat_id
        JOIN zones z ON z.id = s.zone_id
+       JOIN events e ON e.id = s.event_id
        WHERE t.id = $1
        FOR UPDATE`,
       [req.params.id]
@@ -514,6 +527,22 @@ router.delete('/tickets/:id', async (req, res) => {
 
     await client.query('COMMIT');
     await broadcastSeatUpdate(req.app, ticket.event_id, [ticket.seat_id], 'available');
+    await createNotification({
+      db: pool,
+      io: req.app.get('io'),
+      userId: ticket.user_id,
+      type: 'ticket_cancelled',
+      title: 'Vé của bạn đã bị hủy',
+      body: `${ticket.event_title} - ${ticket.zone_name || 'Khu'} ${ticket.seat_label || ''}`.trim(),
+      actionUrl: '/my-tickets?status=cancelled',
+      metadata: {
+        event_id: ticket.event_id,
+        order_id: ticket.order_id,
+        ticket_id: ticket.id,
+        seat_id: ticket.seat_id,
+        reason: body.data.reason || null,
+      },
+    }).catch(err => console.error('Ticket notification error:', err.message));
     res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -564,7 +593,13 @@ router.post('/refunds/:id/approve', async (req, res) => {
     await client.query('BEGIN');
     
     const { rows: refundRows } = await client.query(
-      `SELECT * FROM ticket_refund_requests WHERE id = $1 FOR UPDATE`,
+      `SELECT r.*, e.title AS event_title, s.label AS seat_label, z.name AS zone_name
+       FROM ticket_refund_requests r
+       JOIN events e ON e.id = r.event_id
+       LEFT JOIN seats s ON s.id = r.seat_id
+       LEFT JOIN zones z ON z.id = s.zone_id
+       WHERE r.id = $1
+       FOR UPDATE OF r`,
       [req.params.id]
     );
     const refund = refundRows[0];
@@ -611,6 +646,22 @@ router.post('/refunds/:id/approve', async (req, res) => {
 
     await client.query('COMMIT');
     await broadcastSeatUpdate(req.app, refund.event_id, [refund.seat_id], 'available');
+    await createNotification({
+      db: pool,
+      io: req.app.get('io'),
+      userId: refund.user_id,
+      type: 'ticket_refunded',
+      title: 'Yêu cầu hoàn vé đã được duyệt',
+      body: `${refund.event_title} - ${refund.zone_name || 'Khu'} ${refund.seat_label || ''}`.trim(),
+      actionUrl: '/my-tickets?status=cancelled',
+      metadata: {
+        event_id: refund.event_id,
+        order_id: refund.order_id,
+        ticket_id: refund.ticket_id,
+        seat_id: refund.seat_id,
+        refund_id: refund.id,
+      },
+    }).catch(err => console.error('Refund notification error:', err.message));
     
     res.json({ ok: true, message: 'Refund approved successfully' });
   } catch (err) {

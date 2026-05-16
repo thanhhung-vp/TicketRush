@@ -3,12 +3,13 @@ import pool from '../config/db.js';
 import redis from '../config/redis.js';
 import { authenticate } from '../middleware/auth.js';
 import { seatReleaseQueue } from '../workers/seatRelease.js';
-import { admittedKey, highLoadKey } from '../utils/queueKeys.js';
+import { isUserAdmittedToQueue } from '../utils/virtualQueueAccess.js';
 import { ensureSingleEvent, validateSeatIds } from '../utils/seatHoldRules.js';
 import {
   cancelPendingOrdersForSeatIds,
   createOrReusePendingOrderForSeats,
 } from '../utils/pendingHoldOrders.js';
+import { releaseQueueSlotAndFill } from '../utils/virtualQueueFlow.js';
 
 const router = Router();
 
@@ -29,11 +30,10 @@ async function safeRedisCall(fn, fallback) {
   }
 }
 
-async function userNeedsQueueAdmission(eventId, userId) {
-  const highLoad = await safeRedisCall(() => redis.get(highLoadKey(eventId)), null);
-  if (!highLoad) return false;
+async function userNeedsQueueAdmission(event, eventId, userId) {
+  if (!event?.queue_enabled) return false;
 
-  const admitted = await safeRedisCall(() => redis.sismember(admittedKey(eventId), userId), 0);
+  const admitted = await safeRedisCall(() => isUserAdmittedToQueue(redis, eventId, userId), false);
   return !admitted;
 }
 
@@ -121,7 +121,7 @@ router.post('/hold', authenticate, async (req, res) => {
 
     // Reject holds on closed or past events — must be inside the transaction
     const { rows: [evt] } = await client.query(
-      `SELECT status, event_date FROM events WHERE id = $1`,
+      `SELECT status, event_date, queue_enabled FROM events WHERE id = $1`,
       [eventId]
     );
     if (!evt || evt.status === 'ended' || new Date(evt.event_date) < new Date()) {
@@ -129,7 +129,7 @@ router.post('/hold', authenticate, async (req, res) => {
       return res.status(409).json({ error: 'Sự kiện đã kết thúc, không thể đặt vé.' });
     }
 
-    if (await userNeedsQueueAdmission(eventId, req.user.id)) {
+    if (await userNeedsQueueAdmission(evt, eventId, req.user.id)) {
       await client.query('ROLLBACK');
       return res.status(403).json({
         error: 'Bạn cần vào hàng chờ trước khi giữ ghế.',
@@ -255,10 +255,11 @@ router.post('/release', authenticate, async (req, res) => {
   try {
     await client.query('BEGIN');
     const ph = seat_ids.map((_, i) => `$${i + 2}`).join(',');
-    await client.query(
+    const { rows: releasedSeats } = await client.query(
       `UPDATE seats
        SET status = 'available', locked_by = NULL, locked_at = NULL, locked_until = NULL
-       WHERE locked_by = $1 AND id IN (${ph}) AND status = 'locked'`,
+       WHERE locked_by = $1 AND id IN (${ph}) AND status = 'locked'
+       RETURNING id, event_id`,
       [req.user.id, ...seat_ids]
     );
     await cancelPendingOrdersForSeatIds(client, { userId: req.user.id, seatIds: seat_ids });
@@ -270,6 +271,16 @@ router.post('/release', authenticate, async (req, res) => {
     if (job) await job.remove().catch(() => {});
 
     await broadcastSeatUpdate(req.app, seat_ids);
+    const releasedEventIds = [...new Set(releasedSeats.map(seat => seat.event_id))];
+    await Promise.all(releasedEventIds.map(releasedEventId => (
+      releaseQueueSlotAndFill({
+        eventId: releasedEventId,
+        userId: req.user.id,
+        io: req.app.get('io'),
+      }).catch(err => {
+        console.warn('Queue slot release skipped:', err.message);
+      })
+    )));
     res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

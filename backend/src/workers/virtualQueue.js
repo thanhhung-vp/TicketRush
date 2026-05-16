@@ -1,15 +1,37 @@
 import pool from '../config/db.js';
 import redis from '../config/redis.js';
-import { admittedKey, queueKey } from '../utils/queueKeys.js';
-import { extractQueueUserIds, normalizeQueueBatchSize } from '../utils/virtualQueueRules.js';
+import { queueAdmissionLockKey, queueKey } from '../utils/queueKeys.js';
+import {
+  addUsersToQueueAdmissions,
+  getActiveQueueAdmissionCount,
+  isRedisReady,
+} from '../utils/virtualQueueAccess.js';
+import {
+  extractQueueUserIds,
+  getAvailableAdmissionSlots,
+  normalizeQueueBatchSize,
+} from '../utils/virtualQueueRules.js';
 
 const DEFAULT_ADMIT_INTERVAL_MS = 30_000;
 const DEFAULT_ACCESS_SECONDS = 15 * 60;
 
 let virtualQueueTimer = null;
 
-function isRedisReady(redisClient) {
-  return Boolean(redisClient && ['ready', 'connect'].includes(redisClient.status));
+async function withAdmissionLock(redisClient, eventId, work) {
+  const lockKey = queueAdmissionLockKey(eventId);
+  const lockValue = `${process.pid}:${Date.now()}:${Math.random()}`;
+  const acquired = await redisClient.set(lockKey, lockValue, 'PX', 5000, 'NX');
+
+  if (acquired !== 'OK') {
+    return { admitted: 0, user_ids: [], locked: true };
+  }
+
+  try {
+    return await work();
+  } finally {
+    const currentLock = await redisClient.get(lockKey);
+    if (currentLock === lockValue) await redisClient.del(lockKey);
+  }
 }
 
 export async function admitQueueBatch({
@@ -18,29 +40,48 @@ export async function admitQueueBatch({
   io,
   redisClient = redis,
   accessSeconds = DEFAULT_ACCESS_SECONDS,
+  now = Date.now(),
 }) {
   if (!isRedisReady(redisClient)) return { admitted: 0, user_ids: [] };
 
-  const members = await redisClient.zpopmin(queueKey(eventId), normalizeQueueBatchSize(batchSize));
-  const userIds = extractQueueUserIds(members);
-
-  if (userIds.length === 0) return { admitted: 0, user_ids: [] };
-
-  await redisClient.sadd(admittedKey(eventId), ...userIds);
-  // Use EXPIREGT so we only extend (never shorten) the TTL of the admitted set.
-  // This prevents resetting the 15-min window for users already inside.
-  const setTtl = await redisClient.ttl(admittedKey(eventId));
-  if (setTtl < accessSeconds) {
-    await redisClient.expire(admittedKey(eventId), accessSeconds);
-  }
-
-  if (io) {
-    userIds.forEach(userId => {
-      io.to(`user:${userId}`).emit('queue:admitted', { eventId });
+  return withAdmissionLock(redisClient, eventId, async () => {
+    const activeCount = await getActiveQueueAdmissionCount(redisClient, eventId, now);
+    const slots = getAvailableAdmissionSlots({
+      capacity: normalizeQueueBatchSize(batchSize),
+      admittedCount: activeCount,
     });
-  }
 
-  return { admitted: userIds.length, user_ids: userIds };
+    if (slots <= 0) {
+      return {
+        admitted: 0,
+        user_ids: [],
+        active_count: activeCount,
+        remaining: await redisClient.zcard(queueKey(eventId)),
+      };
+    }
+
+    const members = await redisClient.zpopmin(queueKey(eventId), slots);
+    const userIds = extractQueueUserIds(members);
+
+    if (userIds.length === 0) {
+      return { admitted: 0, user_ids: [], active_count: activeCount, remaining: 0 };
+    }
+
+    await addUsersToQueueAdmissions(redisClient, eventId, userIds, { accessSeconds, now });
+
+    if (io) {
+      userIds.forEach(userId => {
+        io.to(`user:${userId}`).emit('queue:admitted', { eventId });
+      });
+    }
+
+    return {
+      admitted: userIds.length,
+      user_ids: userIds,
+      active_count: activeCount + userIds.length,
+      remaining: await redisClient.zcard(queueKey(eventId)),
+    };
+  });
 }
 
 export async function processVirtualQueueTick({ db = pool, redisClient = redis, io } = {}) {

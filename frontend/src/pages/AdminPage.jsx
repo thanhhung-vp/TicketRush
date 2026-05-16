@@ -307,11 +307,6 @@ function EventsTab({ events, t, locale, onChanged }) {
     await onChanged();
   });
 
-  const admitQueue = (event) => runAction(`admit-${event.id}`, async () => {
-    const { data } = await api.post(`/queue/${event.id}/admit`, { batch_size: getBatchSize(event) });
-    setNotice(`Đã cấp quyền cho ${data.admitted || 0} người. Còn chờ: ${data.waiting_count || 0}.`);
-  });
-
   const deleteEvent = (event) => runAction(`delete-${event.id}`, async () => {
     if (!window.confirm(`Xóa sự kiện "${event.title}"? Hành động không thể hoàn tác.`)) return;
     await api.delete(`/events/${event.id}`);
@@ -364,12 +359,12 @@ function EventsTab({ events, t, locale, onChanged }) {
                         </span>
                         <input
                           type="number"
-                          min="1"
+                          min="0"
                           max="500"
                           value={getBatchSize(e)}
                           onChange={event => setBatchSizes(prev => ({ ...prev, [e.id]: event.target.value }))}
                           className="w-20 rounded-lg border border-gray-300 bg-gray-50 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          aria-label="Queue batch size"
+                          aria-label="Virtual queue capacity"
                         />
                         <button
                           type="button"
@@ -384,14 +379,9 @@ function EventsTab({ events, t, locale, onChanged }) {
                           {busy === `queue-${e.id}` ? 'Đang xử lý...' : e.queue_enabled ? 'Tắt' : 'Bật'}
                         </button>
                         {e.queue_enabled && (
-                          <button
-                            type="button"
-                            onClick={() => admitQueue(e)}
-                            disabled={actionDisabled}
-                            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
-                          >
-                            {busy === `admit-${e.id}` ? 'Đang cấp...' : 'Cấp lượt'}
-                          </button>
+                          <span className="text-xs text-gray-400">
+                            Tự động cấp lượt
+                          </span>
                         )}
                       </div>
                     </td>

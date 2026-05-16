@@ -7,8 +7,10 @@ import { config } from '../config/index.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import { CATEGORIES, eventSchema, eventUpdateSchema } from '../utils/eventValidation.js';
 import { canDeleteEvent } from '../utils/eventDeletionRules.js';
-import { admittedKey, highLoadKey, queueKey } from '../utils/queueKeys.js';
+import { admittedKey, highLoadKey, queueAdmissionLockKey, queueKey } from '../utils/queueKeys.js';
+import { isUserAdmittedToQueue } from '../utils/virtualQueueAccess.js';
 import { normalizeQueueBatchSize, userHasQueueAccess } from '../utils/virtualQueueRules.js';
+import { notifyCustomersAboutNewEvent } from '../services/notifications.js';
 
 const router = Router();
 
@@ -36,7 +38,7 @@ async function userCanReadEventSeats(eventId, req) {
     return { ok: false, status: 401, error: 'Vui lòng đăng nhập để vào phòng chờ.', code: 'QUEUE_REQUIRED' };
   }
 
-  const admitted = await redis.sismember(admittedKey(eventId), user.id);
+  const admitted = await isUserAdmittedToQueue(redis, eventId, user.id);
   const allowed = userHasQueueAccess({
     queueEnabled: true,
     admitted,
@@ -300,7 +302,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         req.user.id,
       ]
     );
-    res.status(201).json(rows[0]);
+    const event = rows[0];
+    if (event.status === 'on_sale') {
+      notifyCustomersAboutNewEvent({ db: pool, io: req.app.get('io'), event }).catch(err => {
+        console.error('New event notification error:', err.message);
+      });
+    }
+    res.status(201).json(event);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -335,15 +343,21 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
     f === 'queue_batch_size' ? normalizeQueueBatchSize(parsed.data[f]) : parsed.data[f]
   ));
   try {
+    const { rows: previousRows } = await pool.query('SELECT status FROM events WHERE id = $1', [req.params.id]);
     const { rows } = await pool.query(
       `UPDATE events SET ${sets} WHERE id = $1 RETURNING *`,
       [req.params.id, ...values]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Event not found' });
     if (parsed.data.queue_enabled === false) {
-      await redis.del(highLoadKey(req.params.id), queueKey(req.params.id), admittedKey(req.params.id));
+      await redis.del(highLoadKey(req.params.id), queueKey(req.params.id), admittedKey(req.params.id), queueAdmissionLockKey(req.params.id));
     } else if (parsed.data.queue_enabled === true) {
       await redis.set(highLoadKey(req.params.id), '1');
+    }
+    if (rows[0].status === 'on_sale' && previousRows[0]?.status !== 'on_sale') {
+      notifyCustomersAboutNewEvent({ db: pool, io: req.app.get('io'), event: rows[0] }).catch(err => {
+        console.error('New event notification error:', err.message);
+      });
     }
     res.json(rows[0]);
   } catch (err) {
@@ -397,7 +411,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
 
     await client.query('DELETE FROM events WHERE id = $1', [req.params.id]);
     await client.query('COMMIT');
-    await redis.del(highLoadKey(req.params.id), queueKey(req.params.id), admittedKey(req.params.id));
+    await redis.del(highLoadKey(req.params.id), queueKey(req.params.id), admittedKey(req.params.id), queueAdmissionLockKey(req.params.id));
     res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

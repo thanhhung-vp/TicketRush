@@ -3,6 +3,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
+import { createVirtualQueuePresence } from '../utils/virtualQueuePresence.js';
 
 export function initSocket(httpServer) {
   const io = new Server(httpServer, {
@@ -22,6 +23,7 @@ export function initSocket(httpServer) {
   subClient.on('error', err => console.error('[socket sub]', err.message));
 
   io.adapter(createAdapter(pubClient, subClient));
+  const queuePresence = createVirtualQueuePresence({ io });
 
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
@@ -38,11 +40,28 @@ export function initSocket(httpServer) {
     }
 
     socket.on('join:event', (eventId) => {
+      const joinedEventId = queuePresence.join(eventId, socket.user?.id);
+      if (joinedEventId) {
+        socket.data.queueEventRooms ??= new Set();
+        socket.data.queueEventRooms.add(joinedEventId);
+      }
       socket.join(`event:${eventId}`);
     });
 
     socket.on('leave:event', (eventId) => {
+      const normalizedEventId = eventId === null || eventId === undefined ? null : String(eventId).trim();
+      if (normalizedEventId) {
+        queuePresence.leave(normalizedEventId, socket.user?.id);
+        socket.data.queueEventRooms?.delete(normalizedEventId);
+      }
       socket.leave(`event:${eventId}`);
+    });
+
+    socket.on('disconnecting', () => {
+      socket.data.queueEventRooms?.forEach(eventId => {
+        queuePresence.leave(eventId, socket.user?.id);
+      });
+      socket.data.queueEventRooms?.clear();
     });
   });
 

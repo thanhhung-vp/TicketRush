@@ -1,23 +1,25 @@
 import express from 'express';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockPool } = vi.hoisted(() => ({
+const { mockPool, mockRedis } = vi.hoisted(() => ({
   mockPool: {
     query: vi.fn(),
     connect: vi.fn(),
   },
-}));
-
-vi.mock('../config/db.js', () => ({ default: mockPool }));
-vi.mock('../config/redis.js', () => ({
-  default: {
+  mockRedis: {
+    eval: vi.fn(),
     get: vi.fn(),
+    getdel: vi.fn(),
     setex: vi.fn(),
     del: vi.fn(),
   },
 }));
+
+vi.mock('../config/db.js', () => ({ default: mockPool }));
+vi.mock('../config/redis.js', () => ({ default: mockRedis }));
 vi.mock('../services/email.js', () => ({
   sendPasswordResetOTP: vi.fn(),
 }));
@@ -29,6 +31,7 @@ delete process.env.JWT_SECRET;
 process.env.NODE_ENV = 'test';
 
 const { default: authRouter } = await import('../routes/auth.js');
+const { hashOtp } = await import('../services/otp.js');
 
 function createAuthApp() {
   const app = express();
@@ -42,6 +45,11 @@ describe('Auth route login flow', () => {
     delete process.env.JWT_SECRET;
     process.env.NODE_ENV = 'test';
     mockPool.query.mockReset();
+    mockRedis.eval.mockReset();
+    mockRedis.get.mockReset();
+    mockRedis.getdel.mockReset();
+    mockRedis.setex.mockReset();
+    mockRedis.del.mockReset();
   });
 
   afterAll(() => {
@@ -90,6 +98,9 @@ describe('Auth route login flow', () => {
     expect(loginResponse.body.refreshToken).toEqual(expect.any(String));
     expect(loginResponse.body.user.password).toBeUndefined();
 
+    const decoded = jwt.decode(loginResponse.body.accessToken);
+    expect(decoded.exp - decoded.iat).toBe(7 * 24 * 60 * 60);
+
     const meResponse = await request(app)
       .get('/auth/me')
       .set('Authorization', `Bearer ${loginResponse.body.accessToken}`);
@@ -110,5 +121,42 @@ describe('Auth route login flow', () => {
 
     expect(response.status).toBe(503);
     expect(response.body).toMatchObject({ error: 'Google login is not configured' });
+  });
+
+  it('consumes a password reset OTP once so it cannot be reused', async () => {
+    const email = 'user@example.com';
+    const otp = '123456';
+    const app = createAuthApp();
+
+    mockRedis.eval
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+    mockPool.query.mockImplementation(async (sql) => {
+      if (sql.startsWith('UPDATE users SET password')) {
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.startsWith('DELETE FROM refresh_tokens')) {
+        return { rowCount: 1, rows: [] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+
+    const firstResponse = await request(app)
+      .post('/auth/reset-password')
+      .send({ email, otp, new_password: 'newpassword123' });
+    const secondResponse = await request(app)
+      .post('/auth/reset-password')
+      .send({ email, otp, new_password: 'newpassword456' });
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(401);
+    expect(mockRedis.eval).toHaveBeenCalledTimes(2);
+    expect(mockRedis.eval.mock.calls[0]).toEqual([
+      expect.any(String),
+      1,
+      `otp:${email}`,
+      hashOtp(otp),
+    ]);
+    expect(mockPool.query.mock.calls.filter(([sql]) => sql.startsWith('UPDATE users SET password'))).toHaveLength(1);
   });
 });

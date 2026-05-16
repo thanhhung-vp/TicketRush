@@ -46,6 +46,30 @@ async function storeRefreshToken(userId, rawToken, db = pool) {
   return hash;
 }
 
+async function consumePasswordResetOtp(email, otp) {
+  const key = `otp:${email}`;
+  const submittedOtpHash = hashOtp(otp);
+
+  if (typeof redis.eval === 'function') {
+    const consumed = await redis.eval(
+      `if redis.call("GET", KEYS[1]) == ARGV[1] then
+         redis.call("DEL", KEYS[1])
+         return 1
+       end
+       return 0`,
+      1,
+      key,
+      submittedOtpHash
+    );
+    return consumed === 1;
+  }
+
+  const savedOtpHash = await redis.get(key);
+  if (!verifyOtpHash(otp, savedOtpHash)) return false;
+  await redis.del(key);
+  return true;
+}
+
 function isGoogleLoginConfigured() {
   return Boolean(config.google.clientId && config.google.clientSecret && config.google.redirectUri);
 }
@@ -491,8 +515,8 @@ router.post('/reset-password', async (req, res) => {
   const { email, otp, new_password } = parsed.data;
 
   try {
-    const savedOtpHash = await redis.get(`otp:${email}`);
-    if (!verifyOtpHash(otp, savedOtpHash)) {
+    const consumedOtp = await consumePasswordResetOtp(email, otp);
+    if (!consumedOtp) {
       return res.status(401).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn' });
     }
 
@@ -503,7 +527,6 @@ router.post('/reset-password', async (req, res) => {
        return res.status(404).json({ error: 'User not found' });
     }
 
-    await redis.del(`otp:${email}`);
     await pool.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email = $1)', [email]);
     res.json({ ok: true, message: 'Đặt lại mật khẩu thành công' });
   } catch (err) {

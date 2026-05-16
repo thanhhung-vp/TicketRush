@@ -4,7 +4,9 @@ import QRCode from 'qrcode';
 import pool from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { sendOrderConfirmation } from '../services/email.js';
+import { createNotification } from '../services/notifications.js';
 import { createOrReusePendingOrderForSeats } from '../utils/pendingHoldOrders.js';
+import { releaseQueueSlotAndFill } from '../utils/virtualQueueFlow.js';
 
 const router = Router();
 
@@ -166,6 +168,24 @@ router.post('/confirm', authenticate, async (req, res) => {
         seatIds.map(id => ({ id, event_id: order.event_id, status: 'sold' }))
       );
     }
+    await releaseQueueSlotAndFill({
+      eventId: order.event_id,
+      userId: req.user.id,
+      io,
+    }).catch(err => {
+      console.warn('Queue slot release skipped:', err.message);
+    });
+
+    createNotification({
+      db: pool,
+      io,
+      userId: req.user.id,
+      type: 'ticket_received',
+      title: 'Vé của bạn đã sẵn sàng',
+      body: `Đơn hàng ${order.id} đã thanh toán thành công.`,
+      actionUrl: '/my-tickets?status=paid',
+      metadata: { event_id: order.event_id, order_id },
+    }).catch(err => console.error('Ticket notification error:', err.message));
 
     // Send confirmation email (non-blocking)
     try {
@@ -257,6 +277,13 @@ router.post('/cancel', authenticate, async (req, res) => {
         releasedSeatIds.map(id => ({ id, event_id: order.event_id, status: 'available' }))
       );
     }
+    await releaseQueueSlotAndFill({
+      eventId: order.event_id,
+      userId: req.user.id,
+      io,
+    }).catch(err => {
+      console.warn('Queue slot release skipped:', err.message);
+    });
 
     res.json({ ok: true });
   } catch (err) {

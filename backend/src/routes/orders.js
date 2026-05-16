@@ -3,6 +3,8 @@ import QRCode from 'qrcode';
 import pool from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { attachDynamicQrToTicket, attachDynamicQrToTickets } from '../utils/ticketQr.js';
+import { releaseQueueSlotAndFill } from '../utils/virtualQueueFlow.js';
+import { createNotification } from '../services/notifications.js';
 
 const router = Router();
 
@@ -116,6 +118,23 @@ router.post('/checkout', authenticate, async (req, res) => {
         seats.map(s => ({ id: s.id, event_id: s.event_id, status: 'sold' }))
       );
     }
+    await releaseQueueSlotAndFill({
+      eventId,
+      userId: req.user.id,
+      io,
+    }).catch(err => {
+      console.warn('Queue slot release skipped:', err.message);
+    });
+    createNotification({
+      db: pool,
+      io,
+      userId: req.user.id,
+      type: 'ticket_received',
+      title: 'Vé của bạn đã sẵn sàng',
+      body: `${tickets.length} vé đã được phát hành.`,
+      actionUrl: '/my-tickets?status=paid',
+      metadata: { event_id: eventId, order_id: order.id },
+    }).catch(err => console.error('Ticket notification error:', err.message));
 
     res.status(201).json({ order, tickets });
   } catch (err) {

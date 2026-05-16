@@ -2,8 +2,12 @@ import { Router } from 'express';
 import pool from '../config/db.js';
 import redis from '../config/redis.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
-import { admittedKey, highLoadKey, queueKey } from '../utils/queueKeys.js';
-import { normalizeQueueBatchSize, userHasQueueAccess } from '../utils/virtualQueueRules.js';
+import { admittedKey, highLoadKey, queueAdmissionLockKey, queueKey } from '../utils/queueKeys.js';
+import {
+  getActiveQueueAdmissionCount,
+  isUserAdmittedToQueue,
+} from '../utils/virtualQueueAccess.js';
+import { normalizeQueueBatchSize } from '../utils/virtualQueueRules.js';
 import { admitQueueBatch } from '../workers/virtualQueue.js';
 
 const router = Router();
@@ -21,9 +25,21 @@ async function getQueueEvent(eventId) {
 async function getQueueSnapshot(eventId) {
   const [waitingCount, admittedCount] = await Promise.all([
     redis.zcard(queueKey(eventId)),
-    redis.scard(admittedKey(eventId)),
+    getActiveQueueAdmissionCount(redis, eventId),
   ]);
   return { waiting_count: waitingCount, admitted_count: admittedCount };
+}
+
+async function getWaitingStatus(eventId, batchSize, userId) {
+  const rank = await redis.zrank(queueKey(eventId), userId);
+  const total = await redis.zcard(queueKey(eventId));
+
+  return {
+    admitted: false,
+    position: rank === null ? null : rank + 1,
+    total,
+    batch_size: batchSize,
+  };
 }
 
 router.post('/:eventId/enter', authenticate, async (req, res) => {
@@ -36,21 +52,24 @@ router.post('/:eventId/enter', authenticate, async (req, res) => {
       return res.json({ admitted: true, position: 0, total: 0 });
     }
 
-    const admitted = await redis.sismember(admittedKey(eventId), req.user.id);
-    if (userHasQueueAccess({ queueEnabled: event.queue_enabled, admitted, isAdmin: false })) {
+    const alreadyAdmitted = await isUserAdmittedToQueue(redis, eventId, req.user.id);
+    if (alreadyAdmitted) {
       return res.json({ admitted: true, position: 0, total: await redis.zcard(queueKey(eventId)) });
     }
 
     await redis.zadd(queueKey(eventId), 'NX', Date.now(), req.user.id);
-    const rank = await redis.zrank(queueKey(eventId), req.user.id);
-    const total = await redis.zcard(queueKey(eventId));
-
-    res.json({
-      admitted: false,
-      position: rank === null ? null : rank + 1,
-      total,
-      batch_size: event.queue_batch_size,
+    await admitQueueBatch({
+      eventId,
+      batchSize: event.queue_batch_size,
+      io: req.app.get('io'),
     });
+
+    const admitted = await isUserAdmittedToQueue(redis, eventId, req.user.id);
+    if (admitted) {
+      return res.json({ admitted: true, position: 0, total: await redis.zcard(queueKey(eventId)) });
+    }
+
+    res.json(await getWaitingStatus(eventId, event.queue_batch_size, req.user.id));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -67,24 +86,26 @@ router.get('/:eventId/status', authenticate, async (req, res) => {
       return res.json({ admitted: true, position: 0, total: 0 });
     }
 
-    const admitted = await redis.sismember(admittedKey(eventId), req.user.id);
+    const admitted = await isUserAdmittedToQueue(redis, eventId, req.user.id);
     if (admitted) return res.json({ admitted: true, position: 0, total: await redis.zcard(queueKey(eventId)) });
 
-    let rank = await redis.zrank(queueKey(eventId), req.user.id);
+    const rank = await redis.zrank(queueKey(eventId), req.user.id);
 
     // User lost their spot (Redis restart or race condition) — re-add to end of queue
     if (rank === null) {
       await redis.zadd(queueKey(eventId), 'NX', Date.now(), req.user.id);
-      rank = await redis.zrank(queueKey(eventId), req.user.id);
     }
 
-    const total = await redis.zcard(queueKey(eventId));
-    res.json({
-      admitted: false,
-      position: rank === null ? 1 : rank + 1,
-      total,
-      batch_size: event.queue_batch_size,
+    await admitQueueBatch({
+      eventId,
+      batchSize: event.queue_batch_size,
+      io: req.app.get('io'),
     });
+
+    const admittedAfterFill = await isUserAdmittedToQueue(redis, eventId, req.user.id);
+    if (admittedAfterFill) return res.json({ admitted: true, position: 0, total: await redis.zcard(queueKey(eventId)) });
+
+    res.json(await getWaitingStatus(eventId, event.queue_batch_size, req.user.id));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -141,31 +162,8 @@ router.post('/:eventId/disable', authenticate, requireAdmin, async (req, res) =>
     );
     if (!rows[0]) return res.status(404).json({ error: 'Event not found' });
 
-    await redis.del(highLoadKey(eventId), queueKey(eventId), admittedKey(eventId));
+    await redis.del(highLoadKey(eventId), queueKey(eventId), admittedKey(eventId), queueAdmissionLockKey(eventId));
     res.json({ ok: true, ...rows[0], waiting_count: 0, admitted_count: 0 });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-router.post('/:eventId/admit', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const event = await getQueueEvent(eventId);
-    if (!event) return res.status(404).json({ error: 'Event not found' });
-
-    const batchSize = normalizeQueueBatchSize(req.body?.batch_size, event.queue_batch_size);
-    const result = await admitQueueBatch({
-      eventId,
-      batchSize,
-      io: req.app.get('io'),
-    });
-
-    res.json({
-      admitted: result.admitted,
-      ...(await getQueueSnapshot(eventId)),
-    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

@@ -6,6 +6,7 @@ import { TicketRepository } from '../infrastructure/database/repositories/Ticket
 import { getPaymentProvider } from '../infrastructure/payment/PaymentProviderFactory.js';
 import { NotFoundError, ConflictError, PaymentError } from '../domain/errors/AppError.js';
 import { config } from '../config/index.js';
+import { releaseQueueSlotAndFill } from '../utils/virtualQueueFlow.js';
 
 const orderRepo  = new OrderRepository();
 const seatRepo   = new SeatRepository();
@@ -76,6 +77,13 @@ export class PaymentService {
           seatIds.map(id => ({ id, event_id: order.event_id, status: 'sold' }))
         );
       }
+      await releaseQueueSlotAndFill({
+        eventId: order.event_id,
+        userId,
+        io: this.io,
+      }).catch(err => {
+        console.warn('Queue slot release skipped:', err.message);
+      });
 
       return { order: { ...order, status: 'paid' }, tickets };
     } catch (err) {
@@ -98,6 +106,13 @@ export class PaymentService {
       if (seatIds.length) await seatRepo.releaseSeats(client, seatIds, userId);
       await orderRepo.markCancelled(client, orderId);
       await client.query('COMMIT');
+      await releaseQueueSlotAndFill({
+        eventId: order.event_id,
+        userId,
+        io: this.io,
+      }).catch(err => {
+        console.warn('Queue slot release skipped:', err.message);
+      });
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;

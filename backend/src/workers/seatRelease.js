@@ -2,6 +2,7 @@ import { Queue, Worker } from 'bullmq';
 import redis from '../config/redis.js';
 import pool from '../config/db.js';
 import { cancelPendingOrdersForReleasedSeats } from '../utils/pendingHoldOrders.js';
+import { releaseQueueSlotAndFill } from '../utils/virtualQueueFlow.js';
 
 const QUEUE_NAME = 'seat-release';
 
@@ -60,6 +61,7 @@ export function startSeatReleaseWorker(io) {
           io.to(`event:${eventId}`).emit('seats:updated', seats);
         }
       }
+      await releaseQueueSlotsForRows(rows, io);
     },
     { connection: redis, concurrency: 10 }
   );
@@ -115,4 +117,23 @@ export async function sweepExpiredSeats(io) {
     }
     console.log(`Swept ${rows.length} expired seat(s)`);
   }
+  await releaseQueueSlotsForRows(rows, io);
+}
+
+async function releaseQueueSlotsForRows(rows, io) {
+  const pairs = new Map();
+  rows.forEach(row => {
+    if (row.event_id && row.locked_by) {
+      pairs.set(`${row.event_id}:${row.locked_by}`, {
+        eventId: row.event_id,
+        userId: row.locked_by,
+      });
+    }
+  });
+
+  await Promise.all([...pairs.values()].map(pair => (
+    releaseQueueSlotAndFill({ ...pair, io }).catch(err => {
+      console.warn('Queue slot release skipped:', err.message);
+    })
+  )));
 }

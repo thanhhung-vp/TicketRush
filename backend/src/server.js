@@ -24,6 +24,7 @@ import checkinRouter     from './routes/checkin.js';
 import ticketRefundsRouter from './routes/ticketRefunds.js';
 import ticketTransfersRouter from './routes/ticketTransfers.js';
 import aiRouter             from './routes/ai.js';
+import notificationsRouter  from './routes/notifications.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -80,6 +81,7 @@ app.use('/api/checkin',     checkinRouter);
 app.use('/api/ticket-refunds',   ticketRefundsRouter);
 app.use('/api/ticket-transfers', ticketTransfersRouter);
 app.use('/api/ai',                aiRouter);
+app.use('/api/notifications',     notificationsRouter);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, ts: Date.now() }));
 

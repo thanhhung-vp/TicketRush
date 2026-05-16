@@ -3,6 +3,7 @@ import { z } from 'zod';
 import pool from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { emailSchema } from '../utils/emailValidation.js';
+import { createNotification } from '../services/notifications.js';
 
 const router = Router();
 const uuidSchema = z.string().uuid();
@@ -207,7 +208,8 @@ router.post('/:transferId/:action', async (req, res) => {
       `SELECT tr.*,
               t.user_id AS ticket_user_id,
               t.checked_in_at,
-              e.event_date
+              e.event_date,
+              e.title AS event_title
        FROM ticket_transfers tr
        JOIN tickets t ON t.id = tr.ticket_id
        JOIN events e ON e.id = tr.event_id
@@ -268,6 +270,23 @@ router.post('/:transferId/:action', async (req, res) => {
     );
 
     await client.query('COMMIT');
+    if (action === 'accept') {
+      await createNotification({
+        db: pool,
+        io: req.app.get('io'),
+        userId: transfer.recipient_user_id,
+        type: 'ticket_received',
+        title: 'Bạn vừa nhận được vé',
+        body: transfer.event_title,
+        actionUrl: '/my-tickets?status=paid',
+        metadata: {
+          event_id: transfer.event_id,
+          order_id: transfer.order_id,
+          ticket_id: transfer.ticket_id,
+          transfer_id: transfer.id,
+        },
+      }).catch(err => console.error('Ticket transfer notification error:', err.message));
+    }
     return res.json({ ok: true, transfer: updatedRows[0] });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

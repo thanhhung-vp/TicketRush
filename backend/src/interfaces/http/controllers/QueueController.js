@@ -1,4 +1,4 @@
-import { sendSuccess, sendCreated } from '../../../shared/response.js';
+import { sendSuccess } from '../../../shared/response.js';
 import { asyncHandler } from '../../../shared/asyncHandler.js';
 import { ForbiddenError } from '../../../domain/errors/AppError.js';
 
@@ -24,12 +24,6 @@ export function makeQueueController(queueService) {
       if (req.user.role !== 'admin') throw new ForbiddenError();
       await queueService.disable(req.params.eventId);
       sendSuccess(res, { ok: true });
-    }),
-
-    admit: asyncHandler(async (req, res) => {
-      if (req.user.role !== 'admin') throw new ForbiddenError();
-      const result = await queueService.admitBatch(req.params.eventId, req.body.batch_size);
-      sendSuccess(res, result);
     }),
   };
 }

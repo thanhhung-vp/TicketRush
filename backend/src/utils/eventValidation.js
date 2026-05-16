@@ -16,7 +16,7 @@ const eventFields = {
   sale_start_at: z.string().datetime({ offset: true }).nullable().optional(),
   is_featured: z.boolean().optional(),
   queue_enabled: z.boolean().optional(),
-  queue_batch_size: z.number().int().min(1).max(500).optional(),
+  queue_batch_size: z.number().int().min(0).max(500).optional(),
 };
 
 export const eventSchema = z.object(eventFields);

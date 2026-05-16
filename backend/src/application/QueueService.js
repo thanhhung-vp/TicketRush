@@ -1,9 +1,8 @@
 import { redisClient } from '../infrastructure/cache/RedisClient.js';
 import { QUEUE_BATCH_SIZE } from '../domain/constants.js';
-
-const queueKey    = (eid) => `queue:${eid}`;
-const admittedKey = (eid) => `admitted:${eid}`;
-const highLoadKey = (eid) => `highload:${eid}`;
+import { admitQueueBatch } from '../workers/virtualQueue.js';
+import { admittedKey, highLoadKey, queueAdmissionLockKey, queueKey } from '../utils/queueKeys.js';
+import { isUserAdmittedToQueue } from '../utils/virtualQueueAccess.js';
 
 export class QueueService {
   constructor(io) { this.io = io; }
@@ -11,22 +10,33 @@ export class QueueService {
   async enter(eventId, userId) {
     const highLoad = await redisClient.get(highLoadKey(eventId));
     if (!highLoad) return { admitted: true, position: 0 };
-    const admitted = await redisClient.sismember(admittedKey(eventId), userId);
+    const admitted = await isUserAdmittedToQueue(redisClient, eventId, userId);
     if (admitted) return { admitted: true, position: 0 };
+
     await redisClient.zadd(queueKey(eventId), 'NX', Date.now(), userId);
+    await this.admitBatch(eventId);
+    if (await isUserAdmittedToQueue(redisClient, eventId, userId)) {
+      return { admitted: true, position: 0 };
+    }
+
     const position = await redisClient.zrank(queueKey(eventId), userId);
     return { admitted: false, position: position + 1 };
   }
 
   async getStatus(eventId, userId) {
-    const admitted = await redisClient.sismember(admittedKey(eventId), userId);
+    const admitted = await isUserAdmittedToQueue(redisClient, eventId, userId);
     if (admitted) return { admitted: true, position: 0 };
     const highLoad = await redisClient.get(highLoadKey(eventId));
     if (!highLoad) return { admitted: true, position: 0 };
     const rank  = await redisClient.zrank(queueKey(eventId), userId);
-    if (rank === null) return { admitted: true, position: 0 };
+    if (rank === null) await redisClient.zadd(queueKey(eventId), 'NX', Date.now(), userId);
+    await this.admitBatch(eventId);
+    if (await isUserAdmittedToQueue(redisClient, eventId, userId)) {
+      return { admitted: true, position: 0 };
+    }
     const total = await redisClient.zcard(queueKey(eventId));
-    return { admitted: false, position: rank + 1, total };
+    const nextRank = await redisClient.zrank(queueKey(eventId), userId);
+    return { admitted: false, position: nextRank === null ? null : nextRank + 1, total };
   }
 
   async enable(eventId) {
@@ -34,19 +44,15 @@ export class QueueService {
   }
 
   async disable(eventId) {
-    await redisClient.del(highLoadKey(eventId), queueKey(eventId), admittedKey(eventId));
+    await redisClient.del(highLoadKey(eventId), queueKey(eventId), admittedKey(eventId), queueAdmissionLockKey(eventId));
   }
 
   async admitBatch(eventId, batchSize = QUEUE_BATCH_SIZE) {
-    const members = await redisClient.zpopmin(queueKey(eventId), batchSize);
-    const userIds = members.filter((_, i) => i % 2 === 0);
-    if (userIds.length > 0) {
-      await redisClient.sadd(admittedKey(eventId), ...userIds);
-      await redisClient.expire(admittedKey(eventId), 15 * 60);
-      if (this.io) {
-        userIds.forEach(uid => this.io.to(`user:${uid}`).emit('queue:admitted', { eventId }));
-      }
-    }
-    return { admitted: userIds.length, remaining: await redisClient.zcard(queueKey(eventId)) };
+    return admitQueueBatch({
+      eventId,
+      batchSize,
+      io: this.io,
+      redisClient,
+    });
   }
 }

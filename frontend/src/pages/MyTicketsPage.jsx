@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Check, CreditCard, Download, RotateCcw, Send, X } from 'lucide-react';
 import api from '../lib/api.js';
@@ -65,6 +65,7 @@ function TicketsPageFrame({ children }) {
 export default function MyTicketsPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'vi' ? 'vi-VN' : 'en-US';
+  const [searchParams] = useSearchParams();
 
   const STATUS_FILTERS = [
     { key: 'all',       label: t('myTickets.all') },
@@ -79,7 +80,7 @@ export default function MyTicketsPage() {
   ];
 
   const [orders, setOrders] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
   const [timeFilter, setTimeFilter] = useState('upcoming');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -94,6 +95,13 @@ export default function MyTicketsPage() {
       .catch(() => setError(t('myTickets.loadError')))
       .finally(() => setLoading(false));
   }, [t]);
+
+  useEffect(() => {
+    const requestedStatus = searchParams.get('status');
+    if (STATUS_FILTERS.some(filter => filter.key === requestedStatus)) {
+      setStatusFilter(requestedStatus);
+    }
+  }, [searchParams]);
 
   const refreshOrders = useCallback(async () => {
     const response = await api.get('/orders');
