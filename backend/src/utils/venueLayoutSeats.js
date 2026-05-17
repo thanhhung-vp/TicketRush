@@ -1,71 +1,33 @@
-export const AUDIENCE_ZONE_SHAPES = [
-  { value: 'rect', label: 'Hinh chu nhat' },
-  { value: 'fan', label: 'Hinh quat' },
-  { value: 'semicircle', label: 'Ban nguyet' },
-  { value: 'circle', label: 'Hinh tron / 360' },
-  { value: 'u_shape', label: 'Hinh chu U' },
-];
-
-export const STAGE_LAYOUT_TYPES = [
-  { value: 'proscenium', label: 'Proscenium / mot huong' },
-  { value: 'thrust', label: 'Thrust / nho ra' },
-  { value: 'arena', label: 'Arena / trung tam 360' },
-  { value: 'traverse', label: 'Traverse / hai phia' },
-  { value: 'catwalk', label: 'Catwalk / runway' },
-];
-
-export function getAudienceShapeLabel(shape) {
-  return AUDIENCE_ZONE_SHAPES.find(item => item.value === shape)?.label || AUDIENCE_ZONE_SHAPES[0].label;
-}
-
-export function getStageLayoutLabel(shape) {
-  return STAGE_LAYOUT_TYPES.find(item => item.value === shape)?.label || STAGE_LAYOUT_TYPES[0].label;
-}
-
-export function clampRotation(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  return ((Math.round(numeric) % 360) + 360) % 360;
-}
-
-export function clampOverviewZoom(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 1;
-  return Math.max(0.75, Math.min(3, Math.round(numeric * 100) / 100));
-}
-
-export function normalizeAudienceShape(shape) {
-  return AUDIENCE_ZONE_SHAPES.some(item => item.value === shape) ? shape : 'rect';
-}
-
-export function normalizeStageLayout(shape) {
-  const legacyMap = {
-    trapezoid: 'proscenium',
-    rect: 'traverse',
-    ellipse: 'arena',
-    semicircle: 'thrust',
-  };
-  const normalized = legacyMap[shape] || shape;
-  return STAGE_LAYOUT_TYPES.some(item => item.value === normalized) ? normalized : 'proscenium';
-}
-
 export function getSeatIndexKey(row, col) {
   return `${Number(row) || 0}:${Number(col) || 0}`;
 }
 
-export function getFanGeometry(zone = {}) {
-  const width = Math.max(0, Number(zone.width || 0));
-  const height = Math.max(0, Number(zone.height || 0));
-  const cx = width / 2;
-  const cy = height * 1.06;
-  const innerRadius = height * 0.34;
-  const outerRadius = height * 0.96;
-  const startAngle = -130;
-  const endAngle = -50;
-  return { width, height, cx, cy, innerRadius, outerRadius, startAngle, endAngle };
+export function buildSeatLabel(zoneName, row, col, maxLength = 20) {
+  const rowLabel = String.fromCharCode(65 + Number(row || 0));
+  const colLabel = String(Number(col || 0) + 1).padStart(2, '0');
+  const suffix = `-${rowLabel}${colLabel}`;
+  const fallback = 'Khu';
+  const cleanName = String(zoneName || fallback).trim() || fallback;
+  const prefixLength = Math.max(1, maxLength - suffix.length);
+  return `${cleanName.slice(0, prefixLength)}${suffix}`.slice(0, maxLength);
 }
 
-export function getFanSeatBounds(zone = {}) {
+function getFanGeometry(zone = {}) {
+  const width = Math.max(0, Number(zone.width || 0));
+  const height = Math.max(0, Number(zone.height || 0));
+  return {
+    width,
+    height,
+    cx: width / 2,
+    cy: height * 1.06,
+    innerRadius: height * 0.34,
+    outerRadius: height * 0.96,
+    startAngle: -130,
+    endAngle: -50,
+  };
+}
+
+function getFanSeatBounds(zone = {}) {
   const geometry = getFanGeometry(zone);
   const radialPadding = Math.max(18, geometry.height * 0.14);
   const anglePadding = 16;
@@ -87,28 +49,12 @@ export function getFanSeatBounds(zone = {}) {
   };
 }
 
-export function polarToPoint(cx, cy, radius, angleDeg) {
+function polarToPoint(cx, cy, radius, angleDeg) {
   const angle = angleDeg * Math.PI / 180;
   return {
     x: cx + Math.cos(angle) * radius,
     y: cy + Math.sin(angle) * radius,
   };
-}
-
-export function getFanZonePath(zone = {}) {
-  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle } = getFanGeometry(zone);
-  const outerStart = polarToPoint(cx, cy, outerRadius, startAngle);
-  const outerEnd = polarToPoint(cx, cy, outerRadius, endAngle);
-  const innerEnd = polarToPoint(cx, cy, innerRadius, endAngle);
-  const innerStart = polarToPoint(cx, cy, innerRadius, startAngle);
-
-  return [
-    `M ${outerStart.x} ${outerStart.y}`,
-    `A ${outerRadius} ${outerRadius} 0 0 1 ${outerEnd.x} ${outerEnd.y}`,
-    `L ${innerEnd.x} ${innerEnd.y}`,
-    `A ${innerRadius} ${innerRadius} 0 0 0 ${innerStart.x} ${innerStart.y}`,
-    'Z',
-  ].join(' ');
 }
 
 function normalizeCount(value, fallback) {
@@ -164,7 +110,6 @@ export function normalizeRowLayout(zone = {}) {
 
 function normalizeDisabledIndexes(disabledIndexes = []) {
   if (!Array.isArray(disabledIndexes)) return new Set();
-
   return new Set(disabledIndexes.map(item => {
     if (typeof item === 'string') return item;
     if (item && typeof item === 'object') return getSeatIndexKey(item.row, item.col);
@@ -190,28 +135,29 @@ function pointInPolygon(point, polygon = []) {
   return inside;
 }
 
-export function isPointInsideAudienceShape(zone = {}, point = {}) {
-  const w = Number(zone.width || 0);
-  const h = Number(zone.height || 0);
+function isPointInsideZone(zone = {}, point = {}) {
+  const width = Number(zone.width || 0);
+  const height = Number(zone.height || 0);
   const x = Number(point.x);
   const y = Number(point.y);
-  if (![w, h, x, y].every(Number.isFinite) || w <= 0 || h <= 0) return false;
-  if (x < 0 || y < 0 || x > w || y > h) return false;
-
+  if (![width, height, x, y].every(Number.isFinite) || width <= 0 || height <= 0) return true;
+  if (x < 0 || y < 0 || x > width || y > height) return false;
   if (!pointInPolygon({ x, y }, zone.maskPolygon)) return false;
 
-  const shape = normalizeAudienceShape(zone.shape);
-  if (shape === 'circle') {
-    const nx = (x - w / 2) / (w / 2);
-    const ny = (y - h / 2) / (h / 2);
+  if (zone.shape === 'u_shape') {
+    return !(x > width * 0.32 && x < width * 0.68 && y > height * 0.38);
+  }
+  if (zone.shape === 'circle') {
+    const nx = (x - width / 2) / (width / 2);
+    const ny = (y - height / 2) / (height / 2);
     return nx * nx + ny * ny <= 1;
   }
-  if (shape === 'semicircle') {
-    const nx = (x - w / 2) / (w / 2);
-    const ny = (y - h) / h;
-    return y <= h && nx * nx + ny * ny <= 1;
+  if (zone.shape === 'semicircle') {
+    const nx = (x - width / 2) / (width / 2);
+    const ny = (y - height) / height;
+    return nx * nx + ny * ny <= 1;
   }
-  if (shape === 'fan') {
+  if (zone.shape === 'fan') {
     const { cx, cy, innerRadius, outerRadius, startAngle, endAngle } = getFanGeometry(zone);
     const dx = x - cx;
     const dy = y - cy;
@@ -219,14 +165,10 @@ export function isPointInsideAudienceShape(zone = {}, point = {}) {
     const angle = Math.atan2(dy, dx) * 180 / Math.PI;
     return radius >= innerRadius - 0.5 && radius <= outerRadius + 0.5 && angle >= startAngle - 0.5 && angle <= endAngle + 0.5;
   }
-  if (shape === 'u_shape') {
-    const insideCutout = x > w * 0.32 && x < w * 0.68 && y > h * 0.38;
-    return !insideCutout;
-  }
   return true;
 }
 
-function buildFanSeatLayout(zone, rowLayout, disabled) {
+function materializeFanSeats(zone, rowLayout, disabled) {
   const {
     cx,
     cy,
@@ -236,65 +178,62 @@ function buildFanSeatLayout(zone, rowLayout, disabled) {
     endSeatAngle,
   } = getFanSeatBounds(zone);
   const rowStep = rowLayout.length > 1 ? (outerSeatRadius - innerSeatRadius) / (rowLayout.length - 1) : 0;
-  const seats = [];
 
-  rowLayout.forEach((rowSpec, row) => {
+  return rowLayout.flatMap((rowSpec, row) => {
     const count = rowSpec.seatCount;
-    if (count <= 0) return;
+    if (count <= 0) return [];
     const radius = innerSeatRadius + rowStep * row;
     const radiusAngleGap = rowSpec.gap > 0 ? rowSpec.gap * 180 / (Math.PI * radius) : 0;
     const usableStart = startSeatAngle + radiusAngleGap / 2;
     const usableEnd = endSeatAngle - radiusAngleGap / 2;
     const angleStep = count > 1 ? (usableEnd - usableStart) / (count - 1) : 0;
     const rowShiftAngle = rowSpec.offsetX * 180 / (Math.PI * radius);
-    const r = Math.min(6.5, Math.max(3, (Math.PI * radius * Math.abs(angleStep || 8) / 180) / 3));
 
-    for (let col = 0; col < count; col++) {
-      const key = getSeatIndexKey(row, col);
-      if (disabled.has(key) || rowSpec.disabledSeats.includes(col)) continue;
+    return Array.from({ length: count }, (_, col) => {
       const point = polarToPoint(cx, cy, radius, usableStart + angleStep * col + rowShiftAngle);
-      if (!isPointInsideAudienceShape(zone, point)) continue;
-      seats.push({ row, col, x: point.x, y: point.y, r, key });
-    }
-  });
-
-  return seats;
+      return { row, col, x: point.x, y: point.y };
+    });
+  }).filter(seat => (
+    !disabled.has(getSeatIndexKey(seat.row, seat.col))
+      && !rowLayout[seat.row].disabledSeats.includes(seat.col)
+      && isPointInsideZone(zone, { x: seat.x, y: seat.y })
+  ));
 }
 
-export function buildZoneSeatLayout(zone = {}) {
+export function materializeZoneSeats(zone = {}) {
   const padX = 14;
   const padY = 30;
   const width = Math.max(0, Number(zone.width || 0));
   const height = Math.max(0, Number(zone.height || 0));
   const rowLayout = normalizeRowLayout(zone);
   const disabled = normalizeDisabledIndexes(zone.disabledIndexes);
-  if (normalizeAudienceShape(zone.shape) === 'fan') return buildFanSeatLayout(zone, rowLayout, disabled);
+  if (zone.shape === 'fan') return materializeFanSeats(zone, rowLayout, disabled);
 
   const innerW = width - padX * 2;
   const innerH = height - padY - 10;
-  if (innerW <= 0 || innerH <= 0) return [];
+
+  if (innerW <= 0 || innerH <= 0) {
+    return rowLayout.flatMap((row, rowIdx) => (
+      Array.from({ length: row.seatCount }, (_, colIdx) => ({ row: rowIdx, col: colIdx }))
+    )).filter(seat => !disabled.has(getSeatIndexKey(seat.row, seat.col)) && !rowLayout[seat.row].disabledSeats.includes(seat.col));
+  }
 
   const rowH = innerH / rowLayout.length;
   const maxCols = Math.max(1, Math.max(...rowLayout.map(row => row.seatCount)));
   const cellW = innerW / maxCols;
-  const r = Math.min(Math.max(2, cellW / 2.8), Math.max(2, rowH / 2.8), 6.5);
-  const seats = [];
 
-  rowLayout.forEach((rowSpec, row) => {
-    if (rowSpec.seatCount <= 0) return;
+  return rowLayout.flatMap((rowSpec, row) => {
     const rowWidth = rowSpec.seatCount * cellW + Math.max(0, rowSpec.seatCount - 1) * rowSpec.gap;
     const rowStart = padX + (innerW - rowWidth) / 2 + rowSpec.offsetX;
     const y = padY + row * rowH + rowH / 2;
 
-    for (let col = 0; col < rowSpec.seatCount; col++) {
+    return Array.from({ length: rowSpec.seatCount }, (_, col) => {
       const x = rowStart + col * (cellW + rowSpec.gap) + cellW / 2;
-      const key = getSeatIndexKey(row, col);
-      if (disabled.has(key)) continue;
-      if (rowSpec.disabledSeats.includes(col)) continue;
-      if (!isPointInsideAudienceShape(zone, { x, y })) continue;
-      seats.push({ row, col, x, y, r, key });
-    }
-  });
-
-  return seats;
+      return { row, col, x, y };
+    });
+  }).filter(seat => (
+    !disabled.has(getSeatIndexKey(seat.row, seat.col))
+      && !rowLayout[seat.row].disabledSeats.includes(seat.col)
+      && isPointInsideZone(zone, { x: seat.x, y: seat.y })
+  ));
 }

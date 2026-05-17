@@ -3,7 +3,10 @@ import { Stage, Layer, Rect, Circle, Text, Transformer, Shape, Group, Line } fro
 import {
   AUDIENCE_ZONE_SHAPES,
   STAGE_LAYOUT_TYPES,
+  buildZoneSeatLayout,
   clampRotation,
+  getFanGeometry,
+  normalizeRowLayout,
   normalizeAudienceShape,
   normalizeStageLayout,
 } from '../utils/venueLayout.js';
@@ -28,6 +31,9 @@ function makeZone(idx = 0) {
     width: 300, height: 180,
     shape: 'rect',
     rotation: 0,
+    rowLayout: [],
+    disabledIndexes: [],
+    maskPolygon: [],
   };
 }
 
@@ -44,18 +50,7 @@ function makeStageEl(count = 0) {
 }
 
 function seatDots(zone) {
-  const padX = 14, padY = 30;
-  const innerW = zone.width - padX * 2;
-  const innerH = zone.height - padY - 10;
-  if (innerW <= 0 || innerH <= 0 || zone.rows <= 0 || zone.cols <= 0) return [];
-  const cellW = innerW / zone.cols;
-  const cellH = innerH / zone.rows;
-  const r = Math.min(Math.max(2, cellW / 2.8), Math.max(2, cellH / 2.8), 6.5);
-  const dots = [];
-  for (let row = 0; row < zone.rows; row++)
-    for (let col = 0; col < zone.cols; col++)
-      dots.push({ x: padX + col * cellW + cellW / 2, y: padY + row * cellH + cellH / 2, r, key: row * 100 + col });
-  return dots;
+  return buildZoneSeatLayout(zone);
 }
 
 // ── Background grid ───────────────────────────────────────────────────────────
@@ -244,10 +239,12 @@ function ZoneShapeEl({ zone, isSelected }) {
   if (shape === 'fan') {
     return (
       <Shape sceneFunc={(ctx, s) => {
+        const { cx, cy, innerRadius, outerRadius, startAngle, endAngle } = getFanGeometry(zone);
+        const start = startAngle * Math.PI / 180;
+        const end = endAngle * Math.PI / 180;
         ctx.beginPath();
-        ctx.moveTo(zone.width * 0.08, zone.height);
-        ctx.quadraticCurveTo(zone.width / 2, -zone.height * 0.18, zone.width * 0.92, zone.height);
-        ctx.quadraticCurveTo(zone.width / 2, zone.height * 0.72, zone.width * 0.08, zone.height);
+        ctx.arc(cx, cy, outerRadius, start, end, false);
+        ctx.arc(cx, cy, innerRadius, end, start, true);
         ctx.closePath(); ctx.fillStrokeShape(s);
       }} {...common} />
     );
@@ -349,6 +346,9 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
       width: Number(z.width) || 300, height: Number(z.height) || 180,
       shape: normalizeAudienceShape(z.shape),
       rotation: clampRotation(z.rotation),
+      rowLayout: normalizeRowLayout(z),
+      disabledIndexes: Array.isArray(z.disabledIndexes) ? z.disabledIndexes : [],
+      maskPolygon: Array.isArray(z.maskPolygon) ? z.maskPolygon : [],
     }));
   });
 
@@ -403,6 +403,29 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
 
   const setZoneProp  = (k, v) => selZone  && setZones(p => p.map(z => z.id === selZone.id  ? { ...z, [k]: v } : z));
   const setStageProp = (k, v) => selStage && setStageEls(p => p.map(s => s.id === selStage.id ? { ...s, [k]: v } : s));
+  const setZoneRowLayout = (rowIndex, patch) => {
+    if (!selZone) return;
+    setZones(prev => prev.map(zone => {
+      if (zone.id !== selZone.id) return zone;
+      const rowLayout = normalizeRowLayout(zone).map((row, index) => (
+        index === rowIndex ? { ...row, ...patch } : row
+      ));
+      const cols = Math.max(1, Math.max(...rowLayout.map(row => row.seatCount)));
+      return { ...zone, rowLayout, cols };
+    }));
+  };
+  const setZoneRowCount = (rowCount) => {
+    if (!selZone) return;
+    setZones(prev => prev.map(zone => {
+      if (zone.id !== selZone.id) return zone;
+      const currentRows = normalizeRowLayout(zone);
+      const rows = Math.max(1, Math.min(30, Number(rowCount) || currentRows.length));
+      const rowLayout = Array.from({ length: rows }, (_, index) => (
+        currentRows[index] || { seatCount: zone.cols || 8, count: zone.cols || 8, offsetX: 0, gap: 0, disabledSeats: [] }
+      ));
+      return { ...zone, rows, rowLayout };
+    }));
+  };
 
   const deleteSelected = () => {
     if (sel?.kind === 'zone')  setZones(p => p.filter(z => z.id !== sel.id));
@@ -411,7 +434,7 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
   };
 
   const handleCanvasClick = e => { if (e.target === e.target.getStage()) setSel(null); };
-  const totalSeats = zones.reduce((s, z) => s + z.rows * z.cols, 0);
+  const totalSeats = zones.reduce((s, z) => s + buildZoneSeatLayout(z).length, 0);
 
   return (
     <div className="space-y-4">
@@ -547,13 +570,68 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
               <div className="grid grid-cols-2 gap-2">
                 <PropRow label="Số hàng">
                   <input type="number" min="1" max="30" value={selZone.rows}
-                    onChange={e => setZoneProp('rows', Math.max(1, Math.min(30, Number(e.target.value))))} className={inputCls} />
+                    onChange={e => setZoneRowCount(e.target.value)} className={inputCls} />
                 </PropRow>
                 <PropRow label="Ghế/hàng">
                   <input type="number" min="1" max="30" value={selZone.cols}
-                    onChange={e => setZoneProp('cols', Math.max(1, Math.min(30, Number(e.target.value))))} className={inputCls} />
+                    onChange={e => {
+                      const cols = Math.max(1, Math.min(30, Number(e.target.value)));
+                      setZones(prev => prev.map(zone => zone.id === selZone.id
+                        ? { ...zone, cols, rowLayout: normalizeRowLayout({ ...zone, cols }).map(row => ({ ...row, seatCount: cols, count: cols })) }
+                        : zone
+                      ));
+                    }} className={inputCls} />
                 </PropRow>
               </div>
+
+              <PropRow label="Tung hang ghe">
+                <div className="max-h-44 space-y-2 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-2">
+                  {normalizeRowLayout(selZone).map((row, index) => (
+                    <div key={index} className="grid grid-cols-[22px_1fr_1fr_1fr_1.5fr] items-center gap-2 text-xs">
+                      <span className="font-semibold text-gray-500">{String.fromCharCode(65 + index)}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={row.seatCount}
+                        onChange={e => {
+                          const seatCount = Math.max(0, Math.min(50, Number(e.target.value)));
+                          setZoneRowLayout(index, { seatCount, count: seatCount });
+                        }}
+                        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-gray-700"
+                        title="So ghe hang nay"
+                      />
+                      <input
+                        type="number"
+                        min="-200"
+                        max="200"
+                        value={row.offsetX}
+                        onChange={e => setZoneRowLayout(index, { offsetX: Number(e.target.value) || 0 })}
+                        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-gray-700"
+                        title="Dich ngang hang"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="80"
+                        value={row.gap}
+                        onChange={e => setZoneRowLayout(index, { gap: Math.max(0, Math.min(80, Number(e.target.value))) })}
+                        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-gray-700"
+                        title="Khoang cach ghe"
+                      />
+                      <input
+                        type="text"
+                        value={row.disabledSeats.join(',')}
+                        onChange={e => setZoneRowLayout(index, {
+                          disabledSeats: e.target.value.split(',').map(value => Number(value.trim()) - 1).filter(value => Number.isInteger(value) && value >= 0),
+                        })}
+                        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-gray-700"
+                        title="Ghe tat, nhap so cot: 1,3,5"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </PropRow>
 
               <PropRow label="Goc xoay">
                 <div className="flex items-center gap-2">
@@ -567,7 +645,7 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
 
               <div className="rounded-xl p-3 text-center"
                 style={{ backgroundColor: selZone.color + '15', border: `1px solid ${selZone.color}30` }}>
-                <p className="text-2xl font-bold" style={{ color: selZone.color }}>{selZone.rows * selZone.cols}</p>
+                <p className="text-2xl font-bold" style={{ color: selZone.color }}>{buildZoneSeatLayout(selZone).length}</p>
                 <p className="text-xs text-gray-400 mt-0.5">ghế trong khu này</p>
               </div>
             </div>
@@ -661,7 +739,7 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
                         ${sel?.kind === 'zone' && sel.id === z.id ? 'bg-white shadow-sm' : 'hover:bg-white/60'}`}>
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: z.color }} />
                       <span className="flex-1 text-gray-700 font-medium truncate">{z.name}</span>
-                      <span className="text-gray-400 shrink-0">{z.rows * z.cols} ghế</span>
+                      <span className="text-gray-400 shrink-0">{buildZoneSeatLayout(z).length} ghế</span>
                     </button>
                   ))}
                   <div className="border-t border-blue-200 pt-2 mt-2 flex justify-between text-xs">
@@ -681,7 +759,7 @@ export default function SeatDesigner({ initialLayout, onSave, saving }) {
           Lưu sơ đồ sẽ xóa toàn bộ ghế cũ và sinh lại từ thiết kế mới.
         </p>
         <button
-          onClick={() => onSave(zones, stageEls, { width: CANVAS_W, height: CANVAS_H })}
+          onClick={() => onSave(zones.map(zone => ({ ...zone, seatRows: normalizeRowLayout(zone), rowLayout: normalizeRowLayout(zone) })), stageEls, { width: CANVAS_W, height: CANVAS_H })}
           disabled={saving || zones.length === 0}
           className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-xl transition text-sm shadow-md shadow-emerald-500/20"
         >

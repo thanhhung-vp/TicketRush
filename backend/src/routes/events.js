@@ -11,6 +11,7 @@ import { admittedKey, highLoadKey, queueAdmissionLockKey, queueKey } from '../ut
 import { isUserAdmittedToQueue } from '../utils/virtualQueueAccess.js';
 import { normalizeQueueBatchSize, userHasQueueAccess } from '../utils/virtualQueueRules.js';
 import { notifyCustomersAboutNewEvent } from '../services/notifications.js';
+import { buildSeatLabel, materializeZoneSeats, normalizeRowLayout } from '../utils/venueLayoutSeats.js';
 
 const router = Router();
 
@@ -494,14 +495,42 @@ router.put('/:id/layout', authenticate, requireAdmin, async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    const { rows: [stats] } = await client.query(
+      `SELECT
+         COUNT(s.id) FILTER (WHERE s.status = 'sold') AS sold_seats,
+         COUNT(s.id) FILTER (WHERE s.status = 'locked') AS locked_seats,
+         (SELECT COUNT(*) FROM orders o WHERE o.event_id = $1) AS orders,
+         (SELECT COUNT(*) FROM tickets t
+          JOIN orders o ON o.id = t.order_id
+          WHERE o.event_id = $1) AS tickets,
+         (SELECT COUNT(*) FROM admin_ticket_actions a WHERE a.event_id = $1) AS admin_actions
+       FROM seats s
+       WHERE s.event_id = $1`,
+      [req.params.id]
+    );
+    const hasLayoutHistory = [
+      stats?.sold_seats,
+      stats?.locked_seats,
+      stats?.orders,
+      stats?.tickets,
+      stats?.admin_actions,
+    ].some(value => Number(value || 0) > 0);
+    if (hasLayoutHistory) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'Không thể lưu lại sơ đồ vì sự kiện đã có ghế được giữ, đơn hàng, vé hoặc lịch sử cấp vé.',
+      });
+    }
+
     // Wipe existing zones (seats cascade)
     await client.query('DELETE FROM zones WHERE event_id = $1', [req.params.id]);
 
     const savedZones = [];
 
     for (const z of layoutZones) {
-      const rows  = Math.max(1, Math.min(50, Number(z.rows)  || 5));
-      const cols  = Math.max(1, Math.min(50, Number(z.cols)  || 8));
+      const rowLayout = normalizeRowLayout(z);
+      const rows  = rowLayout.length;
+      const cols  = Math.max(1, Math.max(...rowLayout.map(row => row.seatCount)));
       const price = Math.max(0, Number(z.price) || 0);
       const color = /^#[0-9A-Fa-f]{6}$/.test(z.color) ? z.color : '#3B82F6';
 
@@ -516,19 +545,21 @@ router.put('/:id/layout', authenticate, requireAdmin, async (req, res) => {
       const vals = [];
       const params = [];
       let pi = 1;
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const label = `${zone.name}-${String.fromCharCode(65 + r)}${String(c + 1).padStart(2, '0')}`;
-          vals.push(`($${pi++},$${pi++},$${pi++},$${pi++},$${pi++})`);
-          params.push(zone.id, req.params.id, r, c, label);
-        }
+      const zoneForSeatGeneration = { ...z, rows, cols, rowLayout };
+      const seats = materializeZoneSeats(zoneForSeatGeneration);
+      for (const seat of seats) {
+        const label = buildSeatLabel(zone.name, seat.row, seat.col);
+        vals.push(`($${pi++},$${pi++},$${pi++},$${pi++},$${pi++})`);
+        params.push(zone.id, req.params.id, seat.row, seat.col, label);
       }
-      await client.query(
-        `INSERT INTO seats (zone_id, event_id, row_idx, col_idx, label) VALUES ${vals.join(',')}`,
-        params
-      );
+      if (vals.length) {
+        await client.query(
+          `INSERT INTO seats (zone_id, event_id, row_idx, col_idx, label) VALUES ${vals.join(',')}`,
+          params
+        );
+      }
 
-      savedZones.push({ ...z, dbId: zone.id, id: zone.id.toString() });
+      savedZones.push({ ...z, rows, cols, seatRows: rowLayout, rowLayout, dbId: zone.id, id: zone.id.toString(), seats: seats.length });
     }
 
     // Persist layout_json with real DB ids
@@ -539,7 +570,12 @@ router.put('/:id/layout', authenticate, requireAdmin, async (req, res) => {
     );
 
     await client.query('COMMIT');
-    res.json({ ok: true, zones_created: savedZones.length, layout: layoutJson });
+    res.json({
+      ok: true,
+      zones_created: savedZones.length,
+      seats_created: savedZones.reduce((sum, zone) => sum + Number(zone.seats || 0), 0),
+      layout: layoutJson,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);

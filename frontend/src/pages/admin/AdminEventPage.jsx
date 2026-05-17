@@ -60,6 +60,7 @@ export default function AdminEventPage() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [designerRevision, setDesignerRevision] = useState(0);
 
   useEffect(() => {
     if (!isNew) {
@@ -73,6 +74,7 @@ export default function AdminEventPage() {
           });
           setZones(z || []);
           setLayoutJson(rest.layout_json || null);
+          setDesignerRevision(revision => revision + 1);
         })
         .catch(() => setError('Không thể tải thông tin sự kiện.'))
         .finally(() => setLoading(false));
@@ -128,6 +130,8 @@ export default function AdminEventPage() {
         price: Number(newZone.price),
       });
       setZones(prev => [...prev, data.zone ?? data]);
+      setLayoutJson(null);
+      setDesignerRevision(revision => revision + 1);
       setNewZone({ name: '', rows: '', cols: '', price: '', color: '#3B82F6' });
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể thêm khu vực.');
@@ -138,12 +142,19 @@ export default function AdminEventPage() {
     try {
       await eventService.removeZone(id, zoneId);
       setZones(prev => prev.filter(z => z.id !== zoneId));
+      setLayoutJson(null);
+      setDesignerRevision(revision => revision + 1);
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể xóa khu vực.');
     }
   };
 
   const saveLayout = async (layoutZones, stages, canvas) => {
+    if (isNew) {
+      setError('Vui lòng tạo sự kiện trước, sau đó lưu sơ đồ ghế.');
+      return;
+    }
+
     setSavingLayout(true);
     setError('');
     setSuccess('');
@@ -151,6 +162,7 @@ export default function AdminEventPage() {
       const data = await eventService.saveLayout(id, { zones: layoutZones, stages, canvas });
       const layout = data.layout || data;
       setLayoutJson(layout);
+      setDesignerRevision(revision => revision + 1);
       setZones((layout.zones || []).map(zone => ({
         ...zone,
         id: zone.dbId ?? zone.id,
@@ -288,7 +300,33 @@ export default function AdminEventPage() {
         </Button>
       </form>
 
-      {!isNew && (
+      <div className="space-y-5 rounded-2xl border border-separator bg-surface p-6 shadow-1">
+        <div className="flex flex-col gap-2 border-b border-separator pb-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="font-semibold text-label-primary">Sơ đồ sân khấu và khu vực khán giả</h2>
+            <p className="mt-1 text-sm text-label-secondary">
+              Tạo khu khán giả, chọn dạng sân khấu, xoay và thay đổi kích thước từng phần tử trên mặt bằng.
+            </p>
+          </div>
+          {zones.length > 0 && (
+            <div className="text-sm text-label-secondary sm:text-right">
+              <p>{zones.length} khu</p>
+              <p>{zones.reduce((sum, zone) => sum + Number(zone.rows || 0) * Number(zone.cols || 0), 0)} ghế</p>
+            </div>
+          )}
+        </div>
+        {isNew && (
+          <Alert type="warning">Vui lòng tạo sự kiện trước khi lưu sơ đồ ghế. Bạn vẫn có thể xem công cụ thiết kế ở đây.</Alert>
+        )}
+        <SeatDesigner
+          key={`designer-${id}-${designerRevision}-${layoutJson ? 'layout' : `zones-${zones.length}`}`}
+          initialLayout={designerLayout}
+          onSave={saveLayout}
+          saving={savingLayout || isNew}
+        />
+      </div>
+
+      {false && !isNew && (
         <div className="space-y-5 rounded-2xl border border-separator bg-surface p-6 shadow-1">
           <div className="flex flex-col gap-2 border-b border-separator pb-3 sm:flex-row sm:items-start sm:justify-between">
             <div>

@@ -230,6 +230,14 @@
     }
   },
   "seatMap": {
+    "overviewTitle": "Sơ đồ tổng quan",
+    "overviewHint": "Chọn ghế trực tiếp trên từng khu trong sơ đồ.",
+    "seatMapAria": "Sơ đồ chọn ghế sự kiện",
+    "zonesCount": "{{count}} khu vé",
+    "zonesAndPrices": "Khu vực và giá vé",
+    "seatsAvailableCount": "{{available}}/{{total}} ghế trống",
+    "estimatedTotal": "Số tiền dự tính",
+    "noSeatsSelected": "Chưa chọn ghế nào.",
     "deselect": "Bỏ chọn",
     "hold": "Giữ ghế →",
     "holding": "Đang giữ...",
@@ -249,6 +257,9 @@
     "sold": "Đã bán",
     "heldSeats": "Ghế đang giữ",
     "selectedSeats": "Ghế đã chọn",
+    "zoomIn": "Phóng to sơ đồ ghế",
+    "zoomOut": "Thu nhỏ sơ đồ ghế",
+    "zoomReset": "Đặt lại zoom",
     "holdError": "Không thể giữ ghế, vui lòng thử lại."
   },
   "myTickets": {

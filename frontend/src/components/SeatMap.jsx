@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { clampRotation, normalizeAudienceShape, normalizeStageLayout } from '../utils/venueLayout.js';
+import { clampOverviewZoom, clampRotation, getFanZonePath, normalizeAudienceShape, normalizeStageLayout } from '../utils/venueLayout.js';
 
 const WARN_AT  = 120;
 const URGENT_AT = 60;
@@ -65,7 +65,7 @@ function getZonePath(zone) {
   const w = Number(zone.width || 0);
   const h = Number(zone.height || 0);
   const shape = normalizeAudienceShape(zone.shape);
-  if (shape === 'fan') return `M ${w * 0.08} ${h} Q ${w / 2} ${-h * 0.18} ${w * 0.92} ${h} Q ${w / 2} ${h * 0.72} ${w * 0.08} ${h} Z`;
+  if (shape === 'fan') return getFanZonePath(zone);
   if (shape === 'semicircle') return `M 0 ${h} A ${w / 2} ${h} 0 0 1 ${w} ${h} L 0 ${h} Z`;
   if (shape === 'u_shape') return `M 0 0 H ${w} V ${h} H ${w * 0.68} V ${h * 0.38} H ${w * 0.32} V ${h} H 0 Z`;
   return `M 0 0 H ${w} V ${h} H 0 Z`;
@@ -95,23 +95,120 @@ function rotateTransform(item) {
   return `rotate(${rotation} ${cx} ${cy})`;
 }
 
-function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
+function zoneTransform(zone) {
+  const x = Number(zone.x || 0);
+  const y = Number(zone.y || 0);
+  const width = Number(zone.width || 0);
+  const height = Number(zone.height || 0);
+  const rotation = clampRotation(zone.rotation);
+  const rotate = rotation ? ` rotate(${rotation} ${width / 2} ${height / 2})` : '';
+  return `translate(${x} ${y})${rotate}`;
+}
+
+function getSeatVisualStatus(seat, selected, heldSeats) {
+  if (selected.has(seat.id)) return 'selected';
+  if (heldSeats.has(seat.id)) return 'locked';
+  return seat.status;
+}
+
+function getSeatDotStyle(status, zoneColor) {
+  if (status === 'selected') return { fill: '#3b82f6', stroke: '#bfdbfe', opacity: 1 };
+  if (status === 'locked') return { fill: '#d97706', stroke: '#fbbf24', opacity: 0.95 };
+  if (status === 'sold') return { fill: '#1f2937', stroke: '#334155', opacity: 0.55 };
+  return { fill: hexToRgba(zoneColor, 0.82), stroke: hexToRgba(zoneColor, 0.96), opacity: 1 };
+}
+
+function getSeatPoint(seat, zone, rowCount, colCount) {
+  const width = Number(zone.width || 0);
+  const height = Number(zone.height || 0);
+  const padX = Math.min(28, Math.max(12, width * 0.12));
+  const padTop = Math.min(44, Math.max(28, height * 0.22));
+  const padBottom = Math.min(24, Math.max(12, height * 0.12));
+  const usableW = Math.max(1, width - padX * 2);
+  const usableH = Math.max(1, height - padTop - padBottom);
+  const col = Number(seat.col_idx || 0);
+  const row = Number(seat.row_idx || 0);
+
+  return {
+    x: padX + (colCount <= 1 ? usableW / 2 : (usableW * col) / (colCount - 1)),
+    y: padTop + (rowCount <= 1 ? usableH / 2 : (usableH * row) / (rowCount - 1)),
+  };
+}
+
+function VenueOverview({ layout, zoneGroups, selected, heldSeats, frozen, onSeatToggle }) {
+  const { t } = useTranslation();
+  const [zoom, setZoom] = useState(1);
   if (!layout?.zones?.length) return null;
 
   const canvas = layout.canvas || { width: 860, height: 540 };
+  const canvasWidth = Number(canvas.width || 860);
+  const canvasHeight = Number(canvas.height || 540);
+  const zoomPercent = Math.round(zoom * 100);
   const zonesById = new Map(zoneGroups.map(zone => [String(zone.zone_id), zone]));
+  const statusLabels = {
+    available: t('seatMap.available'),
+    selected: t('seatMap.selecting'),
+    locked: t('seatMap.holdingStatus'),
+    sold: t('seatMap.sold'),
+  };
 
   return (
-    <div className="mb-8 rounded-2xl border border-gray-800 bg-gray-950/80 p-4">
-      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+    <div className="rounded-2xl border border-separator bg-surface p-4 shadow-1">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-sm font-bold text-white">Sơ đồ tổng quan</h3>
-          <p className="text-xs text-gray-500">Bấm vào một khu để chuyển nhanh đến danh sách ghế.</p>
+          <h3 className="text-sm font-bold text-label-primary">{t('seatMap.overviewTitle')}</h3>
+          <p className="text-xs text-label-secondary">{t('seatMap.overviewHint')}</p>
         </div>
-        <p className="text-xs text-gray-500">{layout.zones.length} khu ve</p>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <p className="mr-1 text-xs text-label-secondary">{t('seatMap.zonesCount', { count: layout.zones.length })}</p>
+          <div className="flex items-center overflow-hidden rounded-xl border border-separator bg-fill-tertiary">
+            <button
+              type="button"
+              onClick={() => setZoom(value => clampOverviewZoom(value - 0.25))}
+              className="h-8 w-8 text-sm font-bold text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary disabled:opacity-40"
+              disabled={zoom <= 0.75}
+              aria-label={t('seatMap.zoomOut')}
+              title={t('seatMap.zoomOut')}
+            >
+              -
+            </button>
+            <span className="min-w-14 border-x border-separator px-2 text-center text-xs font-semibold text-label-primary">
+              {zoomPercent}%
+            </span>
+            <button
+              type="button"
+              onClick={() => setZoom(value => clampOverviewZoom(value + 0.25))}
+              className="h-8 w-8 text-sm font-bold text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary disabled:opacity-40"
+              disabled={zoom >= 3}
+              aria-label={t('seatMap.zoomIn')}
+              title={t('seatMap.zoomIn')}
+            >
+              +
+            </button>
+          </div>
+          {zoom !== 1 && (
+            <button
+              type="button"
+              onClick={() => setZoom(1)}
+              className="rounded-xl border border-separator px-3 py-1.5 text-xs font-semibold text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary"
+            >
+              {t('seatMap.zoomReset')}
+            </button>
+          )}
+        </div>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#0d0d14]">
-        <svg viewBox={`0 0 ${canvas.width || 860} ${canvas.height || 540}`} className="block min-w-[640px] w-full" role="img" aria-label="Sơ đồ tổng quan sự kiện">
+      <div className="max-h-[72vh] overflow-auto rounded-xl border border-separator bg-surface-grouped dark:bg-[#0d0d14]">
+        <svg
+          viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
+          className="block"
+          style={{
+            width: `${Math.max(720, canvasWidth) * zoom}px`,
+            height: `${Math.max(450, canvasHeight) * zoom}px`,
+            maxWidth: 'none',
+          }}
+          role="img"
+          aria-label={t('seatMap.seatMapAria')}
+        >
           <defs>
             <linearGradient id="stageFillBooking" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="#4c1d95" />
@@ -127,26 +224,65 @@ function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
                 ) : (
                   <path d={getStagePath(stage)} transform={`translate(${stage.x || 0} ${stage.y || 0})`} fill="url(#stageFillBooking)" stroke="rgba(216, 180, 254, 0.72)" strokeWidth="2" />
                 )}
-                <text x={Number(stage.x || 0) + Number(stage.width || 0) / 2} y={Number(stage.y || 0) + Number(stage.height || 0) / 2 + 4} textAnchor="middle" className="fill-white text-[11px] font-bold uppercase tracking-[0.25em] opacity-70">{stage.label || 'STAGE'}</text>
+                <text x={Number(stage.x || 0) + Number(stage.width || 0) / 2} y={Number(stage.y || 0) + Number(stage.height || 0) / 2 + 4} textAnchor="middle" className="fill-white text-[11px] font-bold uppercase tracking-[0.25em] opacity-70">{stage.label || t('seatMap.stage')}</text>
               </g>
             );
           })}
           {(layout.zones || []).map(zone => {
             const zoneId = String(zone.dbId || zone.id);
             const group = zonesById.get(zoneId);
-            const total = group?.seats?.length || Number(zone.rows || 0) * Number(zone.cols || 0);
-            const available = group?.seats?.filter(seat => seat.status === 'available').length ?? 0;
+            const zoneSeats = [...(group?.seats || [])].sort((a, b) => Number(a.row_idx) - Number(b.row_idx) || Number(a.col_idx) - Number(b.col_idx));
+            const total = zoneSeats.length || Number(zone.rows || 0) * Number(zone.cols || 0);
+            const available = zoneSeats.filter(seat => seat.status === 'available').length;
             const color = zone.color || '#3B82F6';
             const shape = normalizeAudienceShape(zone.shape);
+            const rowCount = Math.max(1, ...zoneSeats.map(seat => Number(seat.row_idx || 0) + 1));
+            const colCount = Math.max(1, ...zoneSeats.map(seat => Number(seat.col_idx || 0) + 1));
+            const width = Number(zone.width || 0);
+            const height = Number(zone.height || 0);
+            const dotRadius = Math.max(3.5, Math.min(7, Number(zone.width || 0) / Math.max(colCount * 3.2, 1), Number(zone.height || 0) / Math.max(rowCount * 4, 1)));
+
             return (
-              <g key={zoneId} transform={rotateTransform(zone)} role="button" tabIndex={0} aria-label={`${zone.name || 'Khu'} ${available}/${total} ghế trống`} onClick={() => onZoneFocus(zoneId)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') onZoneFocus(zoneId); }} className="cursor-pointer outline-none">
+              <g key={zoneId} transform={zoneTransform(zone)}>
                 {shape === 'circle' ? (
-                  <ellipse cx={Number(zone.x || 0) + Number(zone.width || 0) / 2} cy={Number(zone.y || 0) + Number(zone.height || 0) / 2} rx={Number(zone.width || 0) / 2} ry={Number(zone.height || 0) / 2} fill={hexToRgba(color, 0.18)} stroke={color} strokeWidth="2" />
+                  <ellipse cx={width / 2} cy={height / 2} rx={width / 2} ry={height / 2} fill={hexToRgba(color, 0.18)} stroke={color} strokeWidth="2" />
                 ) : (
-                  <path d={getZonePath(zone)} transform={`translate(${zone.x || 0} ${zone.y || 0})`} fill={hexToRgba(color, 0.18)} stroke={color} strokeWidth="2" />
+                  <path d={getZonePath(zone)} fill={hexToRgba(color, 0.18)} stroke={color} strokeWidth="2" />
                 )}
-                <text x={Number(zone.x || 0) + Number(zone.width || 0) / 2} y={Number(zone.y || 0) + Number(zone.height || 0) / 2 - 4} textAnchor="middle" className="pointer-events-none fill-white text-[13px] font-bold">{zone.name}</text>
-                <text x={Number(zone.x || 0) + Number(zone.width || 0) / 2} y={Number(zone.y || 0) + Number(zone.height || 0) / 2 + 14} textAnchor="middle" className="pointer-events-none fill-white text-[11px] opacity-60">{available}/{total} ghế trống</text>
+                <text x={width / 2} y="20" textAnchor="middle" className="pointer-events-none text-[13px] font-bold" style={{ fill: 'var(--text-label-primary)' }}>{zone.name}</text>
+                <text x={width / 2} y="38" textAnchor="middle" className="pointer-events-none text-[11px]" style={{ fill: 'var(--text-label-secondary)' }}>{t('seatMap.seatsAvailableCount', { available, total })}</text>
+                {zoneSeats.map(seat => {
+                  const status = getSeatVisualStatus(seat, selected, heldSeats);
+                  const style = getSeatDotStyle(status, color);
+                  const point = getSeatPoint(seat, zone, rowCount, colCount);
+                  const disabled = frozen || seat.status !== 'available';
+
+                  return (
+                    <circle
+                      key={seat.id}
+                      cx={point.x}
+                      cy={point.y}
+                      r={dotRadius}
+                      fill={style.fill}
+                      stroke={style.stroke}
+                      strokeWidth={status === 'selected' ? 2.2 : 1.2}
+                      opacity={disabled && status === 'available' ? 0.45 : style.opacity}
+                      role="button"
+                      tabIndex={disabled ? -1 : 0}
+                      aria-label={`${seat.label} ${statusLabels[status] || status}`}
+                      className={disabled ? 'cursor-not-allowed' : 'cursor-pointer transition hover:brightness-125'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!disabled) onSeatToggle(seat);
+                      }}
+                      onKeyDown={(event) => {
+                        if (disabled || (event.key !== 'Enter' && event.key !== ' ')) return;
+                        event.preventDefault();
+                        onSeatToggle(seat);
+                      }}
+                    />
+                  );
+                })}
               </g>
             );
           })}
@@ -308,23 +444,138 @@ function HoldPanel({ heldSeatObjs, countdown, total, renewing, onRelease, onChec
 }
 
 // ── Expired modal ─────────────────────────────────────────────────────────────
+function BookingSidebar({
+  zoneGroups,
+  selectedSeats,
+  heldSeatObjs,
+  countdown,
+  total,
+  holding,
+  renewing,
+  onHold,
+  onClear,
+  onRelease,
+  onCheckout,
+}) {
+  const { t } = useTranslation();
+  const activeSeats = heldSeatObjs.length > 0 ? heldSeatObjs : selectedSeats;
+  const hasHeldSeats = heldSeatObjs.length > 0;
+  const urgent = countdown !== null && countdown <= URGENT_AT;
+  const warning = countdown !== null && countdown <= WARN_AT && countdown > URGENT_AT;
+  const fmtCountdown = countdown != null
+    ? `${Math.floor(countdown / 60)}:${String(countdown % 60).padStart(2, '0')}`
+    : '--:--';
+
+  return (
+    <aside className="self-start rounded-2xl border border-separator bg-surface-elevated p-4 text-label-primary shadow-2 lg:sticky lg:top-24">
+      <div className="space-y-5">
+        <section>
+          <h3 className="text-sm font-bold text-label-primary">{t('seatMap.zonesAndPrices')}</h3>
+          <div className="mt-3 space-y-2">
+            {zoneGroups.map(zone => {
+              const available = zone.seats.filter(seat => seat.status === 'available').length;
+              return (
+                <div key={zone.zone_id} className="rounded-xl border border-separator bg-fill-quaternary px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: zone.color }} />
+                      <span className="truncate text-sm font-semibold text-label-primary">{zone.zone_name}</span>
+                    </span>
+                    <span className="shrink-0 text-sm font-bold text-info">{formatVND(zone.price)}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-label-secondary">{t('seatMap.seatsAvailableCount', { available, total: zone.seats.length })}</p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="border-t border-separator pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-label-primary">
+              {hasHeldSeats ? t('seatMap.heldSeats') : t('seatMap.selectedSeats')}
+            </h3>
+            {hasHeldSeats && (
+              <span className={`font-mono text-sm font-bold ${urgent ? 'text-danger animate-pulse' : warning ? 'text-warning' : 'text-warning'}`}>
+                {renewing ? t('seatMap.renewing') : fmtCountdown}
+              </span>
+            )}
+          </div>
+
+          {activeSeats.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {activeSeats.map(seat => (
+                <span key={seat.id} className="rounded-full border border-info bg-info-tint px-2.5 py-1 text-xs font-semibold text-info">
+                  {seat.label}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-label-secondary">{t('seatMap.noSeatsSelected')}</p>
+          )}
+
+          {urgent && hasHeldSeats && (
+            <p className="mt-3 rounded-xl border border-danger bg-danger-tint px-3 py-2 text-xs font-medium text-danger">
+              {t('seatMap.urgentWarning')}
+            </p>
+          )}
+        </section>
+
+        <section className="border-t border-separator pt-4">
+          <div className="flex items-end justify-between gap-3">
+            <p className="text-xs text-label-secondary">{t('seatMap.estimatedTotal')}</p>
+            <p className="text-xl font-extrabold text-info">{formatVND(total)}</p>
+          </div>
+
+          {hasHeldSeats ? (
+            <div className="mt-4 grid gap-2">
+              <button onClick={onCheckout} className="rounded-xl bg-success px-4 py-3 text-sm font-semibold text-white transition hover:brightness-95">
+                {t('seatMap.checkout')}
+              </button>
+              <button onClick={onRelease} className="rounded-xl border border-separator px-4 py-2.5 text-sm font-semibold text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary">
+                {t('seatMap.releaseHold')}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-2">
+              <button
+                onClick={onHold}
+                disabled={holding || selectedSeats.length === 0}
+                className="rounded-xl bg-info px-4 py-3 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {holding ? t('seatMap.holding') : t('seatMap.hold')}
+              </button>
+              <button
+                onClick={onClear}
+                disabled={holding || selectedSeats.length === 0}
+                className="rounded-xl border border-separator px-4 py-2.5 text-sm font-semibold text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {t('seatMap.deselect')}
+              </button>
+            </div>
+          )}
+        </section>
+      </div>
+    </aside>
+  );
+}
+
 function ExpiredModal({ onClose }) {
   const { t } = useTranslation();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
-      <div className="bg-gray-900 border border-red-500/30 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl">
-        <div className="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto mb-5">
-          <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <div className="w-full max-w-sm rounded-2xl border border-danger bg-surface-elevated p-8 text-center shadow-popover">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-danger bg-danger-tint">
+          <svg className="h-8 w-8 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round"
               d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
         </div>
-        <h3 className="text-white font-bold text-lg mb-2">{t('seatMap.expiredTitle')}</h3>
-        <p className="text-gray-400 text-sm leading-relaxed mb-6">{t('seatMap.expiredDesc')}</p>
+        <h3 className="mb-2 text-lg font-bold text-label-primary">{t('seatMap.expiredTitle')}</h3>
+        <p className="mb-6 text-sm leading-relaxed text-label-secondary">{t('seatMap.expiredDesc')}</p>
         <button
           onClick={onClose}
-          className="w-full py-3 rounded-xl text-white font-semibold text-sm transition"
-          style={{ background: 'linear-gradient(90deg, #f9a8d4, #ec4899)' }}
+          className="w-full rounded-xl bg-accent py-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
         >
           {t('seatMap.reselect')}
         </button>
@@ -343,7 +594,7 @@ function Legend() {
     { style: { backgroundColor: '#374151', opacity: 0.4 },                                               label: t('seatMap.sold') },
   ];
   return (
-    <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-400 mb-6">
+    <div className="mb-6 flex flex-wrap gap-x-5 gap-y-2 text-xs text-label-secondary">
       {items.map(({ style, label }) => (
         <span key={label} className="flex items-center gap-1.5">
           <span className="w-4 h-4 rounded-t-md rounded-b-sm inline-block" style={style} />
@@ -536,57 +787,39 @@ export default function SeatMap({ eventId, layout = null }) {
   const selectedSeats  = seats.filter(s => selected.has(s.id));
   const heldSeatObjs   = seats.filter(s => heldSeats.includes(s.id));
   const total = [...selectedSeats, ...heldSeatObjs].reduce((acc, s) => acc + Number(s.price), 0);
-  const focusZone = (zoneId) => {
-    const zoneEl = document.getElementById(`zone-grid-${zoneId}`);
-    if (!zoneEl) return;
-    zoneEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    zoneEl.classList.add('ring-2', 'ring-blue-400', 'ring-offset-2', 'ring-offset-gray-950');
-    window.setTimeout(() => {
-      zoneEl.classList.remove('ring-2', 'ring-blue-400', 'ring-offset-2', 'ring-offset-gray-950');
-    }, 1200);
-  };
-
   return (
-    <div>
-      <Legend />
-      <Stage />
-      <VenueOverview layout={layout} zoneGroups={zoneGroups} onZoneFocus={focusZone} />
-
-      {zoneGroups.map(zone => (
-        <ZoneGrid
-          key={zone.zone_id}
-          zone={zone}
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="min-w-0 space-y-4">
+        <Legend />
+        <VenueOverview
+          layout={layout}
+          zoneGroups={zoneGroups}
           selected={selected}
           heldSeats={new Set(heldSeats)}
-          onToggle={toggleSeat}
           frozen={frozen}
+          onSeatToggle={toggleSeat}
         />
-      ))}
 
-      {error && (
-        <p className="text-red-400 text-sm bg-red-950/30 border border-red-800/40 px-3 py-2 rounded-xl mt-2">
-          {error}
-        </p>
-      )}
+        {error && (
+          <p className="text-red-400 text-sm bg-red-950/30 border border-red-800/40 px-3 py-2 rounded-xl">
+            {error}
+          </p>
+        )}
+      </div>
 
-      {heldSeats.length > 0 ? (
-        <HoldPanel
-          heldSeatObjs={heldSeatObjs}
-          countdown={countdown}
-          total={total}
-          renewing={renewing}
-          onRelease={releaseHeld}
-          onCheckout={() => navigate('/checkout', { state: { seat_ids: heldSeats, seat_info: heldSeatObjs } })}
-        />
-      ) : selected.size > 0 ? (
-        <SelectionPanel
-          selectedSeats={selectedSeats}
-          total={total}
-          holding={holding}
-          onHold={holdSeats}
-          onClear={() => setSelected(new Set())}
-        />
-      ) : null}
+      <BookingSidebar
+        zoneGroups={zoneGroups}
+        selectedSeats={selectedSeats}
+        heldSeatObjs={heldSeatObjs}
+        countdown={countdown}
+        total={total}
+        holding={holding}
+        renewing={renewing}
+        onHold={holdSeats}
+        onClear={() => setSelected(new Set())}
+        onRelease={releaseHeld}
+        onCheckout={() => navigate('/checkout', { state: { seat_ids: heldSeats, seat_info: heldSeatObjs } })}
+      />
 
       {showExpired && <ExpiredModal onClose={dismissExpired} />}
     </div>

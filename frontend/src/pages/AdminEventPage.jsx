@@ -74,6 +74,7 @@ export default function AdminEventPage() {
   const [success,     setSuccess]     = useState('');
   const [deleting,    setDeleting]    = useState(false);
   const [activeTab,   setActiveTab]   = useState('info');
+  const [designerRevision, setDesignerRevision] = useState(0);
 
   const getGenderLabel = (gender) => {
     if (gender === 'male')   return t('adminEvent.genderMale');
@@ -96,6 +97,7 @@ export default function AdminEventPage() {
         });
         setZones(z || []);
         setLayoutJson(ev.layout_json || null);
+        setDesignerRevision(revision => revision + 1);
       }).finally(() => setLoading(false));
       api.get(`/admin/events/${id}/audience`)
         .then(r => setAudience(r.data))
@@ -173,6 +175,8 @@ export default function AdminEventPage() {
         rows: Number(newZone.rows), cols: Number(newZone.cols), price: Number(newZone.price),
       });
       setZones(prev => [...prev, data.zone]);
+      setLayoutJson(null);
+      setDesignerRevision(revision => revision + 1);
       setNewZone({ name: '', rows: '', cols: '', price: '', color: '#3B82F6' });
     } catch (err) {
       setError(err.response?.data?.error || t('adminEvent.addZoneError'));
@@ -182,9 +186,17 @@ export default function AdminEventPage() {
   const deleteZone = async (zoneId) => {
     await api.delete(`/events/${id}/zones/${zoneId}`);
     setZones(prev => prev.filter(z => z.id !== zoneId));
+    setLayoutJson(null);
+    setDesignerRevision(revision => revision + 1);
   };
 
   const saveLayout = async (zones, stages, canvas) => {
+    if (isNew) {
+      setError('Vui lòng tạo sự kiện trước, sau đó lưu sơ đồ ghế.');
+      setActiveTab('info');
+      return;
+    }
+
     setSavingLayout(true); setError(''); setSuccess('');
     try {
       const { data } = await api.put(`/events/${id}/layout`, { zones, stages, canvas });
@@ -192,9 +204,10 @@ export default function AdminEventPage() {
         ...z, id: z.dbId ?? z.id, rows: Number(z.rows), cols: Number(z.cols),
       })));
       setLayoutJson(data.layout);
+      setDesignerRevision(revision => revision + 1);
       setSuccess(t('adminEvent.saveLayoutSuccess', {
         zones: data.zones_created,
-        seats: zones.reduce((s, z) => s + z.rows * z.cols, 0),
+        seats: data.seats_created ?? zones.reduce((s, z) => s + z.rows * z.cols, 0),
       }));
     } catch (err) {
       setError(err.response?.data?.error || t('adminEvent.saveLayoutError'));
@@ -219,11 +232,9 @@ export default function AdminEventPage() {
   const designerLayout = layoutJson || buildLayoutFromZones(zones);
 
   const TABS = [
-      { key: 'info',   label: t('adminEvent.tabInfo') },
-    ...(isNew ? [] : [
-      { key: 'design',   label: t('adminEvent.tabDesign') },
-      { key: 'audience', label: t('adminEvent.tabAudience') },
-    ]),
+    { key: 'info',   label: t('adminEvent.tabInfo') },
+    { key: 'design', label: t('adminEvent.tabDesign') },
+    ...(isNew ? [] : [{ key: 'audience', label: t('adminEvent.tabAudience') }]),
   ];
 
   return (
@@ -383,7 +394,7 @@ export default function AdminEventPage() {
       )}
 
       {/* ── Tab: Design ── */}
-      {activeTab === 'design' && !isNew && (
+      {activeTab === 'design' && (
         <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-200">
             <div>
@@ -399,11 +410,16 @@ export default function AdminEventPage() {
               </div>
             )}
           </div>
+          {isNew && (
+            <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              Vui lòng tạo sự kiện trước khi lưu sơ đồ ghế. Bạn vẫn có thể xem công cụ thiết kế ở đây.
+            </p>
+          )}
           <SeatDesigner
-            key={layoutJson ? `layout-${id}` : `zones-${zones.length}`}
+            key={`designer-${id}-${designerRevision}-${layoutJson ? 'layout' : `zones-${zones.length}`}`}
             initialLayout={designerLayout}
             onSave={saveLayout}
-            saving={savingLayout}
+            saving={savingLayout || isNew}
           />
         </div>
       )}

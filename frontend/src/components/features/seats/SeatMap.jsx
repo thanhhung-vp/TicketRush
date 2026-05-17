@@ -7,7 +7,7 @@ import { useEventSocket } from '../../../hooks/useEventSocket.js';
 import { useCountdown } from '../../../hooks/useCountdown.js';
 import { formatVND, formatCountdown } from '../../../utils/format.js';
 import { MAX_SEATS } from '../../../utils/constants.js';
-import { clampRotation, normalizeAudienceShape, normalizeStageLayout } from '../../../utils/venueLayout.js';
+import { clampOverviewZoom, clampRotation, getFanZonePath, normalizeAudienceShape, normalizeStageLayout } from '../../../utils/venueLayout.js';
 
 const STATUS_STYLE = {
   available: 'bg-gray-700 hover:ring-2 hover:ring-blue-400 cursor-pointer',
@@ -29,7 +29,7 @@ function getZonePath(zone) {
   const h = Number(zone.height || 0);
   const shape = normalizeAudienceShape(zone.shape);
 
-  if (shape === 'fan') return `M ${w * 0.08} ${h} Q ${w / 2} ${-h * 0.18} ${w * 0.92} ${h} Q ${w / 2} ${h * 0.72} ${w * 0.08} ${h} Z`;
+  if (shape === 'fan') return getFanZonePath(zone);
   if (shape === 'semicircle') return `M 0 ${h} A ${w / 2} ${h} 0 0 1 ${w} ${h} L 0 ${h} Z`;
   if (shape === 'u_shape') return `M 0 0 H ${w} V ${h} H ${w * 0.68} V ${h * 0.38} H ${w * 0.32} V ${h} H 0 Z`;
   return `M 0 0 H ${w} V ${h} H 0 Z`;
@@ -61,24 +61,69 @@ function rotateTransform(item) {
 }
 
 function VenueOverview({ layout, zoneGroups, onZoneFocus }) {
+  const [zoom, setZoom] = useState(1);
   if (!layout?.zones?.length) return null;
 
   const canvas = layout.canvas || { width: 860, height: 540 };
+  const canvasWidth = Number(canvas.width || 860);
+  const canvasHeight = Number(canvas.height || 540);
+  const zoomPercent = Math.round(zoom * 100);
   const zonesById = new Map(zoneGroups.map(zone => [String(zone.zone_id), zone]));
 
   return (
     <div className="rounded-2xl border border-separator bg-surface p-4 shadow-1">
-      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-sm font-bold text-label-primary">Sơ đồ tổng quan</h3>
           <p className="text-xs text-label-secondary">Bấm vào một khu để chuyển nhanh đến danh sách ghế.</p>
         </div>
         <p className="text-xs text-label-secondary">{layout.zones.length} khu vé</p>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#0d0d14]">
+      <div className="mb-3 flex flex-wrap items-center gap-2 sm:justify-end">
+        <div className="flex items-center overflow-hidden rounded-xl border border-separator bg-fill-tertiary">
+          <button
+            type="button"
+            onClick={() => setZoom(value => clampOverviewZoom(value - 0.25))}
+            className="h-8 w-8 text-sm font-bold text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary disabled:opacity-40"
+            disabled={zoom <= 0.75}
+            aria-label="Thu nhỏ sơ đồ"
+            title="Thu nhỏ sơ đồ"
+          >
+            -
+          </button>
+          <span className="min-w-14 border-x border-separator px-2 text-center text-xs font-semibold text-label-primary">
+            {zoomPercent}%
+          </span>
+          <button
+            type="button"
+            onClick={() => setZoom(value => clampOverviewZoom(value + 0.25))}
+            className="h-8 w-8 text-sm font-bold text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary disabled:opacity-40"
+            disabled={zoom >= 3}
+            aria-label="Phóng to sơ đồ"
+            title="Phóng to sơ đồ"
+          >
+            +
+          </button>
+        </div>
+        {zoom !== 1 && (
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            className="rounded-xl border border-separator px-3 py-1.5 text-xs font-semibold text-label-secondary transition hover:bg-fill-quaternary hover:text-label-primary"
+          >
+            100%
+          </button>
+        )}
+      </div>
+      <div className="max-h-[72vh] overflow-auto rounded-xl border border-gray-800 bg-[#0d0d14]">
         <svg
-          viewBox={`0 0 ${canvas.width || 860} ${canvas.height || 540}`}
-          className="block min-w-[640px] w-full"
+          viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
+          className="block"
+          style={{
+            width: `${Math.max(640, canvasWidth) * zoom}px`,
+            height: `${Math.max(400, canvasHeight) * zoom}px`,
+            maxWidth: 'none',
+          }}
           role="img"
           aria-label="Sơ đồ tổng quan sự kiện"
         >

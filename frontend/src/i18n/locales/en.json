@@ -230,6 +230,14 @@
     }
   },
   "seatMap": {
+    "overviewTitle": "Venue overview",
+    "overviewHint": "Select seats directly inside each zone on the map.",
+    "seatMapAria": "Interactive event seat map",
+    "zonesCount": "{{count}} ticket zones",
+    "zonesAndPrices": "Zones and prices",
+    "seatsAvailableCount": "{{available}}/{{total}} seats available",
+    "estimatedTotal": "Estimated total",
+    "noSeatsSelected": "No seats selected yet.",
     "deselect": "Deselect",
     "hold": "Hold Seats →",
     "holding": "Holding...",
@@ -249,6 +257,9 @@
     "sold": "Sold",
     "heldSeats": "Held Seats",
     "selectedSeats": "Selected Seats",
+    "zoomIn": "Zoom in seat map",
+    "zoomOut": "Zoom out seat map",
+    "zoomReset": "Reset zoom",
     "holdError": "Could not hold seats, please try again."
   },
   "myTickets": {

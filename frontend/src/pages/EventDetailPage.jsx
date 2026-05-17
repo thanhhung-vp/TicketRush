@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import SeatMap from '../components/SeatMap.jsx';
-import { clampRotation, normalizeAudienceShape, normalizeStageLayout } from '../utils/venueLayout.js';
+import { clampRotation, getFanGeometry, normalizeAudienceShape, normalizeStageLayout } from '../utils/venueLayout.js';
 
 const CATEGORY_GRADIENTS = {
   music:       'from-purple-700 via-pink-600 to-rose-500',
@@ -139,9 +139,11 @@ function drawZonePreview(ctx, zone, sx, sy, t) {
       ctx.lineTo(x, y + h);
       ctx.closePath();
     } else if (shape === 'fan') {
-      ctx.moveTo(x + w * 0.08, y + h);
-      ctx.quadraticCurveTo(x + w / 2, y - h * 0.18, x + w * 0.92, y + h);
-      ctx.quadraticCurveTo(x + w / 2, y + h * 0.72, x + w * 0.08, y + h);
+      const fan = getFanGeometry({ width: w, height: h });
+      const start = fan.startAngle * Math.PI / 180;
+      const end = fan.endAngle * Math.PI / 180;
+      ctx.arc(x + fan.cx, y + fan.cy, fan.outerRadius, start, end, false);
+      ctx.arc(x + fan.cx, y + fan.cy, fan.innerRadius, end, start, true);
       ctx.closePath();
     } else if (shape === 'u_shape') {
       ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h);
@@ -478,7 +480,7 @@ export default function EventDetailPage() {
       </div>
 
       {/* ═══════════ Tabs ═══════════ */}
-      <div className="border-b border-gray-200 bg-white sticky top-[57px] z-40">
+      <div className="border-b border-gray-200 bg-white">
         <div className="max-w-6xl mx-auto px-4 flex gap-8">
           {TABS.map(tab => (
             <button
@@ -525,31 +527,11 @@ export default function EventDetailPage() {
                 </button>
               </div>
 
-              {/* Zones/Price table */}
-              {event.zones?.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('event.zonesAndPrices')}</h3>
-                  <div className="grid gap-2">
-                    {event.zones.map(z => (
-                      <div key={z.id} className="flex items-center justify-between py-2.5 px-4 bg-gray-50 rounded-lg">
-                        <span className="flex items-center gap-3">
-                          <span className="w-4 h-4 rounded" style={{ backgroundColor: z.color }} />
-                          <span className="font-medium text-gray-800">{z.name}</span>
-                          <span className="text-xs text-gray-400">
-                            ({Number(z.available_seats || 0)}/{Number(z.total_seats || 0)} {t('event.seatsAvailable')})
-                          </span>
-                        </span>
-                        <span className="font-bold text-gray-900">{formatVND(z.price)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Seat map — only for open events */}
             {!isClosed && (
-              <div className="bg-gray-950 rounded-2xl p-5 text-white">
+              <div className="rounded-2xl border border-separator bg-surface p-5 text-label-primary shadow-1">
                 <SeatMap eventId={id} layout={seatLayout} />
               </div>
             )}
