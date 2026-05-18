@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { config } from '../config/index.js';
 
 const router = Router();
 
@@ -37,7 +38,7 @@ router.post('/event-from-image', authenticate, requireAdmin, async (req, res) =>
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type':  'application/json',
-        'HTTP-Referer':  process.env.CLIENT_URL || 'http://localhost:3000',
+        'HTTP-Referer':  config.clientUrl,
         'X-Title':       'TicketRush',
       },
       body: JSON.stringify({

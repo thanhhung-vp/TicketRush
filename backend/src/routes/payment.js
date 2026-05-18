@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { Router } from 'express';
 import QRCode from 'qrcode';
 import pool from '../config/db.js';
+import { config } from '../config/index.js';
 import { authenticate } from '../middleware/auth.js';
 import { sendOrderConfirmation } from '../services/email.js';
 import { createNotification } from '../services/notifications.js';
@@ -354,7 +355,7 @@ function buildVNPayUrl(order, amount) {
     vnp_CurrCode:   'VND',
     vnp_TxnRef:     order.id,
     vnp_OrderInfo:  `TicketRush order ${order.id}`,
-    vnp_ReturnUrl:  `${process.env.CLIENT_URL}/payment/return`,
+    vnp_ReturnUrl:  `${config.clientUrl}/payment/return`,
     vnp_CreateDate: new Date().toISOString().replace(/\D/g, '').slice(0, 14),
     vnp_IpAddr:     '127.0.0.1',
     vnp_Locale:     'vn',
@@ -369,11 +370,11 @@ function buildMoMoRequest(order, amount, user) {
     `accessKey=${process.env.MOMO_ACCESS_KEY || 'demo'}`,
     `amount=${amount}`,
     `extraData=`,
-    `ipnUrl=${process.env.SERVER_URL || 'http://localhost:4000'}/api/payment/momo/ipn`,
+    `ipnUrl=${config.serverUrl}/api/payment/momo/ipn`,
     `orderId=${order.id}`,
     `orderInfo=TicketRush order ${order.id}`,
     `partnerCode=${process.env.MOMO_PARTNER_CODE || 'DEMO'}`,
-    `redirectUrl=${process.env.CLIENT_URL}/payment/return`,
+    `redirectUrl=${config.clientUrl}/payment/return`,
     `requestId=${requestId}`,
     `requestType=captureWallet`,
   ].join('&');

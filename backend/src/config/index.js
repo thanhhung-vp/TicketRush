@@ -1,6 +1,8 @@
 const DEVELOPMENT_JWT_SECRET = 'ticketrush-local-development-secret';
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
-const SERVER_URL = process.env.SERVER_URL || 'http://localhost:4000';
+const PRODUCTION_PUBLIC_URL = 'https://ticketrush.id.vn';
+const isProduction = process.env.NODE_ENV === 'production';
+const CLIENT_URL = process.env.CLIENT_URL || (isProduction ? PRODUCTION_PUBLIC_URL : 'http://localhost:3000');
+const SERVER_URL = process.env.SERVER_URL || (isProduction ? PRODUCTION_PUBLIC_URL : 'http://localhost:4000');
 
 function resolveJwtSecret(env = process.env) {
   const secret = env.JWT_SECRET?.trim();

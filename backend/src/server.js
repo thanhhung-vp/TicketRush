@@ -3,6 +3,7 @@ import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { config } from './config/index.js';
 import { initSocket } from './socket/index.js';
 import { startSeatReleaseWorker, sweepExpiredSeats } from './workers/seatRelease.js';
 import { startVirtualQueueWorker } from './workers/virtualQueue.js';
@@ -34,7 +35,7 @@ const server = http.createServer(app);
 app.set('trust proxy', 1);
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: config.clientUrl,
   credentials: true,
 }));
 app.use(express.json({ limit: '2mb' }));
@@ -105,7 +106,7 @@ startVirtualQueueWorker(io);
 startScheduledEventsWorker();
 setInterval(() => sweepExpiredSeats(io), 60_000);
 
-const PORT = process.env.PORT || 4000;
+const PORT = config.port;
 server.listen(PORT, () => {
-  console.log(`🚀  TicketRush backend → http://localhost:${PORT}`);
+  console.log(`🚀  TicketRush backend → ${config.serverUrl}`);
 });
