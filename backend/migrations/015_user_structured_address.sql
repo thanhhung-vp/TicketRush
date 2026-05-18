@@ -1,0 +1,7 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS address_province_code VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS address_province_name VARCHAR(120),
+  ADD COLUMN IF NOT EXISTS address_ward_code VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS address_ward_name VARCHAR(120),
+  ADD COLUMN IF NOT EXISTS address_hamlet VARCHAR(180),
+  ADD COLUMN IF NOT EXISTS address_line VARCHAR(255);

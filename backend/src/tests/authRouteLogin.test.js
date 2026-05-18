@@ -123,6 +123,74 @@ describe('Auth route login flow', () => {
     expect(response.body).toMatchObject({ error: 'Google login is not configured' });
   });
 
+  it('updates structured address fields on the authenticated profile', async () => {
+    const password = 'password123';
+    const user = {
+      id: 42,
+      email: 'user@example.com',
+      full_name: 'Test User',
+      role: 'customer',
+      password: await bcrypt.hash(password, 12),
+    };
+    const app = createAuthApp();
+
+    mockPool.query.mockImplementation(async (sql, params) => {
+      if (sql.startsWith('SELECT * FROM users WHERE email')) {
+        return { rows: [user] };
+      }
+      if (sql.startsWith('INSERT INTO refresh_tokens')) {
+        return { rows: [] };
+      }
+      if (sql.startsWith('UPDATE users SET')) {
+        expect(params).toContain('1');
+        expect(params).toContain('Thành phố Hà Nội');
+        expect(params).toContain('4');
+        expect(params).toContain('Phường Ba Đình');
+        expect(params).toContain('Khu phố 3');
+        expect(params).toContain('Số 12 đường Lê Lợi');
+        return {
+          rows: [{
+            id: user.id,
+            email: user.email,
+            full_name: user.full_name,
+            role: user.role,
+            address_province_code: '1',
+            address_province_name: 'Thành phố Hà Nội',
+            address_ward_code: '4',
+            address_ward_name: 'Phường Ba Đình',
+            address_hamlet: 'Khu phố 3',
+            address_line: 'Số 12 đường Lê Lợi',
+          }],
+        };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+
+    const loginResponse = await request(app)
+      .post('/auth/login')
+      .send({ email: user.email, password });
+
+    const profileResponse = await request(app)
+      .patch('/auth/profile')
+      .set('Authorization', `Bearer ${loginResponse.body.accessToken}`)
+      .send({
+        address_province_code: '1',
+        address_province_name: 'Thành phố Hà Nội',
+        address_ward_code: '4',
+        address_ward_name: 'Phường Ba Đình',
+        address_hamlet: 'Khu phố 3',
+        address_line: 'Số 12 đường Lê Lợi',
+      });
+
+    expect(profileResponse.status).toBe(200);
+    expect(profileResponse.body).toMatchObject({
+      address_province_name: 'Thành phố Hà Nội',
+      address_ward_name: 'Phường Ba Đình',
+      address_hamlet: 'Khu phố 3',
+      address_line: 'Số 12 đường Lê Lợi',
+    });
+  });
+
   it('consumes a password reset OTP once so it cannot be reused', async () => {
     const email = 'user@example.com';
     const otp = '123456';

@@ -12,6 +12,7 @@ const PUBLIC_AUTH_PATHS = [
   '/auth/reset-password',
   '/auth/refresh',
   '/auth/google',
+  '/auth/facebook',
 ];
 
 function isPublicAuthRequest(config) {

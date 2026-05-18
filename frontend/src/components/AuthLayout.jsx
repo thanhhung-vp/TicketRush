@@ -110,6 +110,41 @@ export function GoogleAuthButton() {
   );
 }
 
+export function FacebookAuthButton() {
+  const { t } = useTranslation();
+  const handleClick = () => {
+    window.location.assign('/api/auth/facebook');
+  };
+
+  return (
+    <div className="flex justify-center">
+      <button
+        type="button"
+        onClick={handleClick}
+        aria-label={t('auth.continueWithFacebook')}
+        title={t('auth.continueWithFacebook')}
+        className="w-12 h-12 rounded-full border border-blue-100 shadow-sm bg-[#1877F2] hover:bg-[#166FE5] hover:shadow-md active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+      >
+        <svg viewBox="0 0 24 24" className="w-6 h-6" aria-hidden="true">
+          <path
+            fill="#fff"
+            d="M14.2 8.1H16V5.2c-.3 0-1.4-.1-2.6-.1-2.6 0-4.4 1.6-4.4 4.6v2.6H6.1v3.3H9V24h3.5v-8.4h2.9l.5-3.3h-3.4V10c0-1 .3-1.9 1.7-1.9z"
+          />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+export function SocialAuthButtons() {
+  return (
+    <div className="flex justify-center gap-3">
+      <GoogleAuthButton />
+      <FacebookAuthButton />
+    </div>
+  );
+}
+
 export function Checkbox({ checked, onChange, label }) {
   return (
     <label className="flex items-center gap-2.5 cursor-pointer select-none">

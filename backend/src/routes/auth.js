@@ -13,10 +13,14 @@ import { emailSchema } from '../utils/emailValidation.js';
 
 const router = Router();
 const GOOGLE_STATE_COOKIE = 'ticketrush_google_oauth_state';
+const FACEBOOK_STATE_COOKIE = 'ticketrush_facebook_oauth_state';
 const GOOGLE_STATE_COOKIE_PATH = '/api/auth';
 const GOOGLE_AUTH_CODE_PREFIX = 'google-auth:';
+const FACEBOOK_AUTH_CODE_PREFIX = 'facebook-auth:';
 const GOOGLE_AUTH_CODE_TTL_SECONDS = 60;
+const FACEBOOK_AUTH_CODE_TTL_SECONDS = 60;
 const GOOGLE_OAUTH_SCOPE = 'openid email profile';
+const FACEBOOK_OAUTH_SCOPE = 'email,public_profile';
 
 const googleProfileSchema = z.object({
   sub: z.string().min(1),
@@ -24,6 +28,17 @@ const googleProfileSchema = z.object({
   email_verified: z.union([z.boolean(), z.string()]).optional(),
   name: z.string().trim().optional(),
   picture: z.string().url().optional(),
+});
+
+const facebookProfileSchema = z.object({
+  id: z.string().min(1),
+  email: emailSchema,
+  name: z.string().trim().optional(),
+  picture: z.object({
+    data: z.object({
+      url: z.string().url().optional(),
+    }).optional(),
+  }).optional(),
 });
 
 function generateTokens(user) {
@@ -74,6 +89,10 @@ function isGoogleLoginConfigured() {
   return Boolean(config.google.clientId && config.google.clientSecret && config.google.redirectUri);
 }
 
+function isFacebookLoginConfigured() {
+  return Boolean(config.facebook.appId && config.facebook.appSecret && config.facebook.redirectUri);
+}
+
 function acceptsJson(req) {
   return req.accepts(['json', 'html']) === 'json';
 }
@@ -99,6 +118,10 @@ function redirectGoogleError(res, code) {
   return res.redirect(buildClientUrl('/login', { google_error: code }));
 }
 
+function redirectFacebookError(res, code) {
+  return res.redirect(buildClientUrl('/login', { facebook_error: code }));
+}
+
 function setGoogleStateCookie(res, state) {
   res.cookie(GOOGLE_STATE_COOKIE, state, {
     httpOnly: true,
@@ -111,6 +134,25 @@ function setGoogleStateCookie(res, state) {
 
 function clearGoogleStateCookie(res) {
   res.clearCookie(GOOGLE_STATE_COOKIE, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.nodeEnv === 'production',
+    path: GOOGLE_STATE_COOKIE_PATH,
+  });
+}
+
+function setFacebookStateCookie(res, state) {
+  res.cookie(FACEBOOK_STATE_COOKIE, state, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.nodeEnv === 'production',
+    maxAge: 10 * 60 * 1000,
+    path: GOOGLE_STATE_COOKIE_PATH,
+  });
+}
+
+function clearFacebookStateCookie(res) {
+  res.clearCookie(FACEBOOK_STATE_COOKIE, {
     httpOnly: true,
     sameSite: 'lax',
     secure: config.nodeEnv === 'production',
@@ -154,6 +196,32 @@ async function fetchGoogleProfile(accessToken) {
   return profile;
 }
 
+async function exchangeFacebookCode(code) {
+  const url = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
+  url.searchParams.set('client_id', config.facebook.appId);
+  url.searchParams.set('client_secret', config.facebook.appSecret);
+  url.searchParams.set('redirect_uri', config.facebook.redirectUri);
+  url.searchParams.set('code', code);
+
+  const response = await fetch(url.toString());
+  if (!response.ok) throw new Error('Facebook token exchange failed');
+  const payload = await response.json();
+  if (!payload.access_token) throw new Error('Facebook access token missing');
+  return payload.access_token;
+}
+
+async function fetchFacebookProfile(accessToken) {
+  const url = new URL('https://graph.facebook.com/v19.0/me');
+  url.searchParams.set('fields', 'id,name,email,picture');
+  url.searchParams.set('access_token', accessToken);
+
+  const response = await fetch(url.toString());
+  if (!response.ok) throw new Error('Facebook profile request failed');
+  const parsed = facebookProfileSchema.safeParse(await response.json());
+  if (!parsed.success) throw new Error('Facebook profile payload invalid');
+  return parsed.data;
+}
+
 async function findOrCreateGoogleUser(profile) {
   const email = profile.email;
   const fullName = profile.name || email.split('@')[0];
@@ -185,6 +253,38 @@ async function findOrCreateGoogleUser(profile) {
   return rows[0];
 }
 
+async function findOrCreateFacebookUser(profile) {
+  const email = profile.email;
+  const fullName = profile.name || email.split('@')[0];
+  const pictureUrl = profile.picture?.data?.url || null;
+
+  const existing = await pool.query(
+    'SELECT id, email, full_name, role, avatar_url FROM users WHERE email = $1',
+    [email]
+  );
+  if (existing.rows[0]) {
+    const { rows } = await pool.query(
+      `UPDATE users
+       SET avatar_url = COALESCE(avatar_url, $2)
+       WHERE id = $1
+       RETURNING id, email, full_name, role, avatar_url`,
+      [existing.rows[0].id, pictureUrl]
+    );
+    return rows[0];
+  }
+
+  const generatedPassword = crypto.randomBytes(32).toString('hex');
+  const passwordHash = await bcrypt.hash(generatedPassword, 12);
+  const { rows } = await pool.query(
+    `INSERT INTO users (email, password, full_name, avatar_url)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, email, full_name, role, avatar_url`,
+    [email, passwordHash, fullName, pictureUrl]
+  );
+
+  return rows[0];
+}
+
 // POST /auth/register
 const registerSchema = z.object({
   email:      emailSchema,
@@ -192,6 +292,12 @@ const registerSchema = z.object({
   full_name:  z.string().min(2).max(100),
   gender:     z.enum(['male', 'female', 'other']).optional(),
   birth_year: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+  address_province_code: z.string().trim().max(10).nullable().optional(),
+  address_province_name: z.string().trim().max(120).nullable().optional(),
+  address_ward_code:     z.string().trim().max(10).nullable().optional(),
+  address_ward_name:     z.string().trim().max(120).nullable().optional(),
+  address_hamlet:        z.string().trim().max(180).nullable().optional(),
+  address_line:          z.string().trim().max(255).nullable().optional(),
 });
 
 router.post('/register', async (req, res) => {
@@ -199,15 +305,46 @@ router.post('/register', async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
   }
-  const { email, password, full_name, gender, birth_year } = parsed.data;
+  const {
+    email,
+    password,
+    full_name,
+    gender,
+    birth_year,
+    address_province_code,
+    address_province_name,
+    address_ward_code,
+    address_ward_name,
+    address_hamlet,
+    address_line,
+  } = parsed.data;
   const client = await pool.connect();
   try {
     const hash = await bcrypt.hash(password, 12);
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO users (email, password, full_name, gender, birth_year)
-       VALUES ($1,$2,$3,$4,$5) RETURNING id, email, full_name, role, avatar_url`,
-      [email, hash, full_name, gender || null, birth_year || null]
+      `INSERT INTO users (
+         email, password, full_name, gender, birth_year,
+         address_province_code, address_province_name, address_ward_code, address_ward_name,
+         address_hamlet, address_line
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       RETURNING id, email, full_name, gender, birth_year, role, avatar_url,
+         address_province_code, address_province_name, address_ward_code, address_ward_name,
+         address_hamlet, address_line`,
+      [
+        email,
+        hash,
+        full_name,
+        gender || null,
+        birth_year || null,
+        address_province_code || null,
+        address_province_name || null,
+        address_ward_code || null,
+        address_ward_name || null,
+        address_hamlet || null,
+        address_line || null,
+      ]
     );
     const user = rows[0];
     const { accessToken, refreshToken } = generateTokens(user);
@@ -316,6 +453,68 @@ async function handleGoogleCallback(req, res) {
 router.get('/google/callback', handleGoogleCallback);
 router.get('/callback/google', handleGoogleCallback);
 
+// GET /auth/facebook - start Facebook OAuth login
+router.get('/facebook', (req, res) => {
+  if (!isFacebookLoginConfigured()) {
+    if (acceptsJson(req)) {
+      return res.status(503).json({ error: 'Facebook login is not configured' });
+    }
+    return redirectFacebookError(res, 'not_configured');
+  }
+
+  const state = crypto.randomBytes(24).toString('hex');
+  setFacebookStateCookie(res, state);
+
+  const facebookUrl = new URL('https://www.facebook.com/v19.0/dialog/oauth');
+  facebookUrl.searchParams.set('client_id', config.facebook.appId);
+  facebookUrl.searchParams.set('redirect_uri', config.facebook.redirectUri);
+  facebookUrl.searchParams.set('response_type', 'code');
+  facebookUrl.searchParams.set('scope', FACEBOOK_OAUTH_SCOPE);
+  facebookUrl.searchParams.set('state', state);
+
+  return res.redirect(facebookUrl.toString());
+});
+
+async function handleFacebookCallback(req, res) {
+  if (!isFacebookLoginConfigured()) return redirectFacebookError(res, 'not_configured');
+
+  const { code, state, error } = req.query;
+  if (error) return redirectFacebookError(res, 'cancelled');
+  if (
+    typeof code !== 'string' ||
+    typeof state !== 'string' ||
+    getCookieValue(req, FACEBOOK_STATE_COOKIE) !== state
+  ) {
+    clearFacebookStateCookie(res);
+    return redirectFacebookError(res, 'invalid_state');
+  }
+
+  clearFacebookStateCookie(res);
+
+  try {
+    const facebookAccessToken = await exchangeFacebookCode(code);
+    const profile = await fetchFacebookProfile(facebookAccessToken);
+    const user = await findOrCreateFacebookUser(profile);
+    const { accessToken, refreshToken } = generateTokens(user);
+    await storeRefreshToken(user.id, refreshToken);
+
+    const authCode = crypto.randomBytes(32).toString('hex');
+    await redis.setex(
+      `${FACEBOOK_AUTH_CODE_PREFIX}${authCode}`,
+      FACEBOOK_AUTH_CODE_TTL_SECONDS,
+      JSON.stringify({ accessToken, refreshToken, user })
+    );
+
+    return res.redirect(buildClientUrl('/auth/facebook/callback', { code: authCode }));
+  } catch (err) {
+    console.error(err);
+    return redirectFacebookError(res, 'failed');
+  }
+}
+
+router.get('/facebook/callback', handleFacebookCallback);
+router.get('/callback/facebook', handleFacebookCallback);
+
 // POST /auth/google/complete - exchange one-time local code for app tokens
 const googleCompleteSchema = z.object({
   code: z.string().regex(/^[a-f0-9]{64}$/i),
@@ -330,7 +529,37 @@ router.post('/google/complete', async (req, res) => {
   const key = `${GOOGLE_AUTH_CODE_PREFIX}${parsed.data.code}`;
   try {
     const payload = await redis.get(key);
-    if (!payload) return res.status(401).json({ error: 'Google login session expired' });
+    if (!payload) {
+      console.warn('Google login complete failed: session code missing or expired');
+      return res.status(401).json({ error: 'Google login session expired' });
+    }
+
+    await redis.del(key);
+    return res.json(JSON.parse(payload));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /auth/facebook/complete - exchange one-time local code for app tokens
+const facebookCompleteSchema = z.object({
+  code: z.string().regex(/^[a-f0-9]{64}$/i),
+});
+
+router.post('/facebook/complete', async (req, res) => {
+  const parsed = facebookCompleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+  }
+
+  const key = `${FACEBOOK_AUTH_CODE_PREFIX}${parsed.data.code}`;
+  try {
+    const payload = await redis.get(key);
+    if (!payload) {
+      console.warn('Facebook login complete failed: session code missing or expired');
+      return res.status(401).json({ error: 'Facebook login session expired' });
+    }
 
     await redis.del(key);
     return res.json(JSON.parse(payload));
@@ -401,7 +630,10 @@ router.post('/logout-all', authenticate, async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, full_name, gender, birth_year, role, avatar_url, created_at FROM users WHERE id=$1',
+      `SELECT id, email, full_name, gender, birth_year, role, avatar_url, created_at,
+              address_province_code, address_province_name, address_ward_code, address_ward_name,
+              address_hamlet, address_line
+       FROM users WHERE id=$1`,
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });
@@ -417,6 +649,12 @@ const profileSchema = z.object({
   full_name:  z.string().min(2).max(100).optional(),
   gender:     z.enum(['male', 'female', 'other']).optional(),
   birth_year: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+  address_province_code: z.string().trim().max(10).nullable().optional(),
+  address_province_name: z.string().trim().max(120).nullable().optional(),
+  address_ward_code:     z.string().trim().max(10).nullable().optional(),
+  address_ward_name:     z.string().trim().max(120).nullable().optional(),
+  address_hamlet:        z.string().trim().max(180).nullable().optional(),
+  address_line:          z.string().trim().max(255).nullable().optional(),
 });
 
 router.patch('/profile', authenticate, async (req, res) => {
@@ -431,7 +669,10 @@ router.patch('/profile', authenticate, async (req, res) => {
   const values = fields.map(f => parsed.data[f]);
   try {
     const { rows } = await pool.query(
-      `UPDATE users SET ${sets} WHERE id = $1 RETURNING id, email, full_name, gender, birth_year, role, avatar_url`,
+      `UPDATE users SET ${sets} WHERE id = $1
+       RETURNING id, email, full_name, gender, birth_year, role, avatar_url,
+         address_province_code, address_province_name, address_ward_code, address_ward_name,
+         address_hamlet, address_line`,
       [req.user.id, ...values]
     );
     res.json(rows[0]);

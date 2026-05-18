@@ -14,6 +14,15 @@ describe('Email service configuration', () => {
     })).toBe('smtp');
   });
 
+  it('trims email provider environment values before resolving provider', () => {
+    expect(resolveEmailProvider({ RESEND_API_KEY: ' re_test ' })).toBe('resend');
+    expect(resolveEmailProvider({
+      SMTP_HOST: ' smtp.gmail.com ',
+      SMTP_USER: ' user@gmail.com ',
+      SMTP_PASS: ' app-password ',
+    })).toBe('smtp');
+  });
+
   it('reports no provider when email configuration is missing', () => {
     expect(resolveEmailProvider({})).toBe('none');
   });

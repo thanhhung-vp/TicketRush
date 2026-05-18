@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
-  AuthBg, AuthCard, IconInput, PinkButton, AuthDivider, GoogleAuthButton, Checkbox,
+  AuthBg, AuthCard, IconInput, PinkButton, AuthDivider, SocialAuthButtons, Checkbox,
   EnvelopeIcon, LockIcon, EyeIcon, EyeOffIcon,
 } from '../components/AuthLayout.jsx';
 
@@ -17,6 +17,16 @@ function getGoogleErrorMessage(code, t) {
   return messages[code] || t('auth.googleFailed');
 }
 
+function getFacebookErrorMessage(code, t) {
+  const messages = {
+    not_configured: t('auth.facebookNotConfigured'),
+    cancelled: t('auth.facebookCancelled'),
+    invalid_state: t('auth.facebookInvalidState'),
+    failed: t('auth.facebookFailed'),
+  };
+  return messages[code] || t('auth.facebookFailed');
+}
+
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -28,7 +38,11 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const googleError = searchParams.get('google_error');
-  const visibleError = error || (googleError ? getGoogleErrorMessage(googleError, t) : '');
+  const facebookError = searchParams.get('facebook_error');
+  const visibleError =
+    error ||
+    (googleError ? getGoogleErrorMessage(googleError, t) : '') ||
+    (facebookError ? getFacebookErrorMessage(facebookError, t) : '');
 
   const handle = async (e) => {
     e.preventDefault();
@@ -95,7 +109,7 @@ export default function LoginPage() {
         </form>
 
         <AuthDivider text={t('auth.orLoginWith')} />
-        <GoogleAuthButton />
+        <SocialAuthButtons />
 
         <p className="mt-5 text-center text-sm text-gray-500">
           {t('auth.noAccount')}{' '}

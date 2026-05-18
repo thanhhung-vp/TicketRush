@@ -77,7 +77,15 @@
     "googleNotConfigured": "Đăng nhập Google chưa được cấu hình. Hãy điền GOOGLE_CLIENT_ID và GOOGLE_CLIENT_SECRET trong backend/.env.",
     "googleCancelled": "Bạn đã hủy đăng nhập bằng Google.",
     "googleInvalidState": "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn. Vui lòng thử lại.",
-    "googleFailed": "Không thể đăng nhập bằng Google. Vui lòng thử lại."
+    "googleFailed": "Không thể đăng nhập bằng Google. Vui lòng thử lại.",
+    "continueWithFacebook": "Tiếp tục với Facebook",
+    "facebookCallbackTitle": "Đang đăng nhập bằng Facebook",
+    "facebookCallbackDesc": "Vui lòng chờ trong giây lát...",
+    "facebookNotConfigured": "Đăng nhập Facebook chưa được cấu hình. Hãy điền FACEBOOK_APP_ID và FACEBOOK_APP_SECRET trong backend/.env.",
+    "facebookCancelled": "Bạn đã hủy đăng nhập bằng Facebook.",
+    "facebookInvalidState": "Phiên đăng nhập Facebook không hợp lệ hoặc đã hết hạn. Vui lòng thử lại.",
+    "facebookFailed": "Không thể đăng nhập bằng Facebook. Vui lòng thử lại.",
+    "addressTitle": "Địa chỉ đăng ký"
   },
   "forgotPassword": {
     "title": "Đổi mật khẩu",
@@ -421,11 +429,11 @@
     "province": "Tỉnh/Thành phố",
     "provinceDefault": "Chọn Tỉnh/Thành phố",
     "district": "Quận/Huyện",
-    "districtPlaceholder": "Chọn Quận/Huyện",
-    "ward": "Phường/Xã",
-    "wardPlaceholder": "Chọn Phường/Xã",
+    "districtPlaceholder": "Cấp quận/huyện không còn dùng sau sáp nhập 2025",
+    "ward": "Phường/Xã/Đặc khu",
+    "wardPlaceholder": "Chọn Phường/Xã/Đặc khu",
     "street": "Số nhà, tên đường",
-    "streetPlaceholder": "Nhập số nhà, tên đường",
+    "streetPlaceholder": "Nhập số nhà và tên đường",
     "cancelBtn": "Hủy",
     "savingText": "Đang lưu...",
     "saveSuccess": "Lưu thay đổi thành công!",
@@ -439,7 +447,9 @@
     "processingText": "Đang xử lý...",
     "updatePasswordBtn": "Cập nhật mật khẩu",
     "changePasswordSuccess": "Đổi mật khẩu thành công",
-    "changePasswordError": "Lỗi đổi mật khẩu"
+    "changePasswordError": "Lỗi đổi mật khẩu",
+    "hamlet": "Thôn/Ấp/Khu phố",
+    "hamletPlaceholder": "Nhập thôn, ấp hoặc khu phố"
   },
   "admin": {
     "dashboard": "Bảng điều khiển",
@@ -695,7 +705,8 @@
     "genderMale": "Nam",
     "genderFemale": "Nữ",
     "genderOther": "Khác",
-    "genderUnknown": "Chưa rõ"
+    "genderUnknown": "Chưa rõ",
+    "addressPickerTitle": "Địa chỉ sự kiện"
   },
   "waitingRoom": {
     "joining": "Đang tham gia hàng chờ...",

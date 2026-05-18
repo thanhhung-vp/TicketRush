@@ -10,7 +10,11 @@ vi.mock('../services/email.js', () => ({
 
 const {
   buildNewEventEmail,
+  buildTicketCancelledEmail,
+  buildTicketRefundedEmail,
   createNotification,
+  notifyUserTicketCancelled,
+  notifyUserTicketRefunded,
   notifyCustomersAboutNewEvent,
 } = await import('../services/notifications.js');
 
@@ -96,5 +100,89 @@ describe('notification service', () => {
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;b&gt;Hall&lt;/b&gt;');
+  });
+
+  it('emails the customer when an admin cancels a ticket', async () => {
+    const ticket = {
+      user_id: 'user-1',
+      user_email: 'buyer@gmail.com',
+      event_id: 'event-1',
+      order_id: 'order-1',
+      ticket_id: 'ticket-1',
+      seat_id: 'seat-1',
+      event_title: 'Launch Concert',
+      zone_name: 'VIP',
+      seat_label: 'A01',
+      reason: 'Schedule changed',
+    };
+    const db = {
+      query: vi.fn(async () => ({
+        rows: [{ id: 'notification-1', user_id: 'user-1', type: 'ticket_cancelled' }],
+      })),
+    };
+    sendEmailMock.mockResolvedValue({});
+
+    const result = await notifyUserTicketCancelled({ db, ticket });
+
+    expect(result).toEqual({ notification: true, email: true });
+    expect(sendEmailMock).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'buyer@gmail.com',
+      subject: expect.stringContaining('Launch Concert'),
+    }));
+  });
+
+  it('emails the customer when a refund is approved', async () => {
+    const refund = {
+      id: 'refund-1',
+      user_id: 'user-1',
+      user_email: 'buyer@gmail.com',
+      event_id: 'event-1',
+      order_id: 'order-1',
+      ticket_id: 'ticket-1',
+      seat_id: 'seat-1',
+      event_title: 'Launch Concert',
+      zone_name: 'VIP',
+      seat_label: 'A01',
+    };
+    const db = {
+      query: vi.fn(async () => ({
+        rows: [{ id: 'notification-1', user_id: 'user-1', type: 'ticket_refunded' }],
+      })),
+    };
+    sendEmailMock.mockResolvedValue({});
+
+    const result = await notifyUserTicketRefunded({ db, refund, status: 'approved' });
+
+    expect(result).toEqual({ notification: true, email: true });
+    expect(sendEmailMock).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'buyer@gmail.com',
+      subject: expect.stringContaining('approved'),
+    }));
+  });
+
+  it('escapes ticket status email content', () => {
+    const cancelledHtml = buildTicketCancelledEmail({
+      ticket: {
+        event_title: '<script>alert(1)</script>',
+        zone_name: '<b>VIP</b>',
+        seat_label: 'A01',
+        reason: '<img src=x>',
+      },
+      actionUrl: 'http://localhost:3000/my-tickets?status=cancelled',
+    });
+    const refundedHtml = buildTicketRefundedEmail({
+      refund: {
+        event_title: '<script>alert(1)</script>',
+        zone_name: '<b>VIP</b>',
+        seat_label: 'A01',
+      },
+      status: 'approved',
+      actionUrl: 'http://localhost:3000/my-tickets?status=cancelled',
+    });
+
+    expect(cancelledHtml).not.toContain('<script>alert(1)</script>');
+    expect(cancelledHtml).toContain('&lt;b&gt;VIP&lt;/b&gt;');
+    expect(cancelledHtml).toContain('&lt;img src=x&gt;');
+    expect(refundedHtml).not.toContain('<script>alert(1)</script>');
   });
 });

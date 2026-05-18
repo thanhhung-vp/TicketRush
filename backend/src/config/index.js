@@ -45,6 +45,11 @@ export const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     redirectUri: process.env.GOOGLE_REDIRECT_URI || `${SERVER_URL}/api/auth/google/callback`,
   },
+  facebook: {
+    appId: process.env.FACEBOOK_APP_ID,
+    appSecret: process.env.FACEBOOK_APP_SECRET,
+    redirectUri: process.env.FACEBOOK_REDIRECT_URI || `${SERVER_URL}/api/auth/facebook/callback`,
+  },
   payment: {
     vnpay: {
       tmnCode: process.env.VNPAY_TMN_CODE,

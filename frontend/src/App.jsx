@@ -9,6 +9,7 @@ import { useSmoothWheelScroll } from './hooks/useSmoothWheelScroll.js';
 import LoginPage          from './pages/LoginPage.jsx';
 import RegisterPage       from './pages/RegisterPage.jsx';
 import GoogleAuthCallbackPage from './pages/GoogleAuthCallbackPage.jsx';
+import FacebookAuthCallbackPage from './pages/FacebookAuthCallbackPage.jsx';
 import HomePage           from './pages/HomePage.jsx';
 import NewsDetailPage     from './pages/NewsDetailPage.jsx';
 import EventDetailPage    from './pages/EventDetailPage.jsx';
@@ -49,6 +50,7 @@ function AppRoutes() {
           <Route path="/login"             element={<LoginPage />} />
           <Route path="/register"          element={<RegisterPage />} />
           <Route path="/auth/google/callback" element={<GoogleAuthCallbackPage />} />
+          <Route path="/auth/facebook/callback" element={<FacebookAuthCallbackPage />} />
           <Route path="/forgot-password"   element={<ForgotPasswordPage />} />
           <Route path="/queue/:eventId"    element={<PrivateRoute><WaitingRoomPage /></PrivateRoute>} />
           <Route path="/checkout"          element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />

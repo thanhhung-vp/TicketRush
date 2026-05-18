@@ -20,32 +20,36 @@ function formatMoney(value) {
   return `${Number(value).toLocaleString('vi-VN')} VND`;
 }
 
+function envValue(env, key) {
+  return String(env[key] || '').trim();
+}
+
 export function resolveEmailProvider(env = process.env) {
-  if (env.RESEND_API_KEY) return 'resend';
-  if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) return 'smtp';
-  if (env.ETHEREAL_USER && env.ETHEREAL_PASS) return 'ethereal';
+  if (envValue(env, 'RESEND_API_KEY')) return 'resend';
+  if (envValue(env, 'SMTP_HOST') && envValue(env, 'SMTP_USER') && envValue(env, 'SMTP_PASS')) return 'smtp';
+  if (envValue(env, 'ETHEREAL_USER') && envValue(env, 'ETHEREAL_PASS')) return 'ethereal';
   return 'none';
 }
 
 function getFromAddress(env = process.env) {
-  return env.RESEND_FROM || env.SMTP_FROM || DEFAULT_FROM;
+  return envValue(env, 'RESEND_FROM') || envValue(env, 'SMTP_FROM') || DEFAULT_FROM;
 }
 
 function createTransport(env = process.env) {
-  if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
+  if (envValue(env, 'SMTP_HOST') && envValue(env, 'SMTP_USER') && envValue(env, 'SMTP_PASS')) {
     return nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: Number(env.SMTP_PORT || '587'),
-      secure: env.SMTP_SECURE === 'true',
-      auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+      host: envValue(env, 'SMTP_HOST'),
+      port: Number(envValue(env, 'SMTP_PORT') || '587'),
+      secure: envValue(env, 'SMTP_SECURE') === 'true',
+      auth: { user: envValue(env, 'SMTP_USER'), pass: envValue(env, 'SMTP_PASS') },
     });
   }
 
-  if (env.ETHEREAL_USER && env.ETHEREAL_PASS) {
+  if (envValue(env, 'ETHEREAL_USER') && envValue(env, 'ETHEREAL_PASS')) {
     return nodemailer.createTransport({
       host: 'smtp.ethereal.email',
       port: 587,
-      auth: { user: env.ETHEREAL_USER, pass: env.ETHEREAL_PASS },
+      auth: { user: envValue(env, 'ETHEREAL_USER'), pass: envValue(env, 'ETHEREAL_PASS') },
     });
   }
 
@@ -56,7 +60,7 @@ async function sendViaResend({ from, to, subject, html }, env = process.env) {
   const response = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      Authorization: `Bearer ${envValue(env, 'RESEND_API_KEY')}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({

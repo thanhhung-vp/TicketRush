@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
+import VietnamAddressFields, { getAddressPayload } from '../components/VietnamAddressFields.jsx';
 import {
-  AuthBg, AuthCard, IconInput, PinkButton, AuthDivider, GoogleAuthButton, Checkbox,
+  AuthBg, AuthCard, IconInput, PinkButton, AuthDivider, SocialAuthButtons, Checkbox,
   EnvelopeIcon, LockIcon, EyeIcon, EyeOffIcon, UserIcon,
 } from '../components/AuthLayout.jsx';
 
@@ -12,7 +13,13 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+    confirm: '',
+    address: { provinceCode: '', wardCode: '', hamlet: '', street: '' },
+  });
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -25,7 +32,12 @@ export default function RegisterPage() {
     if (!agreed) { setError(t('auth.agreeTermsRequired')); return; }
     setError(''); setLoading(true);
     try {
-      await register({ email: form.email, password: form.password, full_name: form.full_name });
+      await register({
+        email: form.email,
+        password: form.password,
+        full_name: form.full_name,
+        ...getAddressPayload(form.address),
+      });
       setStep(2);
     } catch (err) {
       setError(err.response?.data?.error || t('auth.registerFailed'));
@@ -114,6 +126,27 @@ export default function RegisterPage() {
             }
           />
 
+          <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
+            <p className="mb-3 text-sm font-semibold text-gray-700">{t('auth.addressTitle')}</p>
+            <VietnamAddressFields
+              value={form.address}
+              onChange={address => setForm(f => ({ ...f, address }))}
+              labels={{
+                province: t('profile.province'),
+                provincePlaceholder: t('profile.provinceDefault'),
+                ward: t('profile.ward'),
+                wardPlaceholder: t('profile.wardPlaceholder'),
+                hamlet: t('profile.hamlet'),
+                hamletPlaceholder: t('profile.hamletPlaceholder'),
+                street: t('profile.street'),
+                streetPlaceholder: t('profile.streetPlaceholder'),
+              }}
+              inputClassName="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 focus:border-pink-300 focus:outline-none focus:ring-2 focus:ring-pink-300/50 disabled:bg-gray-100 disabled:text-gray-400"
+              labelClassName="mb-1 block text-xs font-medium text-gray-500"
+              gridClassName="grid gap-2.5"
+            />
+          </div>
+
           <Checkbox
             checked={agreed}
             onChange={setAgreed}
@@ -133,7 +166,7 @@ export default function RegisterPage() {
         </form>
 
         <AuthDivider text={t('auth.orRegisterWith')} />
-        <GoogleAuthButton />
+        <SocialAuthButtons />
 
         <p className="mt-5 text-center text-sm text-gray-500">
           {t('auth.hasAccount')}{' '}

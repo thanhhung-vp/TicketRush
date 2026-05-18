@@ -6,35 +6,35 @@ import { AuthBg, AuthCard } from '../components/AuthLayout.jsx';
 import { buildProviderCallbackPath, shouldForwardProviderCallback } from '../utils/oauthCallback.js';
 
 const LOGIN_REQUEST_CACHE_MS = 2 * 60 * 1000;
-const googleLoginRequests = new Map();
+const facebookLoginRequests = new Map();
 
-function completeGoogleLoginOnce(code, completeGoogleLogin) {
-  const existing = googleLoginRequests.get(code);
+function completeFacebookLoginOnce(code, completeFacebookLogin) {
+  const existing = facebookLoginRequests.get(code);
   if (existing) return existing.request;
 
-  const request = completeGoogleLogin(code).catch((err) => {
-    googleLoginRequests.delete(code);
+  const request = completeFacebookLogin(code).catch((err) => {
+    facebookLoginRequests.delete(code);
     throw err;
   });
   const timeoutId = window.setTimeout(() => {
-    googleLoginRequests.delete(code);
+    facebookLoginRequests.delete(code);
   }, LOGIN_REQUEST_CACHE_MS);
 
-  googleLoginRequests.set(code, { request, timeoutId });
+  facebookLoginRequests.set(code, { request, timeoutId });
 
   request.catch(() => {
-    const existing = googleLoginRequests.get(code);
+    const existing = facebookLoginRequests.get(code);
     if (existing?.timeoutId === timeoutId) {
       window.clearTimeout(timeoutId);
-      googleLoginRequests.delete(code);
+      facebookLoginRequests.delete(code);
     }
   });
 
   return request;
 }
 
-export default function GoogleAuthCallbackPage() {
-  const { completeGoogleLogin, user: currentUser } = useAuth();
+export default function FacebookAuthCallbackPage() {
+  const { completeFacebookLogin, user: currentUser } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
@@ -43,20 +43,20 @@ export default function GoogleAuthCallbackPage() {
   useEffect(() => {
     let cancelled = false;
 
-    async function finishGoogleLogin() {
+    async function finishFacebookLogin() {
       if (shouldForwardProviderCallback(searchParams)) {
-        window.location.replace(buildProviderCallbackPath('google', searchParams));
+        window.location.replace(buildProviderCallbackPath('facebook', searchParams));
         return;
       }
 
       const code = searchParams.get('code');
       if (!code) {
-        setError(t('auth.googleFailed'));
+        setError(t('auth.facebookFailed'));
         return;
       }
 
       try {
-        const user = await completeGoogleLoginOnce(code, completeGoogleLogin);
+        const user = await completeFacebookLoginOnce(code, completeFacebookLogin);
         if (!cancelled) navigate(user.role === 'admin' ? '/admin' : '/', { replace: true });
       } catch (err) {
         if (cancelled) return;
@@ -64,20 +64,20 @@ export default function GoogleAuthCallbackPage() {
           navigate(currentUser?.role === 'admin' ? '/admin' : '/', { replace: true });
           return;
         }
-        setError(err.response?.data?.error || t('auth.googleFailed'));
+        setError(err.response?.data?.error || t('auth.facebookFailed'));
       }
     }
 
-    finishGoogleLogin();
+    finishFacebookLogin();
 
     return () => {
       cancelled = true;
     };
-  }, [completeGoogleLogin, currentUser, navigate, searchParams, t]);
+  }, [completeFacebookLogin, currentUser, navigate, searchParams, t]);
 
   return (
     <AuthBg>
-      <AuthCard title={t('auth.googleCallbackTitle')}>
+      <AuthCard title={t('auth.facebookCallbackTitle')}>
         {error ? (
           <div className="space-y-4 text-center">
             <p className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -88,7 +88,7 @@ export default function GoogleAuthCallbackPage() {
             </Link>
           </div>
         ) : (
-          <p className="text-center text-sm text-gray-500">{t('auth.googleCallbackDesc')}</p>
+          <p className="text-center text-sm text-gray-500">{t('auth.facebookCallbackDesc')}</p>
         )}
       </AuthCard>
     </AuthBg>

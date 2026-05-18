@@ -6,7 +6,12 @@ import { authenticate, requireAdmin } from '../middleware/auth.js';
 import { getAdminDashboard } from '../services/adminDashboard.js';
 import { attachDynamicQrToTicket } from '../utils/ticketQr.js';
 import { recalculateOrderAfterTicketRemoval } from '../utils/orderTotals.js';
-import { createNotification } from '../services/notifications.js';
+import {
+  createNotification,
+  notifyUserTicketRefunded,
+  sendTicketCancelledEmail,
+  sendTicketRefundEmail,
+} from '../services/notifications.js';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
@@ -491,9 +496,10 @@ router.delete('/tickets/:id', async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: ticketRows } = await client.query(
-      `SELECT t.id, t.order_id, t.user_id, t.seat_id,
+      `SELECT t.id, t.order_id, t.user_id, u.email AS user_email, t.seat_id,
               s.event_id, s.label AS seat_label, z.name AS zone_name, z.price, e.title AS event_title
        FROM tickets t
+       JOIN users u ON u.id = t.user_id
        JOIN seats s ON s.id = t.seat_id
        JOIN zones z ON z.id = s.zone_id
        JOIN events e ON e.id = s.event_id
@@ -545,6 +551,10 @@ router.delete('/tickets/:id', async (req, res) => {
         reason: body.data.reason || null,
       },
     }).catch(err => console.error('Ticket notification error:', err.message));
+    sendTicketCancelledEmail({
+      ticket,
+      reason: body.data.reason || null,
+    }).catch(err => console.error('Ticket cancellation email error:', err.message));
     res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -653,8 +663,9 @@ router.post('/refunds/:id/approve', async (req, res) => {
     await client.query('BEGIN');
     
     const { rows: refundRows } = await client.query(
-      `SELECT r.*, e.title AS event_title, s.label AS seat_label, z.name AS zone_name
+      `SELECT r.*, u.email AS user_email, e.title AS event_title, s.label AS seat_label, z.name AS zone_name
        FROM ticket_refund_requests r
+       JOIN users u ON u.id = r.user_id
        JOIN events e ON e.id = r.event_id
        LEFT JOIN seats s ON s.id = r.seat_id
        LEFT JOIN zones z ON z.id = s.zone_id
@@ -722,6 +733,10 @@ router.post('/refunds/:id/approve', async (req, res) => {
         refund_id: refund.id,
       },
     }).catch(err => console.error('Refund notification error:', err.message));
+    sendTicketRefundEmail({
+      refund,
+      status: 'approved',
+    }).catch(err => console.error('Refund email error:', err.message));
     
     res.json({ ok: true, message: 'Refund approved successfully' });
   } catch (err) {
@@ -739,16 +754,33 @@ router.post('/refunds/:id/reject', async (req, res) => {
   if (!refundId.success) return res.status(400).json({ error: 'Invalid refund id' });
 
   try {
-    const { rowCount } = await pool.query(
-      `UPDATE ticket_refund_requests 
-       SET status = 'rejected', resolved_at = NOW() 
-       WHERE id = $1 AND status = 'pending'`,
+    const { rows } = await pool.query(
+      `WITH updated AS (
+         UPDATE ticket_refund_requests
+         SET status = 'rejected', resolved_at = NOW()
+         WHERE id = $1 AND status = 'pending'
+         RETURNING *
+       )
+       SELECT updated.*, u.email AS user_email, e.title AS event_title,
+              s.label AS seat_label, z.name AS zone_name
+       FROM updated
+       JOIN users u ON u.id = updated.user_id
+       JOIN events e ON e.id = updated.event_id
+       LEFT JOIN seats s ON s.id = updated.seat_id
+       LEFT JOIN zones z ON z.id = s.zone_id`,
       [req.params.id]
     );
     
-    if (rowCount === 0) {
+    if (!rows[0]) {
       return res.status(404).json({ error: 'Pending refund request not found' });
     }
+
+    notifyUserTicketRefunded({
+      db: pool,
+      io: req.app.get('io'),
+      refund: rows[0],
+      status: 'rejected',
+    }).catch(err => console.error('Refund rejection notification error:', err.message));
     
     res.json({ ok: true, message: 'Refund rejected successfully' });
   } catch (err) {

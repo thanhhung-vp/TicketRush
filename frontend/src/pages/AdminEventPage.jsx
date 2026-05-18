@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import api from '../lib/api.js';
 import SeatDesigner from '../components/SeatDesigner.jsx';
+import VietnamAddressFields, { buildSelectedAddressLine } from '../components/VietnamAddressFields.jsx';
 
 const CATEGORY_VALUES = [
   'music', 'fan_meeting', 'arts', 'sports',
@@ -61,6 +62,7 @@ export default function AdminEventPage() {
     poster_url: '', status: 'draft', category: 'other', is_featured: false,
     sale_start_at: '',
   });
+  const [address, setAddress] = useState({ provinceCode: '', wardCode: '', hamlet: '', street: '' });
   const [zones,       setZones]       = useState([]);
   const [audience,    setAudience]    = useState(null);
   const [layoutJson,  setLayoutJson]  = useState(null);
@@ -107,6 +109,11 @@ export default function AdminEventPage() {
 
   const set  = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const setChecked = k => e => setForm(f => ({ ...f, [k]: e.target.checked }));
+  const setEventAddress = (nextAddress) => {
+    setAddress(nextAddress);
+    const venue = buildSelectedAddressLine(nextAddress);
+    if (venue) setForm(f => ({ ...f, venue }));
+  };
 
   const generateFromPoster = async () => {
     if (!form.poster_url) return;
@@ -299,6 +306,26 @@ export default function AdminEventPage() {
 
           <Field label={`${t('adminEvent.titleLabel')} *`} value={form.title} onChange={set('title')} required />
           <Field label={t('adminEvent.descLabel')} value={form.description} onChange={set('description')} as="textarea" />
+
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-700">{t('adminEvent.addressPickerTitle')}</p>
+            <VietnamAddressFields
+              value={address}
+              onChange={setEventAddress}
+              labels={{
+                province: t('profile.province'),
+                provincePlaceholder: t('profile.provinceDefault'),
+                ward: t('profile.ward'),
+                wardPlaceholder: t('profile.wardPlaceholder'),
+                hamlet: t('profile.hamlet'),
+                hamletPlaceholder: t('profile.hamletPlaceholder'),
+                street: t('profile.street'),
+                streetPlaceholder: t('profile.streetPlaceholder'),
+              }}
+              gridClassName="grid md:grid-cols-2 gap-3"
+            />
+          </div>
+
           <Field label={`${t('adminEvent.venueLabel')} *`} value={form.venue} onChange={set('venue')} required />
           <Field label={`${t('adminEvent.dateLabel')} *`} type="datetime-local" value={form.event_date} onChange={set('event_date')} required />
 
