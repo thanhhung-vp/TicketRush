@@ -11,6 +11,7 @@ import RegisterPage       from './pages/RegisterPage.jsx';
 import GoogleAuthCallbackPage from './pages/GoogleAuthCallbackPage.jsx';
 import FacebookAuthCallbackPage from './pages/FacebookAuthCallbackPage.jsx';
 import HomePage           from './pages/HomePage.jsx';
+import SearchPage         from './pages/SearchPage.jsx';
 import NewsDetailPage     from './pages/NewsDetailPage.jsx';
 import EventDetailPage    from './pages/EventDetailPage.jsx';
 import CheckoutPage       from './pages/CheckoutPage.jsx';
@@ -45,6 +46,7 @@ function AppRoutes() {
       <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <Routes>
           <Route path="/"                  element={<HomePage />} />
+          <Route path="/search"            element={<SearchPage />} />
           <Route path="/news/:id"          element={<NewsDetailPage />} />
           <Route path="/events/:id"        element={<EventDetailPage />} />
           <Route path="/login"             element={<LoginPage />} />

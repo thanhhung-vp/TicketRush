@@ -8,6 +8,8 @@ import { sendOrderConfirmation } from '../services/email.js';
 import { createNotification } from '../services/notifications.js';
 import { createOrReusePendingOrderForSeats } from '../utils/pendingHoldOrders.js';
 import { releaseQueueSlotAndFill } from '../utils/virtualQueueFlow.js';
+import { ensureSingleEvent } from '../utils/seatHoldRules.js';
+import { canPurchaseEventTickets } from '../utils/eventSaleRules.js';
 
 const router = Router();
 
@@ -51,7 +53,23 @@ router.post('/initiate', authenticate, async (req, res) => {
       return res.status(409).json({ error: 'Some seats are no longer locked (hold may have expired)' });
     }
 
-    const eventId = seats[0].event_id;
+    const eventCheck = ensureSingleEvent(seats);
+    if (!eventCheck.ok) {
+      await client.query('ROLLBACK');
+      return res.status(eventCheck.status).json({ error: eventCheck.error });
+    }
+
+    const eventId = eventCheck.eventId;
+    const { rows: [evt] } = await client.query(
+      `SELECT status, event_date, sale_start_at FROM events WHERE id = $1`,
+      [eventId]
+    );
+    const saleCheck = canPurchaseEventTickets(evt);
+    if (!saleCheck.ok) {
+      await client.query('ROLLBACK');
+      return res.status(saleCheck.status).json({ error: saleCheck.error, code: saleCheck.code });
+    }
+
     const order = await createOrReusePendingOrderForSeats(client, {
       userId: req.user.id,
       eventId,
@@ -95,6 +113,16 @@ router.post('/confirm', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Pending order not found' });
     }
     const order = orders[0];
+
+    const { rows: [evt] } = await client.query(
+      `SELECT status, event_date, sale_start_at FROM events WHERE id = $1`,
+      [order.event_id]
+    );
+    const saleCheck = canPurchaseEventTickets(evt);
+    if (!saleCheck.ok) {
+      await client.query('ROLLBACK');
+      return res.status(saleCheck.status).json({ error: saleCheck.error, code: saleCheck.code });
+    }
 
     // For mock: always succeed. For real methods: verify IPN hash first.
     if (method !== 'mock') {

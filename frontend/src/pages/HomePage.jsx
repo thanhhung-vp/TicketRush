@@ -538,26 +538,26 @@ function NewsSection({ news, loading }) {
   const locale = i18n.language === 'vi' ? 'vi-VN' : 'en-US';
 
   return (
-    <section className="mt-12 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-border dark:bg-dark-surface">
+    <section className="mt-12 rounded-2xl border border-[var(--border-separator)] bg-[var(--bg-surface)] p-5 font-sans shadow-sm">
       <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">{t('home.latestNews')}</p>
-          <h2 className="mt-1 text-xl font-bold text-gray-900 dark:text-white">{t('home.latestNewsHint')}</h2>
+          <h2 className="mt-1 text-xl font-bold text-[var(--text-label-primary)]">{t('home.latestNewsHint')}</h2>
         </div>
       </div>
 
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, idx) => (
-            <div key={idx} className="animate-pulse rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-dark-border dark:bg-dark-card">
-              <div className="mb-3 h-24 rounded-lg bg-gray-200 dark:bg-gray-700" />
-              <div className="mb-2 h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
-              <div className="h-3 w-full rounded bg-gray-200 dark:bg-gray-700" />
+            <div key={idx} className="animate-pulse rounded-xl border border-[var(--border-separator)] bg-[var(--bg-surface-elevated)] p-4">
+              <div className="mb-3 h-24 rounded-lg bg-[var(--fill-tertiary)]" />
+              <div className="mb-2 h-4 w-3/4 rounded bg-[var(--fill-tertiary)]" />
+              <div className="h-3 w-full rounded bg-[var(--fill-tertiary)]" />
             </div>
           ))}
         </div>
       ) : news.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm font-medium text-gray-500 dark:border-dark-border dark:bg-dark-card dark:text-gray-400">
+        <div className="rounded-xl border border-dashed border-[var(--border-separator)] bg-[var(--fill-tertiary)] px-4 py-8 text-center text-sm font-medium text-[var(--text-label-secondary)]">
           {t('home.newsEmpty')}
         </div>
       ) : (
@@ -566,21 +566,21 @@ function NewsSection({ news, loading }) {
             <Link
               key={item.id}
               to={`/news/${item.id}`}
-              className="group block overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md dark:border-dark-border dark:bg-dark-card"
+              className="group block overflow-hidden rounded-xl border border-[var(--border-separator)] bg-[var(--bg-surface-elevated)] shadow-sm transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
             >
               {item.image_url ? (
                 <img src={item.image_url} alt={item.title} className="h-32 w-full object-cover transition duration-300 group-hover:scale-105" />
               ) : (
-                <div className="flex h-32 items-center justify-center bg-gradient-to-br from-slate-100 via-white to-cyan-50 text-[0px] dark:from-dark-card dark:via-dark-surface dark:to-cyan-950/30">
-                  <Newspaper className="h-9 w-9 text-gray-400 dark:text-gray-500" />
+                <div className="flex h-32 items-center justify-center bg-[var(--fill-tertiary)] text-[0px]">
+                  <Newspaper className="h-9 w-9 text-[var(--text-label-tertiary)]" />
                 </div>
               )}
               <div className="p-4">
-                <p className="mb-2 text-xs font-semibold text-gray-400">
+                <p className="mb-2 text-xs font-semibold text-[var(--text-label-tertiary)]">
                   {item.published_at ? new Date(item.published_at).toLocaleDateString(locale) : t('home.newsPublished')}
                 </p>
-                <h3 className="line-clamp-2 text-sm font-bold text-gray-900 transition group-hover:text-primary dark:text-white">{item.title}</h3>
-                <p className="mt-2 line-clamp-3 text-sm text-gray-500 dark:text-gray-400">
+                <h3 className="line-clamp-2 text-sm font-bold leading-6 text-[var(--text-label-primary)] transition group-hover:text-primary">{item.title}</h3>
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-[var(--text-label-secondary)]">
                   {item.summary || item.content}
                 </p>
                 <span className="mt-4 inline-flex text-xs font-bold text-primary">

@@ -10,6 +10,7 @@ import {
   createOrReusePendingOrderForSeats,
 } from '../utils/pendingHoldOrders.js';
 import { releaseQueueSlotAndFill } from '../utils/virtualQueueFlow.js';
+import { canPurchaseEventTickets } from '../utils/eventSaleRules.js';
 
 const router = Router();
 
@@ -119,14 +120,15 @@ router.post('/hold', authenticate, async (req, res) => {
     }
     eventId = eventCheck.eventId;
 
-    // Reject holds on closed or past events — must be inside the transaction
+    // Reject holds outside the ticket sale window inside the transaction.
     const { rows: [evt] } = await client.query(
-      `SELECT status, event_date, queue_enabled FROM events WHERE id = $1`,
+      `SELECT status, event_date, sale_start_at, queue_enabled FROM events WHERE id = $1`,
       [eventId]
     );
-    if (!evt || evt.status === 'ended' || new Date(evt.event_date) < new Date()) {
+    const saleCheck = canPurchaseEventTickets(evt);
+    if (!saleCheck.ok) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Sự kiện đã kết thúc, không thể đặt vé.' });
+      return res.status(saleCheck.status).json({ error: saleCheck.error, code: saleCheck.code });
     }
 
     if (await userNeedsQueueAdmission(evt, eventId, req.user.id)) {

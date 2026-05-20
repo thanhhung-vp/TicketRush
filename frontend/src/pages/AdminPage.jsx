@@ -675,34 +675,60 @@ const EMPTY_NEWS_FORM = {
 
 function NewsTab({ posts, formatDateTime, t, onChanged }) {
   const [form, setForm] = useState(EMPTY_NEWS_FORM);
+  const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const isEditing = Boolean(editingId);
 
   const setField = (key) => (event) => {
     const value = event.target.value;
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
+  const resetForm = () => {
+    setForm(EMPTY_NEWS_FORM);
+    setEditingId(null);
+  };
+
+  const editPost = (post) => {
+    setForm({
+      title: post.title || '',
+      summary: post.summary || '',
+      content: post.content || '',
+      image_url: post.image_url || '',
+      status: post.status || 'draft',
+    });
+    setEditingId(post.id);
+    setNotice('');
+    setError('');
+  };
+
   const submitNews = async (event) => {
     event.preventDefault();
-    setBusy('create');
+    setBusy(isEditing ? 'save' : 'create');
     setNotice('');
     setError('');
 
     try {
-      await api.post('/admin/news', {
+      const payload = {
         title: form.title.trim(),
         summary: form.summary.trim(),
         content: form.content.trim(),
         image_url: form.image_url.trim(),
         status: form.status,
-      });
-      setForm(EMPTY_NEWS_FORM);
-      setNotice(t('admin.newsCreated'));
+      };
+      if (isEditing) {
+        await api.patch(`/admin/news/${editingId}`, payload);
+        setNotice(t('admin.newsUpdated'));
+      } else {
+        await api.post('/admin/news', payload);
+        setNotice(t('admin.newsCreated'));
+      }
+      resetForm();
       await onChanged();
     } catch (err) {
-      setError(err.response?.data?.error || t('admin.newsCreateError'));
+      setError(err.response?.data?.error || (isEditing ? t('admin.newsUpdateError') : t('admin.newsCreateError')));
     } finally {
       setBusy('');
     }
@@ -741,15 +767,17 @@ function NewsTab({ posts, formatDateTime, t, onChanged }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-      <form onSubmit={submitNews} className="h-fit rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-bold text-gray-900">{t('admin.newsFormTitle')}</h2>
+      <form onSubmit={submitNews} className="h-fit rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-slate-950/80">
+        <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">
+          {isEditing ? t('admin.newsEditTitle') : t('admin.newsFormTitle')}
+        </h2>
 
-        {error && <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>}
-        {notice && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
+        {error && <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</p>}
+        {notice && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">{notice}</p>}
 
         <div className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-gray-700">{t('admin.newsTitleLabel')}</label>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700 dark:text-slate-200">{t('admin.newsTitleLabel')}</label>
             <input
               value={form.title}
               onChange={setField('title')}
@@ -757,51 +785,51 @@ function NewsTab({ posts, formatDateTime, t, onChanged }) {
               minLength={3}
               maxLength={180}
               placeholder={t('admin.newsTitlePlaceholder')}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-gray-700">{t('admin.newsSummaryLabel')}</label>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700 dark:text-slate-200">{t('admin.newsSummaryLabel')}</label>
             <textarea
               value={form.summary}
               onChange={setField('summary')}
               maxLength={280}
               rows={3}
               placeholder={t('admin.newsSummaryPlaceholder')}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-gray-700">{t('admin.newsContentLabel')}</label>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700 dark:text-slate-200">{t('admin.newsContentLabel')}</label>
             <textarea
               value={form.content}
               onChange={setField('content')}
               required
               rows={7}
               placeholder={t('admin.newsContentPlaceholder')}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-gray-700">{t('admin.newsImageLabel')}</label>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700 dark:text-slate-200">{t('admin.newsImageLabel')}</label>
             <input
               value={form.image_url}
               onChange={setField('image_url')}
               type="url"
               placeholder={t('admin.newsImagePlaceholder')}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-gray-700">{t('admin.newsStatusLabel')}</label>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700 dark:text-slate-200">{t('admin.newsStatusLabel')}</label>
             <select
               value={form.status}
               onChange={setField('status')}
-              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 outline-none transition focus:ring-2 focus:ring-blue-500 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
             >
               <option value="published">{t('admin.newsStatusPublished')}</option>
               <option value="draft">{t('admin.newsStatusDraft')}</option>
@@ -809,52 +837,78 @@ function NewsTab({ posts, formatDateTime, t, onChanged }) {
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={busy === 'create'}
-          className="mt-5 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
-        >
-          {busy === 'create' ? t('admin.newsCreating') : t('admin.newsCreateBtn')}
-        </button>
+        <div className="mt-5 flex gap-2">
+          <button
+            type="submit"
+            disabled={busy === 'create' || busy === 'save'}
+            className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+          >
+            {busy === 'save'
+              ? t('admin.newsUpdating')
+              : busy === 'create'
+                ? t('admin.newsCreating')
+                : isEditing
+                  ? t('admin.newsUpdateBtn')
+                  : t('admin.newsCreateBtn')}
+          </button>
+          {isEditing && (
+            <button
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={resetForm}
+              className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-white/10"
+            >
+              {t('common.cancel')}
+            </button>
+          )}
+        </div>
       </form>
 
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-100 px-5 py-4">
-          <h2 className="text-lg font-bold text-gray-900">{t('admin.newsListTitle')}</h2>
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-slate-950/80">
+        <div className="border-b border-gray-100 px-5 py-4 dark:border-white/10">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('admin.newsListTitle')}</h2>
         </div>
 
         {posts.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-gray-400">{t('admin.newsEmpty')}</p>
+          <p className="px-5 py-10 text-center text-sm text-gray-400 dark:text-slate-500">{t('admin.newsEmpty')}</p>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 dark:divide-white/10">
             {posts.map(post => {
               const isPublished = post.status === 'published';
               return (
                 <article key={post.id} className="grid gap-4 px-5 py-4 md:grid-cols-[120px_1fr_auto]">
-                  <div className="h-24 overflow-hidden rounded-lg border border-gray-100 bg-gray-50">
+                  <div className="h-24 overflow-hidden rounded-lg border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-slate-900">
                     {post.image_url ? (
                       <img src={post.image_url} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400">News</div>
+                      <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400 dark:text-slate-500">News</div>
                     )}
                   </div>
                   <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${
                         isPublished
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                          : 'border-gray-200 bg-gray-50 text-gray-600'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
+                          : 'border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300'
                       }`}>
                         {isPublished ? t('admin.newsStatusPublished') : t('admin.newsStatusDraft')}
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-400 dark:text-slate-500">
                         {formatDateTime(post.published_at || post.created_at)}
                       </span>
                     </div>
-                    <h3 className="truncate text-base font-bold text-gray-900">{post.title}</h3>
-                    <p className="mt-1 line-clamp-2 text-sm text-gray-500">{post.summary || post.content}</p>
+                    <h3 className="truncate text-base font-bold text-gray-900 dark:text-white">{post.title}</h3>
+                    <p className="mt-1 line-clamp-2 text-sm text-gray-500 dark:text-slate-400">{post.summary || post.content}</p>
                   </div>
                   <div className="flex flex-wrap items-start gap-2 md:justify-end">
+                    <button
+                      type="button"
+                      disabled={Boolean(busy)}
+                      onClick={() => editPost(post)}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-white/10"
+                    >
+                      {t('common.edit')}
+                    </button>
                     <button
                       type="button"
                       disabled={Boolean(busy)}

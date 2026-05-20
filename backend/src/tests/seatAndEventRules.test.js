@@ -4,6 +4,10 @@ import {
   validateSeatIds,
 } from '../utils/seatHoldRules.js';
 import { EVENT_DELETE_BLOCKED_ERROR, canDeleteEvent } from '../utils/eventDeletionRules.js';
+import {
+  EVENT_SALE_NOT_STARTED_ERROR,
+  canPurchaseEventTickets,
+} from '../utils/eventSaleRules.js';
 
 describe('seat hold rules', () => {
   it('rejects an empty seat selection', () => {
@@ -78,5 +82,43 @@ describe('event deletion rules', () => {
       .toBe(false);
     expect(canDeleteEvent({ soldSeats: 0, lockedSeats: 0, paidOrders: 0, tickets: 0, adminActions: 1 }).ok)
       .toBe(false);
+  });
+});
+
+describe('event ticket sale rules', () => {
+  const now = new Date('2026-05-21T10:00:00.000Z');
+  const futureEventDate = '2026-05-22T10:00:00.000Z';
+
+  it('allows ticket purchase for active on-sale events without a future sale start', () => {
+    expect(canPurchaseEventTickets({
+      status: 'on_sale',
+      event_date: futureEventDate,
+      sale_start_at: null,
+    }, now)).toEqual({ ok: true });
+  });
+
+  it('blocks scheduled events before the sale start time', () => {
+    expect(canPurchaseEventTickets({
+      status: 'scheduled',
+      event_date: futureEventDate,
+      sale_start_at: '2026-05-21T11:00:00.000Z',
+    }, now)).toEqual({
+      ok: false,
+      status: 409,
+      code: 'SALE_NOT_STARTED',
+      error: EVENT_SALE_NOT_STARTED_ERROR,
+    });
+  });
+
+  it('blocks on-sale events when sale_start_at is still in the future', () => {
+    expect(canPurchaseEventTickets({
+      status: 'on_sale',
+      event_date: futureEventDate,
+      sale_start_at: '2026-05-21T11:00:00.000Z',
+    }, now)).toMatchObject({
+      ok: false,
+      code: 'SALE_NOT_STARTED',
+      error: EVENT_SALE_NOT_STARTED_ERROR,
+    });
   });
 });

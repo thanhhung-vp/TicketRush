@@ -49,43 +49,43 @@ export default function NewsDetailPage() {
   }, [id, t]);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-4xl px-4 py-8 font-sans">
       <Link
         to="/"
-        className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 transition hover:text-primary dark:text-gray-400 dark:hover:text-primary"
+        className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--text-label-secondary)] transition hover:text-primary"
       >
         <ArrowLeft className="h-4 w-4" />
         {t('newsDetail.backToNews')}
       </Link>
 
       {loading ? (
-        <article className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-dark-border dark:bg-dark-surface">
-          <div className="h-72 animate-pulse bg-gray-200 dark:bg-gray-700" />
+        <article className="overflow-hidden rounded-2xl border border-[var(--border-separator)] bg-[var(--bg-surface)] shadow-sm">
+          <div className="h-72 animate-pulse bg-[var(--fill-tertiary)]" />
           <div className="space-y-4 p-6">
-            <div className="h-4 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-            <div className="h-9 w-4/5 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-            <div className="h-4 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-            <div className="h-4 w-11/12 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="h-4 w-40 animate-pulse rounded bg-[var(--fill-tertiary)]" />
+            <div className="h-9 w-4/5 animate-pulse rounded bg-[var(--fill-tertiary)]" />
+            <div className="h-4 w-full animate-pulse rounded bg-[var(--fill-tertiary)]" />
+            <div className="h-4 w-11/12 animate-pulse rounded bg-[var(--fill-tertiary)]" />
           </div>
         </article>
       ) : error ? (
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-16 text-center dark:border-dark-border dark:bg-dark-surface">
-          <Newspaper className="mx-auto mb-4 h-10 w-10 text-gray-300 dark:text-gray-600" />
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('newsDetail.emptyTitle')}</h1>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{error}</p>
+        <div className="rounded-2xl border border-dashed border-[var(--border-separator)] bg-[var(--bg-surface)] px-6 py-16 text-center">
+          <Newspaper className="mx-auto mb-4 h-10 w-10 text-[var(--text-label-tertiary)]" />
+          <h1 className="text-xl font-bold text-[var(--text-label-primary)]">{t('newsDetail.emptyTitle')}</h1>
+          <p className="mt-2 text-sm text-[var(--text-label-secondary)]">{error}</p>
         </div>
       ) : (
-        <article className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-dark-border dark:bg-dark-surface">
+        <article className="overflow-hidden rounded-2xl border border-[var(--border-separator)] bg-[var(--bg-surface)] shadow-sm">
           {article.image_url ? (
             <img src={article.image_url} alt={article.title} className="h-72 w-full object-cover sm:h-96" />
           ) : (
-            <div className="flex h-72 items-center justify-center bg-gradient-to-br from-slate-100 via-white to-cyan-50 text-gray-400 dark:from-dark-card dark:via-dark-surface dark:to-cyan-950/30 sm:h-96">
+            <div className="flex h-72 items-center justify-center bg-[var(--fill-tertiary)] text-[var(--text-label-tertiary)] sm:h-96">
               <Newspaper className="h-16 w-16" />
             </div>
           )}
 
           <div className="p-6 sm:p-8">
-            <div className="mb-4 flex flex-wrap items-center gap-3 text-sm font-semibold text-gray-500 dark:text-gray-400">
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-sm font-semibold text-[var(--text-label-secondary)]">
               <span className="rounded-full bg-primary/10 px-3 py-1 text-primary">{t('home.latestNews')}</span>
               {formatNewsDate(article, locale) && (
                 <span className="inline-flex items-center gap-1.5">
@@ -95,17 +95,17 @@ export default function NewsDetailPage() {
               )}
             </div>
 
-            <h1 className="text-3xl font-extrabold leading-tight text-gray-950 dark:text-white sm:text-4xl">
+            <h1 className="text-3xl font-extrabold leading-tight text-[var(--text-label-primary)] sm:text-4xl">
               {article.title}
             </h1>
 
             {article.summary && (
-              <p className="mt-4 text-lg font-medium leading-8 text-gray-600 dark:text-gray-300">
+              <p className="mt-4 text-lg font-medium leading-8 text-[var(--text-label-secondary)]">
                 {article.summary}
               </p>
             )}
 
-            <div className="mt-8 whitespace-pre-line text-base leading-8 text-gray-700 dark:text-gray-200">
+            <div className="mt-8 whitespace-pre-line text-base leading-8 text-[var(--text-label-primary)]">
               {article.content}
             </div>
           </div>

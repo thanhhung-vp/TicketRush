@@ -33,7 +33,7 @@ export default function Navbar() {
 
   const submitSearch = (value) => {
     const trimmed = value.trim();
-    navigate(trimmed ? `/?search=${encodeURIComponent(trimmed)}` : '/');
+    navigate(trimmed ? `/search?search=${encodeURIComponent(trimmed)}` : '/search');
     setMobileSearch(false);
   };
 

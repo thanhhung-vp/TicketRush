@@ -50,6 +50,7 @@ describe('news routes', () => {
 
     const response = await request(createApp()).get('/news?limit=3');
 
+    console.log(response.status, response.body);
     expect(response.status).toBe(200);
     expect(response.body).toHaveLength(1);
     expect(response.body[0]).toMatchObject({ title: 'Concert update', status: 'published' });
@@ -74,6 +75,7 @@ describe('news routes', () => {
 
     const response = await request(createApp()).get('/news/news-1');
 
+    console.log(response.status, response.body);
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ id: 'news-1', title: 'Concert update', status: 'published' });
     expect(mockPool.query.mock.calls[0][0]).toMatch(/WHERE id = \$1 AND status = 'published'/i);
@@ -126,5 +128,47 @@ describe('news routes', () => {
 
     expect(response.status).toBe(400);
     expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
+  it('lets admins edit a published news post', async () => {
+    mockPool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: '11111111-1111-4111-a111-111111111111',
+          title: 'Updated venue notice',
+          summary: 'Use gate B',
+          content: 'Gate B opens 30 minutes earlier.',
+          image_url: 'https://example.com/news.jpg',
+          status: 'published',
+          created_by: 'admin-user-id',
+        },
+      ],
+    });
+
+    const response = await request(createApp())
+      .patch('/admin/news/11111111-1111-4111-a111-111111111111')
+      .send({
+        title: 'Updated venue notice',
+        summary: 'Use gate B',
+        content: 'Gate B opens 30 minutes earlier.',
+        image_url: 'https://example.com/news.jpg',
+        status: 'published',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      title: 'Updated venue notice',
+      status: 'published',
+    });
+    expect(mockPool.query.mock.calls[0][0]).toMatch(/UPDATE news_posts SET/i);
+    expect(mockPool.query.mock.calls[0][0]).toMatch(/updated_at = NOW\(\)/i);
+    expect(mockPool.query.mock.calls[0][1]).toEqual([
+      '11111111-1111-4111-a111-111111111111',
+      'Updated venue notice',
+      'Use gate B',
+      'Gate B opens 30 minutes earlier.',
+      'https://example.com/news.jpg',
+      'published',
+    ]);
   });
 });

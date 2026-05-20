@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.js';
 import { attachDynamicQrToTicket, attachDynamicQrToTickets } from '../utils/ticketQr.js';
 import { releaseQueueSlotAndFill } from '../utils/virtualQueueFlow.js';
 import { createNotification } from '../services/notifications.js';
+import { canPurchaseEventTickets } from '../utils/eventSaleRules.js';
 
 const router = Router();
 
@@ -54,14 +55,15 @@ router.post('/checkout', authenticate, async (req, res) => {
 
     const eventId = seats[0].event_id;
 
-    // Reject checkout on closed, past, or not-yet-open events
+    // Reject checkout outside the ticket sale window.
     const { rows: [evt] } = await client.query(
-      `SELECT status, event_date FROM events WHERE id = $1`,
+      `SELECT status, event_date, sale_start_at FROM events WHERE id = $1`,
       [eventId]
     );
-    if (!evt || evt.status !== 'on_sale' || new Date(evt.event_date) < new Date()) {
+    const saleCheck = canPurchaseEventTickets(evt);
+    if (!saleCheck.ok) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Sự kiện không khả dụng để đặt vé.' });
+      return res.status(saleCheck.status).json({ error: saleCheck.error, code: saleCheck.code });
     }
 
     const total = seats.reduce((sum, s) => sum + Number(s.price), 0);
