@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import VietnamAddressFields, { getAddressPayload } from '../components/VietnamAddressFields.jsx';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter.jsx';
+import { isPasswordAtLeastMedium } from '../utils/passwordStrength.js';
 import {
   AuthBg, AuthCard, IconInput, PinkButton, AuthDivider, SocialAuthButtons, Checkbox,
   EnvelopeIcon, LockIcon, EyeIcon, EyeOffIcon, UserIcon,
@@ -18,6 +20,8 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirm: '',
+    gender: '',
+    birth_date: '',
     address: { provinceCode: '', wardCode: '', hamlet: '', street: '' },
   });
   const [showPw, setShowPw] = useState(false);
@@ -29,6 +33,7 @@ export default function RegisterPage() {
   const handle = async (e) => {
     e.preventDefault();
     if (form.password !== form.confirm) { setError(t('auth.passwordMismatch')); return; }
+    if (!isPasswordAtLeastMedium(form.password)) { setError(t('passwordStrength.minimumRequired')); return; }
     if (!agreed) { setError(t('auth.agreeTermsRequired')); return; }
     setError(''); setLoading(true);
     try {
@@ -36,6 +41,8 @@ export default function RegisterPage() {
         email: form.email,
         password: form.password,
         full_name: form.full_name,
+        ...(form.gender && { gender: form.gender }),
+        ...(form.birth_date && { birth_date: form.birth_date }),
         ...getAddressPayload(form.address),
       });
       setStep(2);
@@ -112,6 +119,7 @@ export default function RegisterPage() {
               </button>
             }
           />
+          <PasswordStrengthMeter password={form.password} />
           <IconInput
             icon={<LockIcon />}
             type={showConfirm ? 'text' : 'password'}
@@ -125,6 +133,28 @@ export default function RegisterPage() {
               </button>
             }
           />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <select
+              value={form.gender}
+              onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}
+              className="w-full rounded-2xl bg-gray-100 px-4 py-3.5 text-sm text-gray-800 transition focus:outline-none focus:ring-2 focus:ring-pink-300/60"
+            >
+              <option value="">{t('profile.genderPlaceholder')}</option>
+              <option value="male">{t('profile.genderMale')}</option>
+              <option value="female">{t('profile.genderFemale')}</option>
+              <option value="other">{t('profile.genderOther')}</option>
+            </select>
+            <input
+              type="date"
+              value={form.birth_date}
+              onChange={e => setForm(f => ({ ...f, birth_date: e.target.value }))}
+              min="1900-01-01"
+              max={new Date().toISOString().slice(0, 10)}
+              className="w-full rounded-2xl bg-gray-100 px-4 py-3.5 text-sm text-gray-800 transition focus:outline-none focus:ring-2 focus:ring-pink-300/60"
+              aria-label={t('profile.birthDate')}
+            />
+          </div>
 
           <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
             <p className="mb-3 text-sm font-semibold text-gray-700">{t('auth.addressTitle')}</p>

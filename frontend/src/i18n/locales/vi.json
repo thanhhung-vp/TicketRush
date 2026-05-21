@@ -109,6 +109,14 @@
     "otpSentSuccess": "Nếu email tồn tại trong hệ thống, mã xác minh đã được gửi.",
     "resetSuccess": "Đặt lại mật khẩu thành công! Đang chuyển hướng..."
   },
+  "passwordStrength": {
+    "label": "Độ mạnh mật khẩu: {{label}}",
+    "weak": "Yếu",
+    "medium": "Trung bình",
+    "strong": "Mạnh",
+    "minimumRequired": "Mật khẩu phải có độ bảo mật từ trung bình trở lên",
+    "sameAsOld": "Mật khẩu mới không được trùng mật khẩu cũ"
+  },
   "home": {
     "heroTitle": "Đặt vé sự kiện",
     "heroSubtitle": "Khám phá hàng nghìn sự kiện âm nhạc, thể thao và giải trí",
@@ -152,7 +160,6 @@
     "clearHistory": "Xóa",
     "resultsTitle": "Kết quả tìm kiếm",
     "resultsFor": "Kết quả cho \"{{query}}\"",
-    "resultsHint": "Trang kết quả tập trung, không hiển thị banner trang chủ.",
     "resultsCount": "{{count}} kết quả",
     "noQuery": "Nhập từ khóa trên thanh tìm kiếm để tìm sự kiện.",
     "noResultsFor": "Không có sự kiện phù hợp với \"{{query}}\".",
@@ -248,6 +255,7 @@
   "seatMap": {
     "overviewTitle": "Sơ đồ tổng quan",
     "overviewHint": "Chọn ghế trực tiếp trên từng khu trong sơ đồ.",
+    "readOnlyHint": "Sự kiện chưa mở bán, bạn chỉ có thể xem sơ đồ tổng quan.",
     "seatMapAria": "Sơ đồ chọn ghế sự kiện",
     "zonesCount": "{{count}} khu vé",
     "zonesAndPrices": "Khu vực và giá vé",
@@ -431,6 +439,11 @@
     "avatarTooLarge": "Ảnh quá lớn. Vui lòng chọn ảnh nhỏ hơn.",
     "fullName": "Họ tên",
     "fullNamePlaceholder": "Nhập họ tên",
+    "gender": "Giới tính",
+    "genderPlaceholder": "Chọn giới tính",
+    "genderMale": "Nam",
+    "genderFemale": "Nữ",
+    "genderOther": "Khác",
     "birthDate": "Ngày sinh",
     "phoneNumber": "Số điện thoại",
     "phonePlaceholder": "Nhập số điện thoại",
@@ -450,7 +463,7 @@
     "changePasswordSection": "Đổi mật khẩu",
     "currentPasswordLabel": "Mật khẩu hiện tại",
     "newPasswordLabel": "Mật khẩu mới",
-    "minPasswordHint": "Ít nhất 6 ký tự",
+    "minPasswordHint": "Độ bảo mật từ trung bình trở lên",
     "confirmNewPasswordLabel": "Xác nhận mật khẩu mới",
     "processingText": "Đang xử lý...",
     "updatePasswordBtn": "Cập nhật mật khẩu",

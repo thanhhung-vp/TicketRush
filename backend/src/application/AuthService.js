@@ -4,8 +4,13 @@ import jwt from 'jsonwebtoken';
 import { UserRepository } from '../infrastructure/database/repositories/UserRepository.js';
 import { AuthError, ConflictError, ValidationError } from '../domain/errors/AppError.js';
 import { config } from '../config/index.js';
+import { isPasswordAtLeastMedium, PASSWORD_POLICY_ERROR } from '../utils/passwordStrength.js';
 
 const userRepo = new UserRepository();
+
+function birthYearFromDate(value) {
+  return value ? Number(String(value).slice(0, 4)) : null;
+}
 
 function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
@@ -28,11 +33,22 @@ async function persistRefreshToken(userId, rawToken) {
 }
 
 export class AuthService {
-  async register({ email, password, full_name, gender, birth_year }) {
+  async register({ email, password, full_name, gender, birth_date, birth_year }) {
+    if (!isPasswordAtLeastMedium(password)) {
+      throw new ValidationError(PASSWORD_POLICY_ERROR);
+    }
     const existing = await userRepo.findByEmail(email);
     if (existing) throw new ConflictError('Email already exists');
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await userRepo.create({ email, passwordHash, full_name, gender, birth_year });
+    const normalizedBirthYear = birth_date ? birthYearFromDate(birth_date) : birth_year;
+    const user = await userRepo.create({
+      email,
+      passwordHash,
+      full_name,
+      gender,
+      birth_date,
+      birth_year: normalizedBirthYear,
+    });
     const { accessToken, refreshToken } = issueTokenPair(user);
     await persistRefreshToken(user.id, refreshToken);
     return { accessToken, refreshToken, user };
@@ -77,7 +93,11 @@ export class AuthService {
   }
 
   async updateProfile(userId, fields) {
-    const user = await userRepo.update(userId, fields);
+    const updates = { ...fields };
+    if (Object.prototype.hasOwnProperty.call(updates, 'birth_date')) {
+      updates.birth_year = updates.birth_date ? birthYearFromDate(updates.birth_date) : null;
+    }
+    const user = await userRepo.update(userId, updates);
     if (!user) throw new AuthError('User not found');
     return user;
   }

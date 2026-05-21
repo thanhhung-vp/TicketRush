@@ -91,7 +91,7 @@ router.post('/avatar', authenticate, avatarUpload.single('image'), async (req, r
     const { rows } = await pool.query(
       `UPDATE users SET avatar_url = $2
        WHERE id = $1
-       RETURNING id, email, full_name, gender, birth_year, role, avatar_url, created_at`,
+       RETURNING id, email, full_name, gender, birth_date, birth_year, role, avatar_url, created_at`,
       [req.user.id, result.secure_url]
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });

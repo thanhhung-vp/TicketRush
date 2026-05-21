@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Newspaper } from 'lucide-react';
 import api from '../lib/api.js';
+import { prefetchEventDetail } from '../services/eventDetailCache.js';
 import {
   clampPage,
   getCompactPaginationItems,
@@ -10,6 +11,8 @@ import {
   getTotalPages,
   splitEventsBySchedule,
 } from '../utils/homeSections.js';
+import { scheduleIdleTask } from '../utils/idleTask.js';
+import { preloadAppRoute } from '../utils/routePreload.js';
 
 const EVENT_PAGE_SIZE = 8;
 const NEWS_LIMIT = 4;
@@ -56,6 +59,12 @@ const SORT_KEYS = [
   { value: 'price_asc',  key: 'sortPriceAsc' },
   { value: 'price_desc', key: 'sortPriceDesc' },
 ];
+
+function warmEventDetail(event) {
+  if (!event?.id) return;
+  preloadAppRoute(`/events/${event.id}`);
+  prefetchEventDetail(event);
+}
 
 export default function HomePage() {
   const { t } = useTranslation();
@@ -202,6 +211,15 @@ export default function HomePage() {
   useEffect(() => {
     setPastPage(prev => clampPage(prev, pastPageCount));
   }, [pastPageCount]);
+
+  useEffect(() => {
+    const firstEvent = bannerEvents[0] || events[0];
+    if (!firstEvent) return undefined;
+
+    return scheduleIdleTask(() => {
+      warmEventDetail(firstEvent);
+    }, 1500);
+  }, [bannerEvents, events]);
 
   const clearFilters = () => setSearchParams({});
 
@@ -643,7 +661,13 @@ function EventCard({ event }) {
   };
 
   return (
-    <Link to={`/events/${event.id}`} className={`group block ${isClosed ? 'opacity-60' : ''}`}>
+    <Link
+      to={`/events/${event.id}`}
+      onPointerEnter={() => warmEventDetail(event)}
+      onFocus={() => warmEventDetail(event)}
+      onTouchStart={() => warmEventDetail(event)}
+      className={`group block ${isClosed ? 'opacity-60' : ''}`}
+    >
       {/* Image */}
       <div className="aspect-[16/10] rounded-lg overflow-hidden mb-3 bg-gray-200 dark:bg-gray-800 relative">
         {event.poster_url ? (
@@ -801,6 +825,9 @@ function EventCarousel({ events, loading }) {
               {/* Text — slides up when active */}
               <Link
                 to={`/events/${slide.id}`}
+                onPointerEnter={() => warmEventDetail(slide)}
+                onFocus={() => warmEventDetail(slide)}
+                onTouchStart={() => warmEventDetail(slide)}
                 className="absolute inset-0 z-10 flex flex-col justify-end max-w-6xl mx-auto px-8 md:px-16 pb-10"
               >
                 <div className={`text-white max-w-2xl transition-transform duration-700 ease-out delay-200 ${

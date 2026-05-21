@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { fetchAdminPageData, getCachedAdminPageData } from '../services/adminPageCache.js';
 import { getEventOccupancyPercent, getOccupancyPage, OCCUPANCY_PAGE_SIZE } from '../utils/adminDashboard.js';
 import { clampPage, getCompactPaginationItems, getPageItems, getTotalPages } from '../utils/homeSections.js';
 
@@ -145,12 +146,13 @@ export default function AdminPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'vi' ? 'vi-VN' : 'en-US';
   const copy = ADMIN_COPY[locale] || ADMIN_COPY['en-US'];
+  const [initialAdminData] = useState(() => getCachedAdminPageData());
   const [tab, setTab] = useState('dashboard');
-  const [dashboard, setDashboard] = useState(null);
-  const [events, setEvents] = useState([]);
-  const [newsPosts, setNewsPosts] = useState([]);
-  const [supportBadgeCount, setSupportBadgeCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [dashboard, setDashboard] = useState(() => initialAdminData?.dashboard ?? null);
+  const [events, setEvents] = useState(() => initialAdminData?.events ?? []);
+  const [newsPosts, setNewsPosts] = useState(() => initialAdminData?.newsPosts ?? []);
+  const [supportBadgeCount, setSupportBadgeCount] = useState(() => initialAdminData?.supportBadgeCount ?? 0);
+  const [loading, setLoading] = useState(() => !initialAdminData);
 
   const formatDate = (d) => new Date(d).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
   const formatDateTime = (d) => new Date(d).toLocaleString(locale, {
@@ -158,20 +160,18 @@ export default function AdminPage() {
     hour: '2-digit', minute: '2-digit',
   });
 
-  const loadAdminData = async ({ showLoading = true } = {}) => {
+  const applyAdminData = (data) => {
+    setDashboard(data.dashboard);
+    setEvents(data.events);
+    setNewsPosts(data.newsPosts);
+    setSupportBadgeCount(data.supportBadgeCount);
+  };
+
+  const loadAdminData = async ({ showLoading = true, force = false } = {}) => {
     if (showLoading) setLoading(true);
     try {
-      const [d, e, n, pendingRefunds, pendingSupport] = await Promise.all([
-        api.get('/admin/dashboard'),
-        api.get('/admin/events'),
-        api.get('/admin/news'),
-        api.get('/admin/refunds', { params: { status: 'pending' } }),
-        api.get('/admin/support-requests', { params: { status: 'open' } }),
-      ]);
-      setDashboard(d.data);
-      setEvents(e.data);
-      setNewsPosts(Array.isArray(n.data) ? n.data : []);
-      setSupportBadgeCount((Array.isArray(pendingRefunds.data) ? pendingRefunds.data.length : 0) + (Array.isArray(pendingSupport.data) ? pendingSupport.data.length : 0));
+      const data = await fetchAdminPageData({ force });
+      applyAdminData(data);
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -179,7 +179,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (user?.role !== 'admin') { navigate('/'); return; }
-    loadAdminData().catch(() => setLoading(false));
+    loadAdminData({ showLoading: !initialAdminData }).catch(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="text-center py-20 text-gray-400">{t('common.loading')}</div>;
@@ -244,12 +244,12 @@ export default function AdminPage() {
           t={t}
           locale={locale}
           copy={copy}
-          onChanged={() => loadAdminData({ showLoading: false })}
+          onChanged={() => loadAdminData({ showLoading: false, force: true })}
         />
       )}
       {tab === 'customers' && <CustomerManagementTab events={events} formatDateTime={formatDateTime} formatVNDLong={formatVNDLong} t={t} />}
-      {tab === 'support' && <SupportTab formatDateTime={formatDateTime} formatVNDLong={formatVNDLong} t={t} copy={copy} onChanged={() => loadAdminData({ showLoading: false })} />}
-      {tab === 'news' && <NewsTab posts={newsPosts} formatDateTime={formatDateTime} t={t} onChanged={() => loadAdminData({ showLoading: false })} />}
+      {tab === 'support' && <SupportTab formatDateTime={formatDateTime} formatVNDLong={formatVNDLong} t={t} copy={copy} onChanged={() => loadAdminData({ showLoading: false, force: true })} />}
+      {tab === 'news' && <NewsTab posts={newsPosts} formatDateTime={formatDateTime} t={t} onChanged={() => loadAdminData({ showLoading: false, force: true })} />}
     </div>
   );
 }

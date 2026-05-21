@@ -10,6 +10,11 @@ import redis from '../config/redis.js';
 import { sendPasswordResetOTP } from '../services/email.js';
 import { generateOtp, hashOtp, verifyOtpHash } from '../services/otp.js';
 import { emailSchema } from '../utils/emailValidation.js';
+import {
+  isPasswordAtLeastMedium,
+  PASSWORD_POLICY_ERROR,
+  PASSWORD_REUSE_ERROR,
+} from '../utils/passwordStrength.js';
 
 const router = Router();
 const GOOGLE_STATE_COOKIE = 'ticketrush_google_oauth_state';
@@ -50,6 +55,32 @@ function generateTokens(user) {
   const refreshToken = crypto.randomBytes(48).toString('hex');
   return { accessToken, refreshToken };
 }
+
+function isValidDateOnly(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const today = new Date();
+  const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date >= new Date(Date.UTC(1900, 0, 1)) &&
+    date <= todayUtc
+  );
+}
+
+function birthYearFromDate(value) {
+  return value ? Number(value.slice(0, 4)) : null;
+}
+
+const genderSchema = z.enum(['male', 'female', 'other']);
+const birthDateSchema = z.string().refine(isValidDateOnly, {
+  message: 'birth_date must be a valid YYYY-MM-DD date',
+});
+const birthYearSchema = z.number().int().min(1900).max(new Date().getFullYear());
 
 async function storeRefreshToken(userId, rawToken, db = pool) {
   const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -288,10 +319,11 @@ async function findOrCreateFacebookUser(profile) {
 // POST /auth/register
 const registerSchema = z.object({
   email:      emailSchema,
-  password:   z.string().min(6),
+  password:   z.string().min(1),
   full_name:  z.string().min(2).max(100),
-  gender:     z.enum(['male', 'female', 'other']).optional(),
-  birth_year: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+  gender:     genderSchema.nullable().optional(),
+  birth_date: birthDateSchema.nullable().optional(),
+  birth_year: birthYearSchema.nullable().optional(),
   address_province_code: z.string().trim().max(10).nullable().optional(),
   address_province_name: z.string().trim().max(120).nullable().optional(),
   address_ward_code:     z.string().trim().max(10).nullable().optional(),
@@ -310,6 +342,7 @@ router.post('/register', async (req, res) => {
     password,
     full_name,
     gender,
+    birth_date,
     birth_year,
     address_province_code,
     address_province_name,
@@ -318,26 +351,32 @@ router.post('/register', async (req, res) => {
     address_hamlet,
     address_line,
   } = parsed.data;
+  if (!isPasswordAtLeastMedium(password)) {
+    return res.status(400).json({ error: PASSWORD_POLICY_ERROR });
+  }
   const client = await pool.connect();
   try {
     const hash = await bcrypt.hash(password, 12);
+    const normalizedBirthDate = birth_date || null;
+    const normalizedBirthYear = normalizedBirthDate ? birthYearFromDate(normalizedBirthDate) : (birth_year ?? null);
     await client.query('BEGIN');
     const { rows } = await client.query(
       `INSERT INTO users (
-         email, password, full_name, gender, birth_year,
+         email, password, full_name, gender, birth_date, birth_year,
          address_province_code, address_province_name, address_ward_code, address_ward_name,
          address_hamlet, address_line
        )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-       RETURNING id, email, full_name, gender, birth_year, role, avatar_url,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       RETURNING id, email, full_name, gender, birth_date, birth_year, role, avatar_url,
          address_province_code, address_province_name, address_ward_code, address_ward_name,
          address_hamlet, address_line`,
       [
         email,
         hash,
         full_name,
-        gender || null,
-        birth_year || null,
+        gender ?? null,
+        normalizedBirthDate,
+        normalizedBirthYear,
         address_province_code || null,
         address_province_name || null,
         address_ward_code || null,
@@ -630,7 +669,7 @@ router.post('/logout-all', authenticate, async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, email, full_name, gender, birth_year, role, avatar_url, created_at,
+      `SELECT id, email, full_name, gender, birth_date, birth_year, role, avatar_url, created_at,
               address_province_code, address_province_name, address_ward_code, address_ward_name,
               address_hamlet, address_line
        FROM users WHERE id=$1`,
@@ -647,8 +686,9 @@ router.get('/me', authenticate, async (req, res) => {
 // PATCH /auth/profile
 const profileSchema = z.object({
   full_name:  z.string().min(2).max(100).optional(),
-  gender:     z.enum(['male', 'female', 'other']).optional(),
-  birth_year: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+  gender:     genderSchema.nullable().optional(),
+  birth_date: birthDateSchema.nullable().optional(),
+  birth_year: birthYearSchema.nullable().optional(),
   address_province_code: z.string().trim().max(10).nullable().optional(),
   address_province_name: z.string().trim().max(120).nullable().optional(),
   address_ward_code:     z.string().trim().max(10).nullable().optional(),
@@ -662,15 +702,20 @@ router.patch('/profile', authenticate, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
   }
-  const fields = Object.keys(parsed.data);
+  const updates = { ...parsed.data };
+  if (Object.prototype.hasOwnProperty.call(updates, 'birth_date')) {
+    updates.birth_year = updates.birth_date ? birthYearFromDate(updates.birth_date) : null;
+  }
+
+  const fields = Object.keys(updates);
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
 
   const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
-  const values = fields.map(f => parsed.data[f]);
+  const values = fields.map(f => updates[f]);
   try {
     const { rows } = await pool.query(
       `UPDATE users SET ${sets} WHERE id = $1
-       RETURNING id, email, full_name, gender, birth_year, role, avatar_url,
+       RETURNING id, email, full_name, gender, birth_date, birth_year, role, avatar_url,
          address_province_code, address_province_name, address_ward_code, address_ward_name,
          address_hamlet, address_line`,
       [req.user.id, ...values]
@@ -685,7 +730,7 @@ router.patch('/profile', authenticate, async (req, res) => {
 // PATCH /auth/change-password
 const changePasswordSchema = z.object({
   old_password: z.string().min(1),
-  new_password: z.string().min(6),
+  new_password: z.string().min(1),
 });
 
 router.patch('/change-password', authenticate, async (req, res) => {
@@ -694,12 +739,19 @@ router.patch('/change-password', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
   }
   const { old_password, new_password } = parsed.data;
+  if (!isPasswordAtLeastMedium(new_password)) {
+    return res.status(400).json({ error: PASSWORD_POLICY_ERROR });
+  }
 
   try {
     const { rows } = await pool.query('SELECT password FROM users WHERE id = $1', [req.user.id]);
     const user = rows[0];
     if (!user || !(await bcrypt.compare(old_password, user.password))) {
       return res.status(401).json({ error: 'Mật khẩu cũ không chính xác' });
+    }
+
+    if (await bcrypt.compare(new_password, user.password)) {
+      return res.status(400).json({ error: PASSWORD_REUSE_ERROR });
     }
 
     const hash = await bcrypt.hash(new_password, 12);
@@ -745,7 +797,7 @@ router.post('/forgot-password', async (req, res) => {
 const resetPasswordSchema = z.object({
   email: emailSchema,
   otp: z.string().length(6),
-  new_password: z.string().min(6),
+  new_password: z.string().min(1),
 });
 
 router.post('/reset-password', async (req, res) => {
@@ -754,6 +806,9 @@ router.post('/reset-password', async (req, res) => {
     return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
   }
   const { email, otp, new_password } = parsed.data;
+  if (!isPasswordAtLeastMedium(new_password)) {
+    return res.status(400).json({ error: PASSWORD_POLICY_ERROR });
+  }
 
   try {
     const consumedOtp = await consumePasswordResetOtp(email, otp);
@@ -761,14 +816,23 @@ router.post('/reset-password', async (req, res) => {
       return res.status(401).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn' });
     }
 
+    const { rows } = await pool.query('SELECT id, password FROM users WHERE email = $1', [email]);
+    const user = rows[0];
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (await bcrypt.compare(new_password, user.password)) {
+      return res.status(400).json({ error: PASSWORD_REUSE_ERROR });
+    }
+
     const hash = await bcrypt.hash(new_password, 12);
-    const result = await pool.query('UPDATE users SET password = $1 WHERE email = $2', [hash, email]);
+    const result = await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hash, user.id]);
     
     if (result.rowCount === 0) {
        return res.status(404).json({ error: 'User not found' });
     }
 
-    await pool.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email = $1)', [email]);
+    await pool.query('DELETE FROM refresh_tokens WHERE user_id = $1', [user.id]);
     res.json({ ok: true, message: 'Đặt lại mật khẩu thành công' });
   } catch (err) {
     console.error(err);

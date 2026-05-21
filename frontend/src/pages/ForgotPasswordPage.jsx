@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter.jsx';
+import { isPasswordAtLeastMedium } from '../utils/passwordStrength.js';
 import {
   AuthBg, AuthCard, IconInput, PinkButton,
   EnvelopeIcon, LockIcon, EyeIcon, EyeOffIcon, ShieldIcon,
@@ -82,6 +84,7 @@ export default function ForgotPasswordPage() {
   const resetPassword = async (e) => {
     e.preventDefault();
     if (newPw !== confirmPw) { setError(t('forgotPassword.passwordMismatch')); return; }
+    if (!isPasswordAtLeastMedium(newPw)) { setError(t('passwordStrength.minimumRequired')); return; }
     setLoading(true); setError(''); setSuccess('');
     try {
       await api.post('/auth/reset-password', { email, otp, new_password: newPw });
@@ -166,6 +169,7 @@ export default function ForgotPasswordPage() {
                 </button>
               }
             />
+            <PasswordStrengthMeter password={newPw} />
             <IconInput
               icon={<LockIcon />}
               type={showConfirm ? 'text' : 'password'}

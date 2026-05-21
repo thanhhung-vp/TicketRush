@@ -27,11 +27,14 @@ function getOptionalUser(req) {
 
 async function userCanReadEventSeats(eventId, req) {
   const { rows } = await pool.query(
-    `SELECT queue_enabled FROM events WHERE id = $1`,
+    `SELECT queue_enabled, status, sale_start_at FROM events WHERE id = $1`,
     [eventId]
   );
   const event = rows[0];
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
+  if (event.status === 'scheduled' || (event.sale_start_at && new Date(event.sale_start_at) > new Date())) {
+    return { ok: true };
+  }
   if (!event.queue_enabled) return { ok: true };
 
   const user = getOptionalUser(req);

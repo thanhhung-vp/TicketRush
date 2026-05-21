@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import VietnamAddressFields, { getAddressPayload } from '../components/VietnamAddressFields.jsx';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter.jsx';
+import { isPasswordAtLeastMedium } from '../utils/passwordStrength.js';
 import { findProvinceByName, findWardByName } from '../utils/vietnamAddress.js';
 
 const AVATAR_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -58,9 +60,9 @@ function birthYearToDate(year) {
   return `${year}-01-01`;
 }
 
-function dateToYear(dateStr) {
-  if (!dateStr) return '';
-  return new Date(dateStr).getFullYear();
+function getUserBirthDate(user) {
+  if (user?.birth_date) return String(user.birth_date).slice(0, 10);
+  return birthYearToDate(user?.birth_year);
 }
 
 function loadLocal(key, fallback = '') {
@@ -124,7 +126,8 @@ export default function ProfilePage() {
 
   const [form, setForm] = useState({
     full_name:  user?.full_name || '',
-    birth_date: birthYearToDate(user?.birth_year),
+    gender:     user?.gender || '',
+    birth_date: getUserBirthDate(user),
     phone:      loadLocal('profile_phone'),
     address:    getInitialAddress(user),
   });
@@ -150,9 +153,11 @@ export default function ProfilePage() {
     e.preventDefault();
     setSaving(true); setMsg(''); setError('');
     try {
-      const payload = { full_name: form.full_name };
-      const yr = dateToYear(form.birth_date);
-      if (yr) payload.birth_year = yr;
+      const payload = {
+        full_name: form.full_name,
+        gender: form.gender || null,
+        birth_date: form.birth_date || null,
+      };
       Object.assign(payload, getAddressPayload(form.address));
 
       const { data } = await api.patch('/auth/profile', payload);
@@ -171,7 +176,8 @@ export default function ProfilePage() {
   const cancel = () => {
     setForm({
       full_name:  user?.full_name || '',
-      birth_date: birthYearToDate(user?.birth_year),
+      gender:     user?.gender || '',
+      birth_date: getUserBirthDate(user),
       phone:      loadLocal('profile_phone'),
       address:    getInitialAddress(user),
     });
@@ -181,6 +187,8 @@ export default function ProfilePage() {
   const changePw = async (e) => {
     e.preventDefault();
     if (pw.new !== pw.confirm) { setPwError(t('profile.pwMismatch')); return; }
+    if (pw.old === pw.new) { setPwError(t('passwordStrength.sameAsOld')); return; }
+    if (!isPasswordAtLeastMedium(pw.new)) { setPwError(t('passwordStrength.minimumRequired')); return; }
     setPwSaving(true); setPwMsg(''); setPwError('');
     try {
       await api.patch('/auth/change-password', { old_password: pw.old, new_password: pw.new });
@@ -290,13 +298,23 @@ export default function ProfilePage() {
           </div>
 
           <div>
+            <FieldLabel>{t('profile.gender')}</FieldLabel>
+            <SelectInput value={form.gender} onChange={set('gender')}>
+              <option value="">{t('profile.genderPlaceholder')}</option>
+              <option value="male">{t('profile.genderMale')}</option>
+              <option value="female">{t('profile.genderFemale')}</option>
+              <option value="other">{t('profile.genderOther')}</option>
+            </SelectInput>
+          </div>
+
+          <div>
             <FieldLabel>{t('profile.birthDate')}</FieldLabel>
             <div className="relative">
               <TextInput
                 type="date"
                 value={form.birth_date} onChange={set('birth_date')}
-                max={`${new Date().getFullYear() - 5}-12-31`}
-                min="1920-01-01"
+                max={new Date().toISOString().slice(0, 10)}
+                min="1900-01-01"
               />
             </div>
           </div>
@@ -373,6 +391,7 @@ export default function ProfilePage() {
             <FieldLabel>{t('profile.newPasswordLabel')}</FieldLabel>
             <TextInput type="password" placeholder={t('profile.minPasswordHint')} required minLength={6}
               value={pw.new} onChange={e => setPw(p => ({ ...p, new: e.target.value }))} />
+            <PasswordStrengthMeter password={pw.new} />
           </div>
           <div>
             <FieldLabel>{t('profile.confirmNewPasswordLabel')}</FieldLabel>

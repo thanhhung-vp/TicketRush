@@ -135,7 +135,7 @@ function getSeatPoint(seat, zone, rowCount, colCount) {
   };
 }
 
-function VenueOverview({ layout, zoneGroups, selected, heldSeats, frozen, onSeatToggle }) {
+function VenueOverview({ layout, zoneGroups, selected, heldSeats, frozen, readOnly, onSeatToggle }) {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState(1);
   if (!layout?.zones?.length) return null;
@@ -157,7 +157,9 @@ function VenueOverview({ layout, zoneGroups, selected, heldSeats, frozen, onSeat
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-sm font-bold text-label-primary">{t('seatMap.overviewTitle')}</h3>
-          <p className="text-xs text-label-secondary">{t('seatMap.overviewHint')}</p>
+          <p className="text-xs text-label-secondary">
+            {readOnly ? t('seatMap.readOnlyHint') : t('seatMap.overviewHint')}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <p className="mr-1 text-xs text-label-secondary">{t('seatMap.zonesCount', { count: layout.zones.length })}</p>
@@ -639,7 +641,7 @@ function Stage() {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function SeatMap({ eventId, layout = null }) {
+export default function SeatMap({ eventId, layout = null, readOnly = false }) {
   const { t }      = useTranslation();
   const { user }   = useAuth();
   const navigate   = useNavigate();
@@ -653,7 +655,7 @@ export default function SeatMap({ eventId, layout = null }) {
   const [showExpired,setShowExpired] = useState(false);
   const [error,      setError]     = useState('');
 
-  const frozen = holding || heldSeats.length > 0;
+  const frozen = readOnly || holding || heldSeats.length > 0;
 
   const handleQueueRequired = useCallback((err) => {
     const data = err.response?.data;
@@ -788,15 +790,16 @@ export default function SeatMap({ eventId, layout = null }) {
   const heldSeatObjs   = seats.filter(s => heldSeats.includes(s.id));
   const total = [...selectedSeats, ...heldSeatObjs].reduce((acc, s) => acc + Number(s.price), 0);
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className={readOnly ? 'space-y-4' : 'grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px]'}>
       <div className="min-w-0 space-y-4">
-        <Legend />
+        {!readOnly && <Legend />}
         <VenueOverview
           layout={layout}
           zoneGroups={zoneGroups}
           selected={selected}
           heldSeats={new Set(heldSeats)}
           frozen={frozen}
+          readOnly={readOnly}
           onSeatToggle={toggleSeat}
         />
 
@@ -807,19 +810,21 @@ export default function SeatMap({ eventId, layout = null }) {
         )}
       </div>
 
-      <BookingSidebar
-        zoneGroups={zoneGroups}
-        selectedSeats={selectedSeats}
-        heldSeatObjs={heldSeatObjs}
-        countdown={countdown}
-        total={total}
-        holding={holding}
-        renewing={renewing}
-        onHold={holdSeats}
-        onClear={() => setSelected(new Set())}
-        onRelease={releaseHeld}
-        onCheckout={() => navigate('/checkout', { state: { seat_ids: heldSeats, seat_info: heldSeatObjs } })}
-      />
+      {!readOnly && (
+        <BookingSidebar
+          zoneGroups={zoneGroups}
+          selectedSeats={selectedSeats}
+          heldSeatObjs={heldSeatObjs}
+          countdown={countdown}
+          total={total}
+          holding={holding}
+          renewing={renewing}
+          onHold={holdSeats}
+          onClear={() => setSelected(new Set())}
+          onRelease={releaseHeld}
+          onCheckout={() => navigate('/checkout', { state: { seat_ids: heldSeats, seat_info: heldSeatObjs } })}
+        />
+      )}
 
       {showExpired && <ExpiredModal onClose={dismissExpired} />}
     </div>

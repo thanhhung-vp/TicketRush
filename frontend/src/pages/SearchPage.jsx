@@ -62,9 +62,11 @@ export default function SearchPage() {
             <h1 className="mt-1 text-2xl font-extrabold text-gray-950 dark:text-white sm:text-3xl">
               {query ? t('search.resultsFor', { query }) : t('search.resultsTitle')}
             </h1>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              {query ? t('search.resultsHint') : t('search.noQuery')}
-            </p>
+            {!query && (
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                {t('search.noQuery')}
+              </p>
+            )}
           </div>
           {query && (
             <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-semibold text-gray-600 dark:border-dark-border dark:bg-dark-card dark:text-gray-300">

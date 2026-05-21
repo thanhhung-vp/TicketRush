@@ -5,6 +5,13 @@ import { Bell, CheckCheck, ChevronDown } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext.jsx';
 import api from '../../lib/api.js';
+import { prefetchAdminPageData } from '../../services/adminPageCache.js';
+import { preloadAppRoute } from '../../utils/routePreload.js';
+
+function warmAdminRoute() {
+  preloadAppRoute('/admin');
+  prefetchAdminPageData();
+}
 
 export default function UserNavigation() {
   const { t } = useTranslation();
@@ -72,6 +79,7 @@ export default function UserNavigation() {
   };
 
   const handleAvatarClick = () => {
+    if (user?.role === 'admin') warmAdminRoute();
     setMenuOpen(open => !open);
     setNotifOpen(false);
   };
@@ -223,6 +231,9 @@ export default function UserNavigation() {
               <Link
                 to="/admin"
                 onClick={() => setMenuOpen(false)}
+                onPointerEnter={warmAdminRoute}
+                onFocus={warmAdminRoute}
+                onTouchStart={warmAdminRoute}
                 className="block px-4 py-2.5 text-subhead text-warning transition-colors duration-fast hover:bg-fill-quaternary"
               >
                 {t('nav.admin')}

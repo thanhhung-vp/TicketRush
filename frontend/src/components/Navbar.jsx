@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -6,9 +6,19 @@ import { useTheme } from '../context/ThemeContext.jsx';
 import SearchSuggestions from './SearchSuggestions.jsx';
 import ThemeToggle from './ui/ThemeToggle.jsx';
 import LanguageSwitcher from './ui/LanguageSwitcher.jsx';
-import UserNavigation from './ui/UserNavigation.jsx';
 import ticketLogo from '../ticketlogo.png';
 import ticketLogoDark from '../../ticket trang.png';
+
+const UserNavigation = lazy(() => import('./ui/UserNavigation.jsx'));
+
+function UserNavigationFallback() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="h-10 w-10 rounded-full bg-fill-tertiary" />
+      <span className="h-10 w-10 rounded-full bg-fill-tertiary" />
+    </div>
+  );
+}
 
 export default function Navbar() {
   const { t } = useTranslation();
@@ -112,7 +122,9 @@ export default function Navbar() {
                 </span>
               </Link>
 
-              <UserNavigation hasNotification={false} />
+              <Suspense fallback={<UserNavigationFallback />}>
+                <UserNavigation />
+              </Suspense>
             </>
           ) : (
             <>

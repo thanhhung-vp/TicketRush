@@ -40,10 +40,12 @@ vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn(async () => 'data:image/p
 const { default: seatsRouter } = await import('../routes/seats.js');
 const { default: ordersRouter } = await import('../routes/orders.js');
 const { default: paymentRouter } = await import('../routes/payment.js');
+const { default: eventsRouter } = await import('../routes/events.js');
 
 function createApp() {
   const app = express();
   app.use(express.json());
+  app.use('/events', eventsRouter);
   app.use('/seats', seatsRouter);
   app.use('/orders', ordersRouter);
   app.use('/payment', paymentRouter);
@@ -100,6 +102,34 @@ describe('ticket sale window route guards', () => {
     expect(response.status).toBe(409);
     expect(response.body).toMatchObject({ code: 'SALE_NOT_STARTED' });
     expect(mockSeatReleaseQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('allows reading scheduled event seats for the read-only overview even when queue is enabled', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({
+        rows: [futureSaleEvent({ status: 'scheduled', queue_enabled: true })],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: heldSeat().id,
+          zone_id: 'zone-1',
+          row_idx: 0,
+          col_idx: 0,
+          label: 'A1',
+          status: 'available',
+          zone_name: 'VIP',
+          price: '100000',
+          color: '#3B82F6',
+          rows: 1,
+          cols: 1,
+        }],
+      });
+
+    const response = await request(createApp()).get('/events/event-1/seats');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0]).toMatchObject({ id: heldSeat().id, status: 'available' });
   });
 
   it('blocks direct checkout when sale_start_at is still in the future', async () => {

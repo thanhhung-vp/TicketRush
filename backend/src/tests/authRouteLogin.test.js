@@ -4,7 +4,11 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockPool, mockRedis } = vi.hoisted(() => ({
+const { mockClient, mockPool, mockRedis } = vi.hoisted(() => ({
+  mockClient: {
+    query: vi.fn(),
+    release: vi.fn(),
+  },
   mockPool: {
     query: vi.fn(),
     connect: vi.fn(),
@@ -44,12 +48,76 @@ describe('Auth route login flow', () => {
   beforeEach(() => {
     delete process.env.JWT_SECRET;
     process.env.NODE_ENV = 'test';
+    mockClient.query.mockReset();
+    mockClient.release.mockReset();
     mockPool.query.mockReset();
+    mockPool.connect.mockReset();
     mockRedis.eval.mockReset();
     mockRedis.get.mockReset();
     mockRedis.getdel.mockReset();
     mockRedis.setex.mockReset();
     mockRedis.del.mockReset();
+  });
+
+  it('registers gender and full date of birth', async () => {
+    const app = createAuthApp();
+
+    mockPool.connect.mockResolvedValue(mockClient);
+    mockClient.query.mockImplementation(async (sql, params = []) => {
+      if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [] };
+      if (sql.startsWith('INSERT INTO users')) {
+        expect(params).toContain('female');
+        expect(params).toContain('1996-02-29');
+        expect(params).toContain(1996);
+        return {
+          rows: [{
+            id: 'user-1',
+            email: 'user@example.com',
+            full_name: 'Test User',
+            gender: 'female',
+            birth_date: '1996-02-29',
+            birth_year: 1996,
+            role: 'customer',
+          }],
+        };
+      }
+      if (sql.startsWith('INSERT INTO refresh_tokens')) return { rows: [] };
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+
+    const response = await request(app)
+      .post('/auth/register')
+      .send({
+        email: 'user@example.com',
+        password: 'Ticket123',
+        full_name: 'Test User',
+        gender: 'female',
+        birth_date: '1996-02-29',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.user).toMatchObject({
+      gender: 'female',
+      birth_date: '1996-02-29',
+      birth_year: 1996,
+    });
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+
+  it('rejects weak passwords during registration', async () => {
+    const app = createAuthApp();
+
+    const response = await request(app)
+      .post('/auth/register')
+      .send({
+        email: 'weak@example.com',
+        password: 'password123',
+        full_name: 'Weak Password',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Mật khẩu phải có độ bảo mật từ trung bình trở lên');
+    expect(mockPool.connect).not.toHaveBeenCalled();
   });
 
   afterAll(() => {
@@ -142,6 +210,9 @@ describe('Auth route login flow', () => {
         return { rows: [] };
       }
       if (sql.startsWith('UPDATE users SET')) {
+        expect(params).toContain('other');
+        expect(params).toContain('1998-07-20');
+        expect(params).toContain(1998);
         expect(params).toContain('1');
         expect(params).toContain('Thành phố Hà Nội');
         expect(params).toContain('4');
@@ -154,6 +225,9 @@ describe('Auth route login flow', () => {
             email: user.email,
             full_name: user.full_name,
             role: user.role,
+            gender: 'other',
+            birth_date: '1998-07-20',
+            birth_year: 1998,
             address_province_code: '1',
             address_province_name: 'Thành phố Hà Nội',
             address_ward_code: '4',
@@ -174,6 +248,8 @@ describe('Auth route login flow', () => {
       .patch('/auth/profile')
       .set('Authorization', `Bearer ${loginResponse.body.accessToken}`)
       .send({
+        gender: 'other',
+        birth_date: '1998-07-20',
         address_province_code: '1',
         address_province_name: 'Thành phố Hà Nội',
         address_ward_code: '4',
@@ -184,6 +260,9 @@ describe('Auth route login flow', () => {
 
     expect(profileResponse.status).toBe(200);
     expect(profileResponse.body).toMatchObject({
+      gender: 'other',
+      birth_date: '1998-07-20',
+      birth_year: 1998,
       address_province_name: 'Thành phố Hà Nội',
       address_ward_name: 'Phường Ba Đình',
       address_hamlet: 'Khu phố 3',
@@ -194,12 +273,17 @@ describe('Auth route login flow', () => {
   it('consumes a password reset OTP once so it cannot be reused', async () => {
     const email = 'user@example.com';
     const otp = '123456';
+    const userId = 'user-1';
+    const currentPasswordHash = await bcrypt.hash('Current123', 12);
     const app = createAuthApp();
 
     mockRedis.eval
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(0);
     mockPool.query.mockImplementation(async (sql) => {
+      if (sql.startsWith('SELECT id, password FROM users WHERE email')) {
+        return { rows: [{ id: userId, password: currentPasswordHash }] };
+      }
       if (sql.startsWith('UPDATE users SET password')) {
         return { rowCount: 1, rows: [] };
       }
@@ -226,5 +310,67 @@ describe('Auth route login flow', () => {
       hashOtp(otp),
     ]);
     expect(mockPool.query.mock.calls.filter(([sql]) => sql.startsWith('UPDATE users SET password'))).toHaveLength(1);
+  });
+
+  it('rejects changing to the same password', async () => {
+    const password = 'Current123';
+    const user = {
+      id: 42,
+      email: 'user@example.com',
+      full_name: 'Test User',
+      role: 'customer',
+      password: await bcrypt.hash(password, 12),
+    };
+    const app = createAuthApp();
+
+    mockPool.query.mockImplementation(async (sql) => {
+      if (sql.startsWith('SELECT * FROM users WHERE email')) {
+        return { rows: [user] };
+      }
+      if (sql.startsWith('INSERT INTO refresh_tokens')) {
+        return { rows: [] };
+      }
+      if (sql.startsWith('SELECT password FROM users WHERE id')) {
+        return { rows: [{ password: user.password }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+
+    const loginResponse = await request(app)
+      .post('/auth/login')
+      .send({ email: user.email, password });
+
+    const response = await request(app)
+      .patch('/auth/change-password')
+      .set('Authorization', `Bearer ${loginResponse.body.accessToken}`)
+      .send({ old_password: password, new_password: password });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Mật khẩu mới không được trùng mật khẩu cũ');
+    expect(mockPool.query.mock.calls.some(([sql]) => sql.startsWith('UPDATE users SET password'))).toBe(false);
+  });
+
+  it('rejects reset password when the new password matches the old password', async () => {
+    const email = 'user@example.com';
+    const otp = '123456';
+    const password = 'Current123';
+    const app = createAuthApp();
+
+    mockRedis.eval.mockResolvedValueOnce(1);
+    mockPool.query.mockImplementation(async (sql) => {
+      if (sql.startsWith('SELECT id, password FROM users WHERE email')) {
+        return { rows: [{ id: 'user-1', password: await bcrypt.hash(password, 12) }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+
+    const response = await request(app)
+      .post('/auth/reset-password')
+      .send({ email, otp, new_password: password });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Mật khẩu mới không được trùng mật khẩu cũ');
+    expect(mockRedis.eval).toHaveBeenCalledTimes(1);
+    expect(mockPool.query.mock.calls.some(([sql]) => sql.startsWith('UPDATE users SET password'))).toBe(false);
   });
 });

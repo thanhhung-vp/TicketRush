@@ -109,6 +109,14 @@
     "otpSentSuccess": "If this email exists in our system, a verification code has been sent.",
     "resetSuccess": "Password reset successfully! Redirecting..."
   },
+  "passwordStrength": {
+    "label": "Password strength: {{label}}",
+    "weak": "Weak",
+    "medium": "Medium",
+    "strong": "Strong",
+    "minimumRequired": "Password strength must be medium or stronger",
+    "sameAsOld": "New password must be different from the old password"
+  },
   "home": {
     "heroTitle": "Book Event Tickets",
     "heroSubtitle": "Discover thousands of music, sports and entertainment events",
@@ -152,7 +160,6 @@
     "clearHistory": "Clear",
     "resultsTitle": "Search results",
     "resultsFor": "Search results for \"{{query}}\"",
-    "resultsHint": "Focused event results without the home page banner.",
     "resultsCount": "{{count}} results",
     "noQuery": "Type a keyword in the search bar to find events.",
     "noResultsFor": "No events found for \"{{query}}\".",
@@ -248,6 +255,7 @@
   "seatMap": {
     "overviewTitle": "Venue overview",
     "overviewHint": "Select seats directly inside each zone on the map.",
+    "readOnlyHint": "Ticket sales have not opened yet. You can only view the venue overview.",
     "seatMapAria": "Interactive event seat map",
     "zonesCount": "{{count}} ticket zones",
     "zonesAndPrices": "Zones and prices",
@@ -431,6 +439,11 @@
     "avatarTooLarge": "This image is too large. Please choose a smaller image.",
     "fullName": "Full name",
     "fullNamePlaceholder": "Enter your full name",
+    "gender": "Gender",
+    "genderPlaceholder": "Select gender",
+    "genderMale": "Male",
+    "genderFemale": "Female",
+    "genderOther": "Other",
     "birthDate": "Date of birth",
     "phoneNumber": "Phone number",
     "phonePlaceholder": "Enter your phone number",
@@ -452,7 +465,7 @@
     "changePasswordSection": "Change Password",
     "currentPasswordLabel": "Current password",
     "newPasswordLabel": "New password",
-    "minPasswordHint": "At least 6 characters",
+    "minPasswordHint": "Medium strength or stronger",
     "confirmNewPasswordLabel": "Confirm new password",
     "processingText": "Processing...",
     "updatePasswordBtn": "Update password",

@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import api from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import SeatMap from '../components/SeatMap.jsx';
+import { fetchEventDetail, getCachedEventDetail } from '../services/eventDetailCache.js';
+import { canSelectSeatsForEvent, getEventSaleState } from '../utils/eventSaleState.js';
+import { scheduleIdleTask } from '../utils/idleTask.js';
 import { clampRotation, getFanGeometry, normalizeAudienceShape, normalizeStageLayout } from '../utils/venueLayout.js';
+
+const SeatMap = lazy(() => import('../components/SeatMap.jsx'));
 
 const CATEGORY_GRADIENTS = {
   music:       'from-purple-700 via-pink-600 to-rose-500',
@@ -263,21 +266,57 @@ function SaleCountdown({ saleStartAt, t }) {
   );
 }
 
+function SeatMapFallback({ label }) {
+  return (
+    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-dashed border-separator bg-fill-secondary text-sm font-medium text-label-secondary">
+      {label}
+    </div>
+  );
+}
+
 export default function EventDetailPage() {
   const { t, i18n } = useTranslation();
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [event, setEvent] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [event, setEvent] = useState(() => getCachedEventDetail(id));
+  const [loading, setLoading] = useState(() => !getCachedEventDetail(id));
   const [activeTab, setActiveTab] = useState('seats');
   const [copied, setCopied] = useState(false);
   const [showSeatmap, setShowSeatmap] = useState(false);
   const [seatmapZoom, setSeatmapZoom] = useState(1);
+  const [seatMapReady, setSeatMapReady] = useState(false);
   const locale = i18n.language === 'vi' ? 'vi-VN' : 'en-US';
 
   useEffect(() => {
-    api.get(`/events/${id}`).then(r => setEvent(r.data)).finally(() => setLoading(false));
+    const cachedEvent = getCachedEventDetail(id);
+    const controller = new AbortController();
+
+    if (cachedEvent) {
+      setEvent(cachedEvent);
+      setLoading(false);
+    } else {
+      setEvent(null);
+      setLoading(true);
+    }
+
+    fetchEventDetail(id, { signal: controller.signal })
+      .then(data => {
+        if (!controller.signal.aborted) setEvent(data);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted && !cachedEvent) setEvent(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [id]);
+
+  useEffect(() => {
+    setSeatMapReady(false);
+    return scheduleIdleTask(() => setSeatMapReady(true), 700);
   }, [id]);
 
   if (loading) return <div className="text-center py-20 text-gray-400">{t('common.loading')}</div>;
@@ -287,11 +326,15 @@ export default function EventDetailPage() {
   const minPrice = event.zones?.length > 0 ? Math.min(...event.zones.map(z => Number(z.price))) : 0;
   const maxPrice = event.zones?.length > 0 ? Math.max(...event.zones.map(z => Number(z.price))) : 0;
 
-  const isPast      = new Date(event.event_date) < new Date();
-  const isClosed    = event.status === 'ended' || isPast;
-  const isScheduled = event.status === 'scheduled';
-  const isSoldOut   = !isClosed && !isScheduled && event.zones?.length > 0 && event.zones.every(z => Number(z.available_seats) === 0);
-  const eventStatus = isClosed ? 'ended' : isScheduled ? 'scheduled' : isSoldOut ? 'soldout' : 'onsale';
+  const eventStatus = getEventSaleState(event);
+  const isClosed = eventStatus === 'ended';
+  const isScheduled = eventStatus === 'scheduled';
+  const canSelectSeats = canSelectSeatsForEvent(event);
+  const seatPrompt = canSelectSeats
+    ? t('event.selectAreaPrompt')
+    : eventStatus === 'soldout'
+      ? t('event.soldOut')
+      : t('event.saleNotStarted');
   const seatLayout = event.layout_json || buildFallbackLayout(event.zones);
 
   const TABS = [
@@ -505,7 +548,7 @@ export default function EventDetailPage() {
             {/* Venue info card */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">{t('event.scheduleAndSeats')}</h2>
-              <p className="text-sm text-gray-500 mb-4">{t('event.selectAreaPrompt')}</p>
+              <p className="text-sm text-gray-500 mb-4">{seatPrompt}</p>
 
               {/* Venue */}
               <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
@@ -529,10 +572,16 @@ export default function EventDetailPage() {
 
             </div>
 
-            {/* Seat map — only for open events */}
+            {/* Seat map */}
             {!isClosed && (
               <div className="rounded-2xl border border-separator bg-surface p-5 text-label-primary shadow-1">
-                <SeatMap eventId={id} layout={seatLayout} />
+                {seatMapReady ? (
+                  <Suspense fallback={<SeatMapFallback label={t('common.loading')} />}>
+                    <SeatMap eventId={id} layout={seatLayout} readOnly={!canSelectSeats} />
+                  </Suspense>
+                ) : (
+                  <SeatMapFallback label={t('common.loading')} />
+                )}
               </div>
             )}
           </div>

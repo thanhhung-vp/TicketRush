@@ -3,7 +3,7 @@ import pool from '../pool.js';
 export class UserRepository {
   async findById(id) {
     const { rows } = await pool.query(
-      'SELECT id, email, full_name, gender, birth_year, role, created_at FROM users WHERE id=$1',
+      'SELECT id, email, full_name, gender, birth_date, birth_year, role, created_at FROM users WHERE id=$1',
       [id]
     );
     return rows[0] || null;
@@ -14,12 +14,12 @@ export class UserRepository {
     return rows[0] || null;
   }
 
-  async create({ email, passwordHash, full_name, gender, birth_year }) {
+  async create({ email, passwordHash, full_name, gender, birth_date, birth_year }) {
     const { rows } = await pool.query(
-      `INSERT INTO users (email, password, full_name, gender, birth_year)
-       VALUES ($1,$2,$3,$4,$5)
-       RETURNING id, email, full_name, role, created_at`,
-      [email, passwordHash, full_name, gender || null, birth_year || null]
+      `INSERT INTO users (email, password, full_name, gender, birth_date, birth_year)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING id, email, full_name, gender, birth_date, birth_year, role, created_at`,
+      [email, passwordHash, full_name, gender ?? null, birth_date ?? null, birth_year ?? null]
     );
     return rows[0];
   }
@@ -31,7 +31,7 @@ export class UserRepository {
     const values = keys.map(k => fields[k]);
     const { rows } = await pool.query(
       `UPDATE users SET ${sets} WHERE id=$1
-       RETURNING id, email, full_name, gender, birth_year, role`,
+       RETURNING id, email, full_name, gender, birth_date, birth_year, role`,
       [id, ...values]
     );
     return rows[0] || null;
